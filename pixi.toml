@@ -5,6 +5,10 @@
 #
 # Use `pixi task list` to list the available tasks,
 # and `pixi run TASK` to run it.
+#
+# This is the single manifest of the whole repository: every example under
+# examples/ registers a feature, two environments, and its dataset tasks here.
+# Example pyproject.toml files hold package metadata only.
 
 [workspace]
 name = "rrd-datasets"
@@ -18,20 +22,137 @@ license = "MIT OR Apache-2.0"
 platforms = ["linux-64", "linux-aarch64", "osx-arm64", "win-64"]
 readme = "README.md"
 repository = "https://github.com/rerun-io/rrd-datasets"
+requires-pixi = ">=0.73"
 version = "0.1.0"
 
 
-[tasks]
-# Run first ruff fix, then ruff format, order is important see also https://twitter.com/charliermarsh/status/1717229721954799727
-py-fmt = "ruff check --fix --config pyproject.toml . && ruff format --config pyproject.toml ."
-py-fmt-check = "ruff check --config pyproject.toml . && ruff format --check --config pyproject.toml"
-py-lint = "mypy --install-types --non-interactive --no-warn-unused-ignore"
-lint-typos = "typos"
+# ─── common: the shared example toolchain ────────────────────────────────────
+# One Python and one rerun-sdk for every example, pinned exactly once so a
+# version bump stays a one-line change. Example environments compose this feature.
 
-
-[dependencies]
+[feature.common.dependencies]
 python = "3.12.*"
 
+[feature.common.pypi-dependencies]
+# rerun-sdk is PyPI-only. Example pyprojects declare compatible ranges; this is
+# the single exact pin their environments solve against.
+rerun-sdk = "==0.34.*"
+# The shared tools every example composes; not declared in example pyprojects —
+# the Modal images ship its source instead (no index carries a path dependency).
+rrd_datasets_common = { path = "packages/rrd_datasets_common", editable = true }
+
+# The shared package's own dev environment: PACKAGE_DIR points the generic
+# dev tasks (lint/typecheck/tests) at it, mirroring the example features.
+[feature.common-package.dependencies]
+# Type information for the cloud modules.
+boto3-stubs = ">=1.34"
+mypy-boto3-s3 = ">=1.34"
+
+[feature.common-package.pypi-dependencies]
+# The cloud extra's real dependencies, so common-dev type-checks and tests the
+# modal_jobs modules; the example environments bring their own copies.
+modal = ">=1,<2"
+boto3 = ">=1.34"
+
+[feature.common-package.activation.env]
+PACKAGE_DIR = "packages/rrd_datasets_common"
+
+
+# ─── dev: check tooling shared by the default and every -dev environment ─────
+
+[feature.dev.dependencies]
+python = "3.12.*"
 mypy = "1.14.1.*"
 ruff = "0.11.6.*"
+pytest = ">=8"
 typos = ">=1.16.20"
+nbstripout = ">=0.9.1,<0.10"
+actionlint = ">=1.7.7,<2"
+lychee = "0.24.2.*"
+
+[feature.dev.activation.env]
+# The directory the generic tasks below operate on. Example features override
+# this with their own directory; the default environment covers the repo root.
+# List the example feature before dev in its environment — on conflicts, the
+# first feature's activation.env wins.
+PACKAGE_DIR = "."
+
+# Generic per-package tasks, parameterized by $PACKAGE_DIR:
+
+[feature.dev.tasks.fmt]
+cmd = "cd $PACKAGE_DIR && ruff check --fix --config \"$PIXI_PROJECT_ROOT/pyproject.toml\" . && ruff format --config \"$PIXI_PROJECT_ROOT/pyproject.toml\" ."
+description = "Auto-fix lint findings and format the package"
+
+[feature.dev.tasks.lint]
+cmd = "cd $PACKAGE_DIR && ruff check --config \"$PIXI_PROJECT_ROOT/pyproject.toml\" . && ruff format --check --config \"$PIXI_PROJECT_ROOT/pyproject.toml\" ."
+description = "Lint and format-check the package"
+
+[feature.dev.tasks.typecheck]
+# mypy does not search parent directories for config, so pass the root one explicitly.
+# Stub packages (types-*) go into feature.dev dependencies, not --install-types:
+# the env has no pip for mypy to call.
+cmd = "cd $PACKAGE_DIR && mypy --config-file \"$PIXI_PROJECT_ROOT/.mypy.ini\" --no-warn-unused-ignore ."
+description = "Type-check the package"
+
+[feature.dev.tasks.tests]
+# The explicit `tests` argument keeps collection inside the package; a bare
+# `pytest` would fall back to the root config's testpaths.
+cmd = "cd $PACKAGE_DIR && pytest -q tests"
+description = "Run the package tests"
+
+# Repo-wide static checks:
+
+[feature.dev.tasks.lint-typos]
+cmd = "typos"
+description = "Check for typos"
+
+[feature.dev.tasks.nb-strip]
+cmd = "python scripts/nb_strip.py"
+description = "Strip outputs from committed notebooks"
+
+[feature.dev.tasks.nb-strip-check]
+cmd = "python scripts/nb_strip.py --verify"
+description = "Check that committed notebooks carry no outputs"
+
+[feature.dev.tasks.lint-actions]
+cmd = "actionlint"
+description = "Lint the GitHub workflow files"
+
+[feature.dev.tasks.link-check]
+# lychee reads lychee.toml at the repo root; the globs match CI's link workflow.
+# --hidden reaches .github/.
+cmd = 'lychee --hidden --cache --max-cache-age 1d --root-dir "$PIXI_PROJECT_ROOT" . "**/*.toml" "**/*.py" "**/*.yml"'
+description = "Check links in text files"
+
+[feature.dev.tasks.check-all]
+# Example code type-checks and tests in its own dev environment, where its real
+# dependencies are installed; ruff needs no environment, so the root lint
+# already covers example code.
+depends-on = [
+    "lint",
+    "typecheck",
+    "lint-typos",
+    "nb-strip-check",
+    "lint-actions",
+    "link-check",
+    { task = "typecheck", environment = "common-dev" },
+    { task = "tests", environment = "common-dev" },
+]
+description = "Run every repo check"
+
+
+# ─── serve: one local catalog server shared by every example ─────────────────
+
+[feature.serve-tasks.tasks.serve]
+# One in-memory catalog holds every example's dataset: each *-register task
+# adds its recordings as absolute URIs, so the server needs no particular
+# working directory. The extra origin lets the notebook-embedded viewer
+# connect from VS Code webviews; plain localhost Jupyter is allowed by default.
+cmd = "rerun server --cors-allow-origin 'vscode-webview://*'"
+description = "Serve a local Rerun catalog of the converted recordings"
+
+
+[environments]
+default = { features = ["dev"] }
+serve = { features = ["common", "serve-tasks"], no-default-feature = true }
+common-dev = { features = ["common", "common-package", "dev"], no-default-feature = true }

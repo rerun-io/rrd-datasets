@@ -4,3 +4,7 @@
 
 [default.extend-words]
 teh = "teh"     # part of @teh-cmc
+
+[default]
+# Jupyter cell ids are random hex / uuids, not prose — skip them (e.g. "f52b5ba0" trips on "ba").
+extend-ignore-re = ['"id": "[0-9a-f][0-9a-f-]*"']

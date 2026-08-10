@@ -19,6 +19,9 @@ venv
 data/
 rrds/
 
+# Cached HuggingFace repo listings, regenerated per revision:
+.cache/
+
 # Internal working notes:
 notes/
 

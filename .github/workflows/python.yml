@@ -17,9 +17,13 @@ jobs:
 
       - uses: prefix-dev/setup-pixi@v0.8.8
         with:
-          pixi-version: v0.72.0
+          pixi-version: v0.73.0
           cache: true
 
-      - run: pixi run py-fmt-check
+      - run: pixi run lint
 
-      - run: pixi run py-lint
+      - run: pixi run typecheck
+
+      - run: pixi run -e common-dev typecheck
+
+      - run: pixi run -e common-dev tests

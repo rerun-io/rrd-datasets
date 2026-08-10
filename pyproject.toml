@@ -11,7 +11,11 @@ repository = "https://github.com/rerun-io/rrd-datasets"
 [tool.ruff]
 # https://beta.ruff.rs/docs/configuration/
 
-target-version = "py310"
+target-version = "py312"
+
+# Where first-party sources live, so isort keeps example and shared-package
+# imports in the first-party group when linting from the repository root.
+src = [".", "examples/*", "packages/*"]
 
 # Enable unsafe fixes to allow ruff to apply fixes that may change the behavior of the code.
 # This is needed because otherwise ruff will not be able to trim whitespaces in (codegened) docstrings.
@@ -25,7 +29,11 @@ lint.explicit-preview-rules = true
 extend-exclude = [
     # Automatically generated test artifacts
     "venv/",
+    "target/",
 ]
+
+# Lint committed notebooks too.
+extend-include = ["*.ipynb"]
 
 lint.ignore = [
     # These makes sense to ignore in example code, but for a proper library we should not ignore these.
@@ -77,3 +85,7 @@ lint.unfixable = [
 
 [tool.ruff.lint.isort]
 required-imports = ["from __future__ import annotations"]
+
+[tool.pytest.ini_options]
+# Root tests only; example tests run through the `tests` task in the example's dev environment.
+testpaths = ["tests"]
