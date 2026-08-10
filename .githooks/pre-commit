@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Pre-commit hook: run the same lint/format checks as CI before allowing a commit.
+#
+# This hook is tracked in the repo. Activate it in a fresh checkout with:
+#     git config core.hooksPath .githooks
+#
+# It runs `pixi run check-all` — a superset of the checks CI runs. It only *checks*; to auto-fix
+# run `pixi run fmt` (formatting) and `pixi run nb-strip` (notebook outputs).
+# Bypass in a pinch with `git commit --no-verify`.
+set -euo pipefail
+
+if ! command -v pixi >/dev/null 2>&1; then
+  echo "pre-commit: 'pixi' not found on PATH — skipping checks." >&2
+  exit 0
+fi
+
+echo "pre-commit: running 'pixi run check-all'…"
+if ! pixi run check-all; then
+  echo >&2
+  echo "pre-commit: checks failed. Auto-fix formatting with 'pixi run fmt', then re-stage." >&2
+  echo "            (bypass with 'git commit --no-verify' if you must.)" >&2
+  exit 1
+fi
