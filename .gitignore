@@ -1,14 +1,6 @@
 # Mac stuff:
 .DS_Store
 
-# C++ build directory
-build
-
-# Rust compile target directories:
-target
-target_ra
-target_wasm
-
 # https://github.com/lycheeverse/lychee
 .lycheecache
 
@@ -22,3 +14,12 @@ __pycache__
 .ruff_cache
 *.egg-info
 venv
+
+# Downloaded datasets and converted recordings — hosted externally, never committed:
+data/
+rrds/
+
+# Internal working notes:
+notes/
+
+CLAUDE.md

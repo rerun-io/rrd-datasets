@@ -1,22 +1,12 @@
-# Copied from https://github.com/rerun-io/rerun_template
-
 [project]
-name = "new_project_name"
-dynamic = ["version"]
-description = "A sample Rerun python project."
-authors = [{ name = "Rerun.io", email = "opensource@rerun.io" }]
+name = "rrd_datasets"
+version = "0.1.0"
+description = "Python data conversion examples from open robotics datasets to the Rerun file format (.rrd)"
+authors = [{ name = "Bhoram Lee", email = "bhoram@rerun.io" }]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 homepage = "https://rerun.io"
-repository = "https://github.com/rerun-io/rerun_template"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.version]
-path = "new_project_name/__init__.py"
-variable = "__version__"
+repository = "https://github.com/rerun-io/rrd-datasets"
 
 [tool.ruff]
 # https://beta.ruff.rs/docs/configuration/
@@ -35,7 +25,6 @@ lint.explicit-preview-rules = true
 extend-exclude = [
     # Automatically generated test artifacts
     "venv/",
-    "target/",
 ]
 
 lint.ignore = [
