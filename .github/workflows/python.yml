@@ -27,3 +27,7 @@ jobs:
       - run: pixi run -e common-dev typecheck
 
       - run: pixi run -e common-dev tests
+
+      - run: pixi run -e abc-130k-dev typecheck
+
+      - run: pixi run -e abc-130k-dev tests

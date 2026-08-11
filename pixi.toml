@@ -137,6 +137,8 @@ depends-on = [
     "link-check",
     { task = "typecheck", environment = "common-dev" },
     { task = "tests", environment = "common-dev" },
+    { task = "typecheck", environment = "abc-130k-dev" },
+    { task = "tests", environment = "abc-130k-dev" },
 ]
 description = "Run every repo check"
 
@@ -152,7 +154,76 @@ cmd = "rerun server --cors-allow-origin 'vscode-webview://*'"
 description = "Serve a local Rerun catalog of the converted recordings"
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# abc-130k
+# ═══════════════════════════════════════════════════════════════════════════
+
+[feature.abc-130k.dependencies]
+# PyAV from conda, so its native FFmpeg libraries come along on every platform.
+av = ">=12"
+
+# Notebook environment.
+pandas = ">=2,<3"
+ipykernel = ">=6.29,<7"
+ipywidgets = ">=8.1.8,<9"
+
+# Type information for the cloud extra.
+boto3-stubs = ">=1.34"
+mypy-boto3-s3 = ">=1.34"
+
+[feature.abc-130k.pypi-dependencies]
+abc_130k = { path = "examples/abc-130k", editable = true, extras = ["cloud"] }
+# PyPI-only notebook integration; not required by the conversion package.
+rerun-notebook = ">=0.34,<0.35"
+
+[feature.abc-130k.activation.env]
+PACKAGE_DIR = "examples/abc-130k"
+
+# Dataset tasks sit in their own feature, included only in the abc-130k
+# environment — in exactly one environment, a bare `pixi run abc-…` needs
+# no --environment flag.
+
+[feature.abc-130k-tasks.tasks.abc-demo]
+cmd = "rerun rrds/abc-130k/base/*.rrd blueprints/abc-130k/default.rbl"
+depends-on = ["abc-download", "abc-convert"]
+description = "Download a sample episode, convert it, and open it in the Rerun Viewer"
+
+[feature.abc-130k-tasks.tasks.abc-download]
+cmd = "python -m abc_130k.download"
+cwd = "examples/abc-130k"
+description = "Download the ABC-130k sample episode"
+
+[feature.abc-130k-tasks.tasks.abc-convert]
+cmd = "python -m abc_130k.convert"
+cwd = "examples/abc-130k"
+description = "Convert ABC-130k episodes to rrd"
+
+[feature.abc-130k-tasks.tasks.abc-blueprint]
+cmd = "python -m abc_130k.blueprint"
+cwd = "examples/abc-130k"
+description = "Generate the ABC-130k blueprint"
+
+[feature.abc-130k-tasks.tasks.abc-register]
+cmd = "python -m abc_130k.catalog"
+cwd = "examples/abc-130k"
+description = "Register the ABC-130k recordings in a catalog"
+
+[feature.abc-130k-tasks.tasks.abc-convert-on-modal]
+cmd = "modal run --detach -q -m abc_130k.modal_jobs.convert_episodes"
+cwd = "examples/abc-130k"
+description = "Convert ABC-130k episodes on Modal"
+
+[feature.abc-130k-tasks.tasks.abc-upload-blueprint]
+cmd = "python -m abc_130k.upload_blueprint"
+cwd = "examples/abc-130k"
+description = "Upload the ABC-130k blueprint"
+
+
 [environments]
 default = { features = ["dev"] }
 serve = { features = ["common", "serve-tasks"], no-default-feature = true }
 common-dev = { features = ["common", "common-package", "dev"], no-default-feature = true }
+# The example feature comes before dev: on activation.env conflicts the first
+# feature wins, and PACKAGE_DIR must be the example's.
+abc-130k = { features = ["common", "abc-130k", "abc-130k-tasks"], solve-group = "abc-130k", no-default-feature = true }
+abc-130k-dev = { features = ["common", "abc-130k", "dev"], solve-group = "abc-130k", no-default-feature = true }

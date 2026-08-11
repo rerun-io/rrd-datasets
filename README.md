@@ -24,56 +24,70 @@ Clone the repository:
     git clone https://github.com/rerun-io/rrd-datasets.git
     cd rrd-datasets
 
+For a quick demo, run an ABC-130k dataset example end to end — download a sample episode, convert it, and open the result in the Rerun Viewer:
+
+    pixi run abc-demo
+
+The dataset is gated on Hugging Face — accept its terms and authenticate first, see [examples/abc-130k](examples/abc-130k#dataset).
+
 Run `pixi task list` to see all available tasks.
 
 
+### Agent Skills
+
+This repository was built using [Rerun's agent skills](https://github.com/rerun-io/rerun/tree/main/skills).
+To refresh the checked-in snapshot to the newest maintained versions, run:
+
+```bash
+npx skills add rerun-io/rerun
+```
+
 ## Datasets
+
+The repository currently supports the following datasets, with additional integrations planned.
 
 | Dataset | Domain | Input | Rerun HF bucket | Status |
 |---------|--------|-------|-----------------|--------|
-| ABC-130k | Bi-manual arm | MCAP | [`rerun/abc-130k`](https://huggingface.co/buckets/rerun/abc-130k) | ✅ |
+| [ABC-130k](examples/abc-130k) | Bi-manual arm | MCAP | [`rerun/abc-130k`](https://huggingface.co/buckets/rerun/abc-130k) | ✅ |
 | HIW-500 | Humanoid | MCAP | N/A | 🚧 |
 | *More to come* | | | | |
 
+
+## Repository structure
+
+The repository is organized around self-contained dataset examples, with shared utilities and committed viewer blueprints kept alongside them.
+
+    examples/       one directory per dataset — the conversion code
+    packages/       shared utilities used by the examples
+    blueprints/     each dataset's committed default viewer layout
+    data/  rrds/    created locally by the tasks: downloads and converted recordings (gitignored)
+
+Each example is a small Python package in the following structure:
+
+    examples/<dataset>/
+        README.md       source, license, mapping to Rerun, how to run
+        <dataset>/      the conversion code: download.py, convert.py, blueprint.py, catalog.py, …
+        tests/
+
+registering its pixi tasks in `pixi.toml`, and committing its default blueprint under `blueprints/<dataset>/`.
 
 ## How it works
 
 Each example follows the same pipeline:
 
-    Download a sample of the source dataset
+    📥 Download a sample of the source dataset
           ↓
-    Convert it to .rrd and generate a blueprint
+    🔄 Convert it to .rrd and generate a blueprint
           ↓
-    Inspect the recordings in the Rerun Viewer
+    👀 Inspect the recordings in the Rerun Viewer
           ↓
-    Serve the recordings and register them to a catalog
+    🗄️ Serve the recordings and register them to a catalog
           ↓
-    Query the catalog from your training code
+    🔎 Query the catalog for your curation/training
 
-Each stage is a pixi task named `<dataset>-<stage>`.
+Each stage is a pixi task named `<dataset>-<stage>`, such as `abc-download` or `abc-convert`.
 
 The examples intentionally favor readable conversion code over abstraction.
-
-
-## Repository structure
-
-    examples/       one directory per dataset
-    packages/       shared utilities used by the examples
-
-Each example contains its own conversion code and a README with the dataset-specific details: source, license, mapping to Rerun, and how to run it.
-
-
-## Adding a dataset
-
-A new example is a directory under `examples/`:
-
-    examples/<dataset>/
-        README.md
-        download.py
-        convert.py
-
-Start from [`examples/_template`](examples/_template).
-
 
 ## License
 
