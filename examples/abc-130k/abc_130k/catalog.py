@@ -4,7 +4,7 @@ Register the converted ABC-130k RRDs into a local Rerun catalog as one dataset.
 The flow mirrors the cloud ingestion pattern, with two pixi tasks:
 
     pixi run serve           # start the in-memory Rerun catalog (leave running)
-    pixi run abc-register    # in another shell: register every converted episode
+    pixi run -e abc register    # in another shell: register every converted episode
 
 Each episode's `.rrd` becomes one *segment* (id = its `recording_id`), and the default blueprint is
 installed on the dataset. Connect a viewer to the catalog URL to browse, filter, and query across
@@ -46,7 +46,7 @@ def register_episodes(
     """
     rrds = _episode_rrds(rrd_dir)
     if not rrds:
-        raise FileNotFoundError(f"No episode .rrd files in {rrd_dir} — run `pixi run abc-convert` first.")
+        raise FileNotFoundError(f"No episode .rrd files in {rrd_dir} — run `pixi run -e abc convert` first.")
 
     client = CatalogClient(catalog_url)
     if recreate and dataset_name in client.dataset_names():
@@ -61,7 +61,7 @@ def register_episodes(
         dataset.register_blueprint(blueprint.resolve().as_uri(), set_default=True)
         print(f"Default blueprint: {blueprint}")
     else:
-        print(f"No blueprint at {blueprint} (run `pixi run abc-blueprint`)")
+        print(f"No blueprint at {blueprint} (run `pixi run -e abc blueprint`)")
     return dataset
 
 

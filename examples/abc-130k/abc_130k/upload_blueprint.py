@@ -1,11 +1,11 @@
 """
 Upload the ABC-130k blueprint (`.rbl`) to the storage bucket.
 
-`pixi run abc-blueprint` writes the committed default `blueprints/abc-130k/default.rbl`; this
+`pixi run -e abc blueprint` writes the committed default `blueprints/abc-130k/default.rbl`; this
 uploads it to the bucket, under the dataset's `blueprints/` prefix.
 
-Run:  pixi run abc-blueprint         # (re)generate the default blueprint
-      pixi run abc-upload-blueprint  # upload it
+Run:  pixi run -e abc blueprint         # (re)generate the default blueprint
+      pixi run -e abc upload-blueprint  # upload it
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ def upload_blueprint(blueprint: Path, s3_uri: str) -> None:
     if blueprint.suffix != ".rbl":
         raise ValueError(f"Expected an .rbl blueprint file, got {blueprint}")
     if not blueprint.exists():
-        raise FileNotFoundError(f"{blueprint} not found — run `pixi run abc-blueprint` first.")
+        raise FileNotFoundError(f"{blueprint} not found — run `pixi run -e abc blueprint` first.")
     if not s3_uri.startswith("s3://"):
         raise ValueError(f"Expected an s3:// URI, got {s3_uri}")
 

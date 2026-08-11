@@ -26,7 +26,7 @@ Clone the repository:
 
 For a quick demo, run an ABC-130k dataset example end to end — download a sample episode, convert it, and open the result in the Rerun Viewer:
 
-    pixi run abc-demo
+    pixi run -e abc demo
 
 The dataset is gated on Hugging Face — accept its terms and authenticate first, see [examples/abc-130k](examples/abc-130k#dataset).
 
@@ -85,7 +85,7 @@ Each example follows the same pipeline:
           ↓
     🔎 Query the catalog for your curation/training
 
-Each stage is a pixi task named `<dataset>-<stage>`, such as `abc-download` or `abc-convert`.
+Each stage is a pixi task named after the stage, run in the dataset's environment — for example `pixi run -e abc download` or `pixi run -e abc convert`.
 
 The examples intentionally favor readable conversion code over abstraction.
 

@@ -6,8 +6,8 @@ This writes the *base* layer: the raw ABC-130k `episode.mcap` (plus the optional
 `<task>__<uuid>`, so every episode is its own catalog segment. The camera video is re-encoded to
 H.264 with a fixed GOP, and 1920x1200 cameras are downscaled with their `Pinhole` rescaled to match.
 
-Run:  pixi run abc-convert                 # every episode found under data/ABC-130k/data/
-      pixi run abc-convert <episode.mcap>  # a single episode mcap
+Run:  pixi run -e abc convert                 # every episode found under data/ABC-130k/data/
+      pixi run -e abc convert <episode.mcap>  # a single episode mcap
 """
 
 from __future__ import annotations
@@ -433,7 +433,7 @@ def main() -> None:
     episodes = [episode_from_mcap(args.mcap)] if args.mcap is not None else discover_episodes(DATA_ROOT)
     if not episodes:
         print(f"No episodes found under {DATA_ROOT}")
-        print("-> download some first: 'pixi run abc-download' (see README).")
+        print("-> download some first: 'pixi run -e abc download' (see README).")
         return
     video_setting = VideoSettings(crf=args.crf)
     print(

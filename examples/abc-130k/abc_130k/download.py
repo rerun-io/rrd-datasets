@@ -6,7 +6,7 @@ two-arm YAM stations. Each episode is distributed as a single MCAP file. This gr
 one episode (~450 MB) from the "fold and stack the t-shirts" task so there is
 something to poke at locally without pulling the full (>1 TB) dataset.
 
-Run:  pixi run abc-download
+Run:  pixi run -e abc download
 """
 
 from __future__ import annotations

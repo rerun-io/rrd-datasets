@@ -8,7 +8,7 @@ fans the rest out across workers. Each worker downloads one episode, runs the sa
 The launch is fire-and-forget: the pixi task uses `modal run --detach`, so the workers keep going
 after the CLI exits. Watch their progress in the Modal dashboard.
 
-Run `pixi run abc-convert-on-modal --help` for flags; see the README for examples and prerequisites.
+Run `pixi run -e abc convert-on-modal --help` for flags; see the README for examples and prerequisites.
 """
 
 from __future__ import annotations

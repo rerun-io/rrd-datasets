@@ -20,14 +20,8 @@ jobs:
           pixi-version: v0.73.0
           cache: true
 
-      - run: pixi run lint
+      - run: pixi run py-fmt-check
 
-      - run: pixi run typecheck
+      - run: pixi run py-lint-all
 
-      - run: pixi run -e common-dev typecheck
-
-      - run: pixi run -e common-dev tests
-
-      - run: pixi run -e abc-130k-dev typecheck
-
-      - run: pixi run -e abc-130k-dev tests
+      - run: pixi run tests-all

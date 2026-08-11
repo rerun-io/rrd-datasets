@@ -6,7 +6,7 @@ Writes the committed default `blueprints/abc-130k/default.rbl` bound to the shar
 registered as a catalog dataset's default blueprint once that layer exists.
 There is no 3D view: the base layer carries no transforms or geometry that is useful for 3D view.
 
-Run:  pixi run abc-blueprint
+Run:  pixi run -e abc blueprint
 """
 
 from __future__ import annotations
