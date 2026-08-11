@@ -77,3 +77,7 @@ exclude = [
   # HF bucket gateway endpoints appear in code as templates, not documents.
   's3\.hf\.co',
 ]
+
+  # Embedded demo videos: GitHub serves these only to authenticated requests,
+  # so anonymous checks get 404 while the README embed renders fine.
+  'https://github.com/user-attachments/assets/.*',

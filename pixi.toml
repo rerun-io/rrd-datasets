@@ -69,6 +69,7 @@ typos = ">=1.16.20"
 nbstripout = ">=0.9.1,<0.10"
 actionlint = ">=1.7.7,<2"
 lychee = "0.24.2.*"
+prettier = ">=3.6"
 
 [feature.dev.activation.env]
 # The directory the generic tasks below operate on. Example features override
@@ -118,20 +119,21 @@ description = "Check that committed notebooks carry no outputs"
 cmd = "actionlint"
 description = "Lint the GitHub workflow files"
 
+# Prettier walks the whole tree but skips everything in .gitignore (data/, rrds/, .pixi, …).
+[feature.dev.tasks.format-md]
+cmd = 'prettier --write "**/*.md"'
+description = "Format the markdown files"
+
+[feature.dev.tasks.check-md]
+cmd = 'prettier --check "**/*.md"'
+description = "Check markdown formatting"
+
 [feature.dev.tasks.link-check]
 # lychee reads lychee.toml at the repo root; the globs match CI's link workflow.
 # --hidden reaches .github/.
 cmd = 'lychee --hidden --cache --max-cache-age 1d --root-dir "$PIXI_PROJECT_ROOT" . "**/*.toml" "**/*.py" "**/*.yml"'
 description = "Check links in text files"
 
-[feature.dev.tasks.check-all]
-# ruff needs no environment, so the root py-fmt-check already covers example code.
-depends-on = [
-    "py-fmt-check",
-    "py-lint-all",
-    "lint-typos",
-    "nb-strip-check",
-    "lint-actions",
 # Each package type-checks and tests in its own dev environment, where its real
 # dependencies are installed — no single environment holds every package's
 # dependencies (per-example solve groups), so these fan out instead of running
@@ -152,6 +154,15 @@ depends-on = [
 ]
 description = "Run every package's tests"
 
+[feature.dev.tasks.check-all]
+# ruff needs no environment, so the root py-fmt-check already covers example code.
+depends-on = [
+    "py-fmt-check",
+    "py-lint-all",
+    "lint-typos",
+    "nb-strip-check",
+    "lint-actions",
+    "check-md",
     "link-check",
     "tests-all",
 ]

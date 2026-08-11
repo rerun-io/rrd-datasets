@@ -30,8 +30,8 @@ What surveying the episodes revealed that the dataset card does not say.
 
 Explain how the source schema maps to entity paths, archetypes, and timelines.
 
-| Source | Entity path | Archetype |
-| ------ | ----------- | --------- |
+| Source         | Entity path  | Archetype                              |
+| -------------- | ------------ | -------------------------------------- |
 | <topic/column> | <`/robot/…`> | <`Transform3D`, `Image`, `Scalars`, …> |
 
 Rerun APIs demonstrated: <e.g. `McapReader`, lenses, `send_chunks`, blueprint>.

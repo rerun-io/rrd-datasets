@@ -16,7 +16,6 @@ New to Rerun? Start with [What is Rerun?](https://rerun.io/docs/overview/what-is
 ## Quickstart
 
 Install Pixi:
-
     curl -fsSL https://pixi.sh/install.sh | sh
 
 Clone the repository:
@@ -34,7 +33,6 @@ Run `pixi task list` to see all available tasks.
 
 
 ### Agent Skills
-
 This repository was built using [Rerun's agent skills](https://github.com/rerun-io/rerun/tree/main/skills).
 To refresh the checked-in snapshot to the newest maintained versions, run:
 
@@ -46,12 +44,11 @@ npx skills add rerun-io/rerun
 
 The repository currently supports the following datasets, with additional integrations planned.
 
-| Dataset | Domain | Input | Rerun HF bucket | Status |
-|---------|--------|-------|-----------------|--------|
-| [ABC-130k](examples/abc-130k) | Bi-manual arm | MCAP | [`rerun/abc-130k`](https://huggingface.co/buckets/rerun/abc-130k) | ✅ |
-| HIW-500 | Humanoid | MCAP | N/A | 🚧 |
-| *More to come* | | | | |
-
+| Dataset                       | Domain        | Input | Rerun HF bucket                                                   | Status |
+| ----------------------------- | ------------- | ----- | ----------------------------------------------------------------- | ------ |
+| [ABC-130k](examples/abc-130k) | Bi-manual arm | MCAP  | [`rerun/abc-130k`](https://huggingface.co/buckets/rerun/abc-130k) | ✅     |
+| HIW-500                       | Humanoid      | MCAP  | N/A                                                               | 🚧     |
+| _More to come_                |               |       |                                                                   |        |
 
 ## Repository structure
 
