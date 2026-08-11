@@ -77,11 +77,6 @@ exclude = [
   # This repository is not public yet; drop this exclusion once it is.
   'github\.com/rerun-io/rrd-datasets',
 
-  # The abc demo video must be re-hosted before publication — the old asset was
-  # uploaded through a private repo and returns 404 anonymously. Drop this
-  # exclusion once the README carries the public replacement.
-  'github\.com/user-attachments/assets/fa485891-58ca-43eb-9a77-0acf90b8b9c1',
-
   # HF bucket gateway endpoints appear in code as templates, not documents.
   's3\.hf\.co',
 ]

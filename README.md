@@ -24,10 +24,6 @@ Clone the repository:
     git clone https://github.com/rerun-io/rrd-datasets.git
     cd rrd-datasets
 
-Run an example end to end — download a sample episode, convert it, and open the result in the Rerun Viewer:
-
-    pixi run abc-demo
-
 Run `pixi task list` to see all available tasks.
 
 
@@ -35,8 +31,8 @@ Run `pixi task list` to see all available tasks.
 
 | Dataset | Domain | Input | Rerun HF bucket | Status |
 |---------|--------|-------|-----------------|--------|
-| [ABC-130k](examples/abc-130k) | Bi-manual arm | MCAP | [`rerun/abc-130k`](https://huggingface.co/buckets/rerun/abc-130k) | ✅ |
-| [HIW-500](examples/hiw-500) | Humanoid | MCAP | N/A | 🚧 |
+| ABC-130k | Bi-manual arm | MCAP | [`rerun/abc-130k`](https://huggingface.co/buckets/rerun/abc-130k) | ✅ |
+| HIW-500 | Humanoid | MCAP | N/A | 🚧 |
 | *More to come* | | | | |
 
 
@@ -54,7 +50,7 @@ Each example follows the same pipeline:
           ↓
     Query the catalog from your training code
 
-Each stage is a pixi task named `<dataset>-<stage>`, such as `abc-download` or `abc-convert`.
+Each stage is a pixi task named `<dataset>-<stage>`.
 
 The examples intentionally favor readable conversion code over abstraction.
 
