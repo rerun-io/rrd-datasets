@@ -1,5 +1,9 @@
 # RRD Datasets
 
+<p align="center">
+  <img src="assets/rerun-wordmark-animation.gif" alt="Rerun wordmark" width="500">
+</p>
+
 Physical AI teams win by iterating quickly on data composition and modeling while scaling data and compute.
 
 Open datasets are an important part of that process, but they often arrive in different formats and schemas.
@@ -12,10 +16,10 @@ Already using `.rrd`? You're in the right place.
 
 New to Rerun? Start with [What is Rerun?](https://rerun.io/docs/overview/what-is-rerun), [How does Rerun work?](https://rerun.io/docs/concepts/how-does-rerun-work), and [A new data layer for robot learning](https://rerun.io/blog/data-layer-for-robot-learning).
 
-
 ## Quickstart
 
-Install Pixi:
+Dependencies are managed with [Pixi](https://pixi.sh). Install it:
+
     curl -fsSL https://pixi.sh/install.sh | sh
 
 Clone the repository:
@@ -27,12 +31,12 @@ For a quick demo, run an ABC-130k dataset example end to end — download a samp
 
     pixi run -e abc demo
 
-The dataset is gated on Hugging Face — accept its terms and authenticate first, see [examples/abc-130k](examples/abc-130k#dataset).
+Note that the dataset is gated on Hugging Face — accept its terms and authenticate first, see [examples/abc-130k](examples/abc-130k#dataset).
 
 Run `pixi task list` to see all available tasks.
 
-
 ### Agent Skills
+
 This repository was built using [Rerun's agent skills](https://github.com/rerun-io/rerun/tree/main/skills).
 To refresh the checked-in snapshot to the newest maintained versions, run:
 
