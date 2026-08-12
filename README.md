@@ -33,7 +33,7 @@ For a quick demo, run an ABC-130k dataset example end to end — download sample
 
 Note that the dataset is gated on Hugging Face — accept its terms and authenticate first, see [examples/abc-130k](examples/abc-130k#dataset).
 
-It downloads files about 900 MB in total under `data/`.
+This downloads about 900 MB into `data/`.
 
 Run `pixi task list` to see all available tasks.
 
@@ -48,7 +48,7 @@ npx skills experimental_install
 
 ## Datasets
 
-The repository currently supports the following datasets, with additional integrations planned.
+Currently supported datasets:
 
 | Dataset                       | Domain        | Input | Rerun HF bucket                                                   | Status |
 | ----------------------------- | ------------- | ----- | ----------------------------------------------------------------- | ------ |
@@ -65,14 +65,14 @@ The repository is organized around self-contained dataset examples, with shared 
     blueprints/     each dataset's committed default viewer layout
     data/  rrds/    created locally by the tasks: downloads and converted recordings (gitignored)
 
-Each example is a small Python package in the following structure:
+Each example is a small Python package:
 
     examples/<dataset>/
         README.md       source, license, mapping to Rerun, how to run
         <dataset>/      the conversion code: download.py, convert.py, blueprint.py, catalog.py, …
         tests/
 
-registering its pixi tasks in `pixi.toml`, and committing its default blueprint under `blueprints/<dataset>/`.
+It registers its pixi tasks in `pixi.toml` and commits its default blueprint under `blueprints/<dataset>/`.
 
 ## How it works
 
@@ -88,7 +88,13 @@ Each example follows the same pipeline:
           ↓
     🔎 Query the catalog for your curation/training
 
-Each stage is a pixi task named after the stage, run in the dataset's environment — for example `pixi run -e abc download` or `pixi run -e abc convert`.
+Each stage is a pixi task of the same name, run in the dataset's environment. For example:
+
+```sh
+pixi run -e abc download
+pixi run -e abc convert
+pixi run -e <env> <stage>      # blueprint, register, …
+```
 
 The examples intentionally favor readable conversion code over abstraction.
 

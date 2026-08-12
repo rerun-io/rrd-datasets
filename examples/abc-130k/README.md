@@ -2,14 +2,16 @@
 
 [XDOF/ABC-130k](https://huggingface.co/datasets/XDOF/ABC-130k) is a large open-source bi-manual teleoperation dataset: 130k episodes across 197 household manipulation tasks, recorded as MCAP.
 This example converts each episode MCAP into a Rerun recording (`.rrd`).
-The [default blueprint](#running) arranges a converted episode across three rows.
+The [default blueprint](#3-view) arranges a converted episode across three rows.
 Below is the viewer displaying a sample episode.
 
 https://github.com/user-attachments/assets/3bcafe00-1f66-47c5-97a1-9d20be273664
 
 The top and wrist cameras run across the top row, the instruction and subtask timeline share the middle row, and the bottom row plots arm and gripper positions, velocities, and torques.
 
-This example includes (1) a [local version](#local-runs) that downloads, converts, registers, and queries the data for a small subset, and (2) a [Modal](https://modal.com/)-based [remote version](#remote-convert-example-on-modal) that downloads, converts, and stores all episodes in an AWS S3 bucket.
+There are two ways to run it.
+The [local version](#local-runs) downloads a small subset, converts it, and registers it to a catalog you can query.
+The [Modal](https://modal.com/)-based [remote version](#remote-convert-example-on-modal) converts every episode and stores the results in an AWS S3 bucket.
 
 ## Dataset
 
@@ -25,11 +27,9 @@ Data is downloaded at runtime from the original Hugging Face repo.
 
 Converted recordings are published at [`rerun/abc-130k`](https://huggingface.co/buckets/rerun/abc-130k) — download them directly if you only want the `.rrd` data.
 
-# Running
+## Local Runs
 
 File paths below are relative to the repository root.
-
-## Local Runs
 
 ### 1. Download
 
@@ -86,7 +86,7 @@ pixi run -e abc rerun rrds/abc-130k/base/<episode>.rrd blueprints/abc-130k/defau
 
 ### 4. Local Catalog
 
-The converted episodes become more useful when registered to a **[catalog server](https://rerun.io/docs/concepts/how-does-rerun-work#catalog-server)**. You can browse, sort, filter, and query segments of your dataset.
+Register the converted episodes to a [catalog server](https://rerun.io/docs/concepts/how-does-rerun-work#catalog-server), then browse, sort, filter, and query the segments as one dataset.
 
 Start a local server:
 
@@ -101,7 +101,7 @@ pixi run -e abc register               # register every converted episode under 
 pixi run -e abc register --recreate    # delete the existing dataset and rebuild it from scratch
 ```
 
-Browse them on the Rerun viewer.
+Browse them in the Rerun Viewer:
 
 ```sh
 pixi run -e abc rerun rerun+http://127.0.0.1:51234
@@ -114,10 +114,10 @@ See [`notebook/query_local_catalog.ipynb`](notebook/query_local_catalog.ipynb) f
 The steps above run locally with a small set of data.
 To convert the full dataset off-box, the [Modal](https://modal.com/) job under `abc_130k/modal_jobs/` fans episodes out across workers: each worker downloads one episode, converts it, and uploads the `.rrd` to S3.
 
-### 1. Prerequisite (1) S3 Storage
+### 1. Prerequisite: S3 storage
 
 Storage is plain S3 via [`boto3`](https://docs.aws.amazon.com/boto3/latest/), and AWS access uses [Modal's OIDC](https://modal.com/docs/guide/oidc-integration) identity exchanged for temporary credentials (no keys stored, no Modal Volumes to configure).
-To point at your own infrastructure, set the env vars below
+To point at your own infrastructure, set the env vars below:
 
 | Env var        | What it is                                                              |
 | -------------- | ----------------------------------------------------------------------- |
@@ -125,12 +125,13 @@ To point at your own infrastructure, set the env vars below
 | `S3_REGION`    | Bucket region (workers run in the same region)                          |
 | `AWS_ROLE_ARN` | IAM role that trusts Modal's OIDC issuer and can read/write that bucket |
 
-The defaults are placeholders.
+The values committed in the repo are placeholders.
 
-### 2. Prerequisite (2) Modal Setup
+### 2. Prerequisite: Modal setup
 
 - `pixi run -e abc modal setup` — authenticate the Modal CLI (one-time).
-- Log in to Hugging Face locally (`pixi run -e abc hf auth login`, or set `$HF_TOKEN`) — needed to list the gated dataset and to hand your token to the workers (shipped as an ephemeral per-run secret, so there is nothing stored on Modal to refresh).
+- Log in to Hugging Face locally (`pixi run -e abc hf auth login`, or set `$HF_TOKEN`).
+  The token lists the gated dataset and reaches the workers as an ephemeral per-run secret, so nothing is stored on Modal to refresh.
 
 ### 3. Run Convert
 
@@ -176,7 +177,7 @@ The table below shows where each source topic lands in the recording.
 | `/*-camera-info`          | same path                            | `Pinhole`      |
 | `annotation.mcap` sidecar | `/task/subtask`                      | `StateChange`  |
 
-References of Rerun APIs demonstrated in the example:
+Rerun APIs demonstrated in this example:
 
 - [`McapReader`](https://ref.rerun.io/docs/python/stable/experimental/#rerun.experimental.McapReader) decodes the episode topics, including the custom protobuf messages, into chunk streams (`convert.py`).
 - [`Lenses`](https://rerun.io/docs/concepts/query-and-transform/lenses) turn the raw messages into typed components: `Scalars` for the joint signals, `TextDocument` for the instruction, `StateChange` for the subtask labels (`convert.py`).
