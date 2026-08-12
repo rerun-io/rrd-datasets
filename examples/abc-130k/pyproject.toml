@@ -1,0 +1,36 @@
+# Package metadata only — the workspace root pixi.toml owns environments,
+# tasks, and lint configuration.
+
+[project]
+name = "abc_130k"
+dynamic = ["version"]
+requires-python = ">=3.12,<3.13"
+description = "Convert robot-teleoperation MCAP datasets into Rerun recordings."
+authors = [{ name = "Rerun.io", email = "opensource@rerun.io" }]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+dependencies = [
+    # Package runtime deps for the conversion.
+    "rerun-sdk>=0.34,<0.35",
+    "datafusion==53.0.0",
+    "huggingface_hub>=1,<2",
+    "numpy>=1.26",
+    "pyarrow>=14",
+    "av>=12",
+]
+
+[project.urls]
+Homepage = "https://rerun.io"
+Repository = "https://github.com/rerun-io/rrd-datasets"
+
+[project.optional-dependencies]
+# Cloud (Modal/S3) flow only.
+cloud = ["modal>=1,<2", "boto3>=1.34", "botocore>=1.34"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "abc_130k/__init__.py"
+variable = "__version__"

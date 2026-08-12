@@ -5,7 +5,7 @@
 #     git config core.hooksPath .githooks
 #
 # It runs `pixi run check-all` — a superset of the checks CI runs. It only *checks*; to auto-fix
-# run `pixi run fmt` (formatting) and `pixi run nb-strip` (notebook outputs).
+# run `pixi run py-fmt` (formatting) and `pixi run nb-strip` (notebook outputs).
 # Bypass in a pinch with `git commit --no-verify`.
 set -euo pipefail
 
@@ -17,7 +17,7 @@ fi
 echo "pre-commit: running 'pixi run check-all'…"
 if ! pixi run check-all; then
   echo >&2
-  echo "pre-commit: checks failed. Auto-fix formatting with 'pixi run fmt', then re-stage." >&2
+  echo "pre-commit: checks failed. Auto-fix formatting with 'pixi run py-fmt', then re-stage." >&2
   echo "            (bypass with 'git commit --no-verify' if you must.)" >&2
   exit 1
 fi

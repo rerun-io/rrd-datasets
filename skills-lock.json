@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "skills": {
+    "rerun-blueprint": {
+      "source": "rerun-io/rerun",
+      "sourceType": "github",
+      "skillPath": "skills/rerun-blueprint/SKILL.md",
+      "computedHash": "3fd5a39854f48d2a5cdc912176b4b54af5afc79a3470e07ff3597db17921018f"
+    },
+    "rerun-catalog-queries": {
+      "source": "rerun-io/rerun",
+      "sourceType": "github",
+      "skillPath": "skills/rerun-catalog-queries/SKILL.md",
+      "computedHash": "9c5029e3ddee453dea047542cbe2851bf754d38b11eda726b2f2e9df8f0626e7"
+    },
+    "rerun-chunk-processing": {
+      "source": "rerun-io/rerun",
+      "sourceType": "github",
+      "skillPath": "skills/rerun-chunk-processing/SKILL.md",
+      "computedHash": "22609ccebb86117e22e2399cf5afa41d22efa8f34eb78a7649a45e20a876b56d"
+    },
+    "rerun-data-model": {
+      "source": "rerun-io/rerun",
+      "sourceType": "github",
+      "skillPath": "skills/rerun-data-model/SKILL.md",
+      "computedHash": "5057234e91b82af67569353520c76f176bb5f386a13907b01e3160e089a36528"
+    },
+    "rerun-lerobot": {
+      "source": "rerun-io/rerun",
+      "sourceType": "github",
+      "skillPath": "skills/rerun-lerobot/SKILL.md",
+      "computedHash": "0e49a74e2c1f92167c083c3689e9fe908a26f3932cad7936fbac88dcacecc696"
+    },
+    "rerun-mcap": {
+      "source": "rerun-io/rerun",
+      "sourceType": "github",
+      "skillPath": "skills/rerun-mcap/SKILL.md",
+      "computedHash": "3f460b4c24ec385e5bd45a7f18e394cde3b76306780a0dcc694ad9a31b7e1a95"
+    },
+    "rerun-mp4": {
+      "source": "rerun-io/rerun",
+      "sourceType": "github",
+      "skillPath": "skills/rerun-mp4/SKILL.md",
+      "computedHash": "4f05cd91b164fdf738eaccef37b4fb48620eff158126e5360922c89eb2cfc4b7"
+    },
+    "rerun-parquet": {
+      "source": "rerun-io/rerun",
+      "sourceType": "github",
+      "skillPath": "skills/rerun-parquet/SKILL.md",
+      "computedHash": "ff1d7a0866e3919f4c2fdf50d9eca51bc877817fb37f5d91226684c878546c3a"
+    },
+    "rerun-urdf": {
+      "source": "rerun-io/rerun",
+      "sourceType": "github",
+      "skillPath": "skills/rerun-urdf/SKILL.md",
+      "computedHash": "d42f79852416cb1e338b7f9ec79739f5fc04c62427407359745c2e917596ae50"
+    }
+  }
+}

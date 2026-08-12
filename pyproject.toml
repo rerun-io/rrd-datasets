@@ -85,6 +85,9 @@ lint.unfixable = [
 
 [tool.ruff.lint.isort]
 required-imports = ["from __future__ import annotations"]
+# Pinned by name: the relative `src` paths resolve against the working directory,
+# so per-package runs (e.g. `pixi run -e abc-dev py-fmt`) would otherwise misgroup these.
+known-first-party = ["abc_130k", "rrd_datasets_common"]
 
 [tool.pytest.ini_options]
 # Root tests only; example tests run through the `tests` task in the example's dev environment.

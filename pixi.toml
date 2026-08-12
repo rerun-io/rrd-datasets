@@ -69,6 +69,7 @@ typos = ">=1.16.20"
 nbstripout = ">=0.9.1,<0.10"
 actionlint = ">=1.7.7,<2"
 lychee = "0.24.2.*"
+prettier = ">=3.6"
 
 [feature.dev.activation.env]
 # The directory the generic tasks below operate on. Example features override
@@ -79,15 +80,15 @@ PACKAGE_DIR = "."
 
 # Generic per-package tasks, parameterized by $PACKAGE_DIR:
 
-[feature.dev.tasks.fmt]
+[feature.dev.tasks.py-fmt]
 cmd = "cd $PACKAGE_DIR && ruff check --fix --config \"$PIXI_PROJECT_ROOT/pyproject.toml\" . && ruff format --config \"$PIXI_PROJECT_ROOT/pyproject.toml\" ."
 description = "Auto-fix lint findings and format the package"
 
-[feature.dev.tasks.lint]
+[feature.dev.tasks.py-fmt-check]
 cmd = "cd $PACKAGE_DIR && ruff check --config \"$PIXI_PROJECT_ROOT/pyproject.toml\" . && ruff format --check --config \"$PIXI_PROJECT_ROOT/pyproject.toml\" ."
 description = "Lint and format-check the package"
 
-[feature.dev.tasks.typecheck]
+[feature.dev.tasks.py-lint]
 # mypy does not search parent directories for config, so pass the root one explicitly.
 # Stub packages (types-*) go into feature.dev dependencies, not --install-types:
 # the env has no pip for mypy to call.
@@ -118,25 +119,52 @@ description = "Check that committed notebooks carry no outputs"
 cmd = "actionlint"
 description = "Lint the GitHub workflow files"
 
+# Prettier walks the whole tree but skips everything in .gitignore (data/, rrds/, .pixi, …).
+[feature.dev.tasks.format-md]
+cmd = 'prettier --write "**/*.md"'
+description = "Format the markdown files"
+
+[feature.dev.tasks.check-md]
+cmd = 'prettier --check "**/*.md"'
+description = "Check markdown formatting"
+
 [feature.dev.tasks.link-check]
 # lychee reads lychee.toml at the repo root; the globs match CI's link workflow.
 # --hidden reaches .github/.
 cmd = 'lychee --hidden --cache --max-cache-age 1d --root-dir "$PIXI_PROJECT_ROOT" . "**/*.toml" "**/*.py" "**/*.yml"'
 description = "Check links in text files"
 
-[feature.dev.tasks.check-all]
-# Example code type-checks and tests in its own dev environment, where its real
-# dependencies are installed; ruff needs no environment, so the root lint
-# already covers example code.
+# Each package type-checks and tests in its own dev environment, where its real
+# dependencies are installed — no single environment holds every package's
+# dependencies (per-example solve groups), so these fan out instead of running
+# one repo-wide pass. New examples register here; CI just runs the aggregate.
+
+[feature.dev.tasks.py-lint-all]
 depends-on = [
-    "lint",
-    "typecheck",
+    "py-lint",
+    { task = "py-lint", environment = "common-dev" },
+    { task = "py-lint", environment = "abc-dev" },
+]
+description = "Type-check the repo root and every package"
+
+[feature.dev.tasks.tests-all]
+depends-on = [
+    { task = "tests", environment = "common-dev" },
+    { task = "tests", environment = "abc-dev" },
+]
+description = "Run every package's tests"
+
+[feature.dev.tasks.check-all]
+# ruff needs no environment, so the root py-fmt-check already covers example code.
+depends-on = [
+    "py-fmt-check",
+    "py-lint-all",
     "lint-typos",
     "nb-strip-check",
     "lint-actions",
+    "check-md",
     "link-check",
-    { task = "typecheck", environment = "common-dev" },
-    { task = "tests", environment = "common-dev" },
+    "tests-all",
 ]
 description = "Run every repo check"
 
@@ -152,7 +180,76 @@ cmd = "rerun server --cors-allow-origin 'vscode-webview://*'"
 description = "Serve a local Rerun catalog of the converted recordings"
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# abc-130k
+# ═══════════════════════════════════════════════════════════════════════════
+
+[feature.abc-130k.dependencies]
+# PyAV from conda, so its native FFmpeg libraries come along on every platform.
+av = ">=12"
+
+# Notebook environment.
+pandas = ">=2,<3"
+ipykernel = ">=6.29,<7"
+ipywidgets = ">=8.1.8,<9"
+
+# Type information for the cloud extra.
+boto3-stubs = ">=1.34"
+mypy-boto3-s3 = ">=1.34"
+
+[feature.abc-130k.pypi-dependencies]
+abc_130k = { path = "examples/abc-130k", editable = true, extras = ["cloud"] }
+# PyPI-only notebook integration; not required by the conversion package.
+rerun-notebook = ">=0.34,<0.35"
+
+[feature.abc-130k.activation.env]
+PACKAGE_DIR = "examples/abc-130k"
+
+# Dataset tasks sit in their own feature, included only in the abc environment.
+# Every dataset names its stages the same way (download, convert, register, …),
+# and the environment selects the dataset: `pixi run -e abc convert`.
+
+[feature.abc-130k-tasks.tasks.demo]
+cmd = "rerun rrds/abc-130k/base/*.rrd blueprints/abc-130k/default.rbl"
+depends-on = ["download", "convert"]
+description = "Download sample episodes, convert them, and open them in the Rerun Viewer"
+
+[feature.abc-130k-tasks.tasks.download]
+cmd = "python -m abc_130k.download"
+cwd = "examples/abc-130k"
+description = "Download the ABC-130k sample episodes"
+
+[feature.abc-130k-tasks.tasks.convert]
+cmd = "python -m abc_130k.convert --pass-through"
+cwd = "examples/abc-130k"
+description = "Convert ABC-130k episodes to rrd"
+
+[feature.abc-130k-tasks.tasks.blueprint]
+cmd = "python -m abc_130k.blueprint"
+cwd = "examples/abc-130k"
+description = "Generate the ABC-130k blueprint"
+
+[feature.abc-130k-tasks.tasks.register]
+cmd = "python -m abc_130k.catalog"
+cwd = "examples/abc-130k"
+description = "Register the ABC-130k recordings in a catalog"
+
+[feature.abc-130k-tasks.tasks.convert-on-modal]
+cmd = "modal run --detach -q -m abc_130k.modal_jobs.convert_episodes"
+cwd = "examples/abc-130k"
+description = "Convert ABC-130k episodes on Modal"
+
+[feature.abc-130k-tasks.tasks.upload-blueprint]
+cmd = "python -m abc_130k.upload_blueprint"
+cwd = "examples/abc-130k"
+description = "Upload the ABC-130k blueprint"
+
+
 [environments]
 default = { features = ["dev"] }
 serve = { features = ["common", "serve-tasks"], no-default-feature = true }
 common-dev = { features = ["common", "common-package", "dev"], no-default-feature = true }
+# The example feature comes before dev: on activation.env conflicts the first
+# feature wins, and PACKAGE_DIR must be the example's.
+abc = { features = ["common", "abc-130k", "abc-130k-tasks"], solve-group = "abc", no-default-feature = true }
+abc-dev = { features = ["common", "abc-130k", "dev"], solve-group = "abc", no-default-feature = true }

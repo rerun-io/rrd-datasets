@@ -43,6 +43,8 @@ exclude_path = [
   ".cache",
   "data",
   "rrds",
+  ".agents",
+  ".claude",
 ]
 
 # Exclude URLs and mail addresses from checking (supports regex).
@@ -74,9 +76,10 @@ exclude = [
   'https://github.com/rerun-io/rerun/commit/\.*', # Ignore links to our own commits (typically in changelog).
   'https://github.com/rerun-io/rerun/pull/\.*',   # Ignore links to our own pull requests (typically in changelog).
 
-  # This repository is not public yet; drop this exclusion once it is.
-  'github\.com/rerun-io/rrd-datasets',
-
   # HF bucket gateway endpoints appear in code as templates, not documents.
   's3\.hf\.co',
+
+  # Embedded demo videos: GitHub serves these only to authenticated requests,
+  # so anonymous checks get 404 while the README embed renders fine.
+  'https://github.com/user-attachments/assets/.*',
 ]
