@@ -39,8 +39,6 @@ Download one sample episode (~450 MB) into `data/ABC-130k/`:
 pixi run -e abc download
 ```
 
-To inspect the dataset metadata and pick episodes more selectively, see [`notebook/download_episodes.ipynb`](notebook/download_episodes.ipynb).
-
 ### 2. Convert (MCAP → RRD)
 
 Convert downloaded episode MCAP files into per-episode Rerun recordings under `rrds/abc-130k/base/`:
@@ -149,7 +147,7 @@ pixi run -e abc convert-on-modal --task-filter fold_and_stack_the_t_shirts --lim
 > **Note:** transcoding is CPU-heavy, so a higher worker `cpu` allocation speeds it up (see `CPU_REQUEST` in [convert_episodes.py](abc_130k/modal_jobs/convert_episodes.py)).
 
 > **Note:** episode discovery (`discover_episodes` in [episode_index.py](abc_130k/episode_index.py)) lists the full Hugging Face repo tree once, which takes minutes for a repo this size.
-> The listing is cached in `examples/abc-130k/.cache/hf_files.json.gz` and reused until the dataset revision changes (the [download notebook](notebook/download_episodes.ipynb) shares it).
+> The listing is cached in `examples/abc-130k/.cache/hf_files.json.gz` and reused until the dataset revision changes.
 > Delete the file to force a re-listing.
 
 ## Observations
