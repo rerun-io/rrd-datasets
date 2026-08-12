@@ -52,12 +52,16 @@ pixi run -e abc convert <path to episode.mcap>     # just one
 
 #### Notes on Video Transcode
 
-The convert task always re-encodes the camera video to H.264 with a fixed config: keyframe interval (GOP) 60 for finer seeking (source's GOP is ~250), and 1920x1200 cameras downscaled to 640x400 (aspect-preserving).
+The local `convert` task runs `abc_130k.convert --pass-through`, copying the source video through untouched.
+
+To re-encode instead, run `pixi run -e abc python -m abc_130k.convert` directly.
+It re-encodes the camera video to H.264 with a fixed config: keyframe interval (GOP) 60 for finer seeking (source's GOP is ~250), and 1920x1200 cameras downscaled to 640x400 (aspect-preserving).
 The camera intrinsic parameters are updated accordingly.
 `--crf` tunes quality (default 23).
 
-> **Note:** the re-encode is CPU-heavy.
-> So the convert task can take minutes per episode (versus sub-second for a plain pass-through).
+The rrd dataset published at [`rerun/abc-130k`](https://huggingface.co/buckets/rerun/abc-130k) is a re-encoded version.
+
+> **Note:** the re-encode is CPU-heavy. It takes minutes per episode (versus seconds for a plain pass-through).
 > This project does not use GPU acceleration.
 
 ### 3. View

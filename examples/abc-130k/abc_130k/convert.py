@@ -4,7 +4,8 @@ Convert ABC-130k (two-arm YAM bimanual) MCAP episodes into per-episode Rerun RRD
 This writes the *base* layer: the raw ABC-130k `episode.mcap` (plus the optional sibling
 `annotation.mcap`) as Rerun entities, one optimized RRD per episode. Each `recording_id` is a stable
 `<task>__<uuid>`, so every episode is its own catalog segment. The camera video is re-encoded to
-H.264 with a fixed GOP, and 1920x1200 cameras are downscaled with their `Pinhole` rescaled to match.
+H.264 with a fixed GOP, and 1920x1200 cameras are downscaled with their `Pinhole` rescaled to match;
+`--pass-through` skips the re-encode and copies the source video through untouched.
 
 Run:  pixi run -e abc convert                 # every episode found under data/ABC-130k/data/
       pixi run -e abc convert <episode.mcap>  # a single episode mcap
@@ -428,6 +429,9 @@ def main() -> None:
         "mcap", nargs="?", type=Path, help="A single episode.mcap (default: every episode under data/)."
     )
     parser.add_argument("--crf", type=int, default=DEFAULT_CRF, help=f"libx264 CRF (default {DEFAULT_CRF}).")
+    parser.add_argument(
+        "--pass-through", action="store_true", help="Copy camera video through untouched (no re-encode)."
+    )
     args = parser.parse_args()
 
     episodes = [episode_from_mcap(args.mcap)] if args.mcap is not None else discover_episodes(DATA_ROOT)
@@ -435,11 +439,13 @@ def main() -> None:
         print(f"No episodes found under {DATA_ROOT}")
         print("-> download some first: 'pixi run -e abc download' (see README).")
         return
-    video_setting = VideoSettings(crf=args.crf)
-    print(
-        f"Converting {len(episodes)} episode(s) -> {OUT_DIR} "
-        f"(gop {video_setting.gop_size}, crf {video_setting.crf}, max_width {video_setting.max_width})"
+    video_setting = None if args.pass_through else VideoSettings(crf=args.crf)
+    video_note = (
+        "video pass-through"
+        if video_setting is None
+        else f"gop {video_setting.gop_size}, crf {video_setting.crf}, max_width {video_setting.max_width}"
     )
+    print(f"Converting {len(episodes)} episode(s) -> {OUT_DIR} ({video_note})")
     for ep in episodes:
         out = convert_episode(ep, OUT_DIR, video_setting)
         tag = "annotated" if ep.annotation is not None else "no annotation"

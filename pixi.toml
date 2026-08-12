@@ -220,7 +220,7 @@ cwd = "examples/abc-130k"
 description = "Download the ABC-130k sample episodes"
 
 [feature.abc-130k-tasks.tasks.convert]
-cmd = "python -m abc_130k.convert"
+cmd = "python -m abc_130k.convert --pass-through"
 cwd = "examples/abc-130k"
 description = "Convert ABC-130k episodes to rrd"
 
