@@ -38,10 +38,10 @@ Run `pixi task list` to see all available tasks.
 ### Agent Skills
 
 This repository was built using [Rerun's agent skills](https://github.com/rerun-io/rerun/tree/main/skills).
-To refresh the checked-in snapshot to the newest maintained versions, run:
+The set used is listed in [`skills-lock.json`](skills-lock.json); install them with:
 
 ```bash
-npx skills add rerun-io/rerun
+npx skills experimental_install
 ```
 
 ## Datasets
