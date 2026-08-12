@@ -212,12 +212,12 @@ PACKAGE_DIR = "examples/abc-130k"
 [feature.abc-130k-tasks.tasks.demo]
 cmd = "rerun rrds/abc-130k/base/*.rrd blueprints/abc-130k/default.rbl"
 depends-on = ["download", "convert"]
-description = "Download a sample episode, convert it, and open it in the Rerun Viewer"
+description = "Download sample episodes, convert them, and open them in the Rerun Viewer"
 
 [feature.abc-130k-tasks.tasks.download]
 cmd = "python -m abc_130k.download"
 cwd = "examples/abc-130k"
-description = "Download the ABC-130k sample episode"
+description = "Download the ABC-130k sample episodes"
 
 [feature.abc-130k-tasks.tasks.convert]
 cmd = "python -m abc_130k.convert"

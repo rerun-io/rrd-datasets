@@ -27,11 +27,13 @@ Clone the repository:
     git clone https://github.com/rerun-io/rrd-datasets.git
     cd rrd-datasets
 
-For a quick demo, run an ABC-130k dataset example end to end — download a sample episode, convert it, and open the result in the Rerun Viewer:
+For a quick demo, run an ABC-130k dataset example end to end — download sample episodes, convert them, and open the results in the Rerun Viewer:
 
     pixi run -e abc demo
 
 Note that the dataset is gated on Hugging Face — accept its terms and authenticate first, see [examples/abc-130k](examples/abc-130k#dataset).
+
+It downloads files about 900 MB in total under `data/`.
 
 Run `pixi task list` to see all available tasks.
 

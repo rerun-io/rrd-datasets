@@ -15,7 +15,7 @@ This example includes (1) a [local version](#local-runs) that downloads, convert
 
 - **Source**: [XDOF/ABC-130k](https://huggingface.co/datasets/XDOF/ABC-130k) on Hugging Face
 - **License**: Apache-2.0. Converted artifacts are derived from the dataset, so redistributing them is governed by the same terms.
-- **Subset used**: the local demo runs on one sample episode from the `fold_and_stack_the_t_shirts` task; the Modal job converts the full dataset.
+- **Subset used**: the local demo runs on five sample episodes (~900 MB) — the representative episodes from [observations.md](observations.md#example-episodes), spanning five tasks; the Modal job converts the full dataset.
 - **Access**: gated — accept the terms on Hugging Face, then authenticate (`pixi run -e abc hf auth login`, or set `$HF_TOKEN`).
 
 This example does not redistribute the dataset.
@@ -33,11 +33,13 @@ File paths below are relative to the repository root.
 
 ### 1. Download
 
-Download one sample episode (~450 MB) into `data/ABC-130k/`:
+Download the sample episodes (~900 MB) into `data/ABC-130k/`:
 
 ```sh
 pixi run -e abc download
 ```
+
+To download different episodes, edit `SAMPLES` in [`abc_130k/download.py`](abc_130k/download.py).
 
 ### 2. Convert (MCAP → RRD)
 
