@@ -1,0 +1,47 @@
+# Package metadata only — the workspace root pixi.toml owns environments,
+# tasks, and lint configuration.
+
+[project]
+name = "hiw_500"
+dynamic = ["version"]
+requires-python = ">=3.12,<3.13"
+description = "Convert the BitRobot HIW-500 dataset into layered Rerun recordings."
+authors = [
+    { name = "Michael Grupp", email = "michael@rerun.io" },
+    { name = "Bhoram Lee", email = "bhoram@rerun.io" }
+]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+dependencies = [
+    # Also the Modal image's pip installs — `modal_jobs/image.py` reads these at build time.
+    "rerun-sdk[datafusion]>=0.34,<0.35",
+    "datafusion==53.0.0",
+    "pyarrow>=14",
+    "toml>=0.10",
+    "numpy>=1.26",
+    "pillow>=10",
+    "pyyaml>=6,<7",
+    # PyTurboJPEG 2 needs libjpeg-turbo 3 — see the pixi feature's conda dependency.
+    "pyturbojpeg>=2,<3",
+    "huggingface_hub>=1.21.0,<2",
+    "tyro>=1.0.5,<2",
+]
+
+[project.urls]
+Homepage = "https://rerun.io"
+Repository = "https://github.com/rerun-io/rrd-datasets"
+
+[project.optional-dependencies]
+# Cloud (Modal/S3) flow only.
+cloud = ["modal>=1,<2", "boto3>=1.34", "botocore>=1.34"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["hiw_500"]
+
+[tool.hatch.version]
+path = "hiw_500/__init__.py"
+variable = "__version__"

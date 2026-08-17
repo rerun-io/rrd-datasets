@@ -144,6 +144,7 @@ depends-on = [
     "py-lint",
     { task = "py-lint", environment = "common-dev" },
     { task = "py-lint", environment = "abc-dev" },
+    { task = "py-lint", environment = "hiw-dev" },
 ]
 description = "Type-check the repo root and every package"
 
@@ -151,6 +152,7 @@ description = "Type-check the repo root and every package"
 depends-on = [
     { task = "tests", environment = "common-dev" },
     { task = "tests", environment = "abc-dev" },
+    { task = "tests", environment = "hiw-dev" },
 ]
 description = "Run every package's tests"
 
@@ -245,6 +247,93 @@ cwd = "examples/abc-130k"
 description = "Upload the ABC-130k blueprint"
 
 
+
+# ─── hiw-500 ──────────────────────────────────────────────────────────────────
+
+[feature.hiw-500.dependencies]
+# Native JPEG library behind pyturbojpeg, which needs major version 3. The
+# Modal image installs the same version from the upstream .deb — see
+# `LIBJPEG_TURBO_INSTALL` in `modal_jobs/convert_episodes.py`.
+libjpeg-turbo = ">=3,<4"
+
+# Type stubs for mypy (cloud extra + yaml calibration parsing).
+boto3-stubs = ">=1.34"
+mypy-boto3-s3 = ">=1.34"
+types-pyyaml = ">=6"
+
+[feature.hiw-500.pypi-dependencies]
+hiw_500 = { path = "examples/hiw-500", editable = true, extras = ["cloud"] }
+
+[feature.hiw-500.activation.env]
+PACKAGE_DIR = "examples/hiw-500"
+# This dataset converts into a HuggingFace bucket named after it, so the hiw environments pick
+# that backend and bucket while `rrd_datasets_common` keeps its own `s3` default and placeholder
+# buckets. `HF_NAMESPACE` stays the caller's: the bucket lives in their namespace.
+# Keep the `${VAR:-default}` form. A literal value here would override a caller's own
+# `STORAGE_BACKEND=s3`, since pixi's activation wins over the surrounding shell.
+STORAGE_BACKEND = "${STORAGE_BACKEND:-hf}"
+HF_BUCKET = "${HF_BUCKET:-hiw-500}"
+
+# Dataset tasks sit in their own feature, included only in the hiw environment.
+# Every dataset names its stages the same way (download, convert, register, …),
+# and the environment selects the dataset: `pixi run -e hiw convert`.
+
+[feature.hiw-500-tasks.tasks.download]
+cmd = "python -m hiw_500.download"
+cwd = "examples/hiw-500"
+description = "Download the HIW-500 sample episodes"
+
+[feature.hiw-500-tasks.tasks.convert]
+cmd = "python -m hiw_500.convert"
+cwd = "examples/hiw-500"
+description = "Convert HIW-500 episodes to rrd (every layer)"
+
+[feature.hiw-500-tasks.tasks.convert-base]
+cmd = "python -m hiw_500.base_layer"
+cwd = "examples/hiw-500"
+description = "Convert the HIW-500 base layer"
+
+[feature.hiw-500-tasks.tasks.convert-urdf]
+cmd = "python -m hiw_500.urdf_layer"
+cwd = "examples/hiw-500"
+description = "Convert the HIW-500 URDF layer"
+
+[feature.hiw-500-tasks.tasks.convert-odom]
+cmd = "python -m hiw_500.odom_layer"
+cwd = "examples/hiw-500"
+description = "Convert the HIW-500 odometry layer"
+
+[feature.hiw-500-tasks.tasks.convert-cameras]
+cmd = "python -m hiw_500.camera_layer"
+cwd = "examples/hiw-500"
+description = "Convert the HIW-500 camera layer"
+
+[feature.hiw-500-tasks.tasks.convert-ir]
+cmd = "python -m hiw_500.ir_layer"
+cwd = "examples/hiw-500"
+description = "Convert the HIW-500 wrist IR layer"
+
+[feature.hiw-500-tasks.tasks.convert-properties]
+cmd = "python -m hiw_500.properties_layer"
+cwd = "examples/hiw-500"
+description = "Convert the HIW-500 properties layer"
+
+[feature.hiw-500-tasks.tasks.blueprint]
+cmd = "python -m hiw_500.blueprint"
+cwd = "examples/hiw-500"
+description = "Generate the HIW-500 blueprint"
+
+[feature.hiw-500-tasks.tasks.register]
+cmd = "python -m hiw_500.catalog"
+cwd = "examples/hiw-500"
+description = "Register the HIW-500 recordings in a catalog"
+
+[feature.hiw-500-tasks.tasks.convert-on-modal]
+cmd = "modal run --detach -q -m hiw_500.modal_jobs.convert_episodes"
+cwd = "examples/hiw-500"
+description = "Convert HIW-500 episodes on Modal"
+
+
 [environments]
 default = { features = ["dev"] }
 serve = { features = ["common", "serve-tasks"], no-default-feature = true }
@@ -253,3 +342,5 @@ common-dev = { features = ["common", "common-package", "dev"], no-default-featur
 # feature wins, and PACKAGE_DIR must be the example's.
 abc = { features = ["common", "abc-130k", "abc-130k-tasks"], solve-group = "abc", no-default-feature = true }
 abc-dev = { features = ["common", "abc-130k", "dev"], solve-group = "abc", no-default-feature = true }
+hiw = { features = ["common", "hiw-500", "hiw-500-tasks"], solve-group = "hiw", no-default-feature = true }
+hiw-dev = { features = ["common", "hiw-500", "dev"], solve-group = "hiw", no-default-feature = true }
