@@ -60,3 +60,14 @@ def resolve_input_path(path: Path) -> Path:
         return path
     rooted = repo_root() / path
     return rooted if rooted.exists() else path
+
+
+def layer_relpath(layer: str, recording_id: str) -> str:
+    """
+    The relative path of one layer recording, e.g. `base/<recording_id>.rrd`.
+
+    The same relative path applies under the local rrd root (`dataset_rrd_dir`) and
+    under the dataset's bucket prefix, so a layer directory syncs between the two
+    without renaming and the catalog registers either side as is.
+    """
+    return f"{layer}/{recording_id}.rrd"
