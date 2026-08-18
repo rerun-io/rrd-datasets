@@ -112,10 +112,23 @@ def build_blueprint() -> rrb.Blueprint:
             ),
             rrb.Horizontal(
                 rrb.TimeSeriesView(origin="/state/joint", name="Joints"),
+                # End-effector poses and gripper controls plot on unrelated scales, so they get
+                # a view each rather than one axis that flattens both.
                 rrb.TimeSeriesView(
                     origin="/lerobot",
                     name="End-effector",
-                    contents=["+ /lerobot/ee_state/**", "+ /lerobot/ee_action/**", "+ /lerobot/gripper/**"],
+                    contents=["+ /lerobot/ee_state/**", "+ /lerobot/ee_action/**"],
+                ),
+                rrb.Tabs(
+                    # What the gripper actually did: the dex1 jaw, measured against commanded.
+                    rrb.TimeSeriesView(
+                        origin="/",
+                        name="Gripper(Dex1)",
+                        contents=["+ /state/gripper/**", "+ /cmd/gripper/**"],
+                    ),
+                    # The teleop inputs behind it, whose 0-10 range would flatten the jaw angle.
+                    rrb.TimeSeriesView(origin="/lerobot/gripper", name="Gripper(LeRobot)"),
+                    name="Gripper",
                 ),
                 name="Signals",
             ),

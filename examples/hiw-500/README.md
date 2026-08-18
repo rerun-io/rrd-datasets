@@ -6,7 +6,7 @@ Below is the viewer showing a converted episode with the default blueprint.
 
 ![HIW-500 in the Rerun viewer](screenshot.png)
 
-The [default blueprint](#3-view) puts a 3D scene in the `odom` frame on the left with the subtask timeline beneath it, the cameras on the right, and joint and end-effector plots along the bottom.
+The [default blueprint](#3-view) puts a 3D scene in the `odom` frame on the left with the subtask timeline beneath it, the cameras on the right, and joint, end-effector and gripper plots along the bottom.
 The camera pane shows the head pair above the wrists, where an `RGB` and an `IR` tab switch between the two modalities of the same cameras.
 
 There are two ways to run it.
