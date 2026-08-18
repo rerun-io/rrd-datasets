@@ -6,7 +6,8 @@ Below is the viewer showing a converted episode with the default blueprint.
 
 ![HIW-500 in the Rerun viewer](screenshot.png)
 
-The [default blueprint](#3-view) puts a 3D scene in the `odom` frame on the left with the subtask timeline beneath it, the four camera streams in a grid on the right, and joint and end-effector plots along the bottom.
+The [default blueprint](#3-view) puts a 3D scene in the `odom` frame on the left with the subtask timeline beneath it, the cameras on the right, and joint and end-effector plots along the bottom.
+The camera pane shows the head pair above the wrists, where an `RGB` and an `IR` tab switch between the two modalities of the same cameras.
 
 There are two ways to run it.
 The [local version](#local-runs) downloads four sample episodes, converts them, and registers them to a catalog you can query.
@@ -107,6 +108,12 @@ pixi run -e hiw register   # in another shell: register all episodes as the `hiw
 > **Note:** each episode becomes one segment, keyed by its `recording_id`, and each `.rrd` of that episode attaches as one named layer of the segment.
 > A layer name is an argument to the register call (`layer_name=` in `hiw_500/catalog.py`).
 > The `register` task creates the dataset, attaches each episode's RRDs as its named layers paired by `recording_id`, and installs [`blueprints/hiw-500/default.rbl`](../../blueprints/hiw-500/default.rbl) as the default blueprint.
+
+Browse them in the Rerun Viewer:
+
+```sh
+pixi run -e hiw rerun rerun+http://127.0.0.1:51234
+```
 
 https://github.com/user-attachments/assets/5180a716-9ceb-4209-a795-626053d59ba5
 
@@ -244,7 +251,7 @@ head images 2D. The **wrist cameras stay 2D**: the dataset provides no camera→
 `hiw_500/ir_layer.py` — the four wrist infrared streams (`/camera/{left,right}_wrist/ir{1,2}/compressed`), passed through as JPEG images on their own topic paths.
 The base layer leaves them out so its size does not double for imagery most workflows never look at.
 They stay 2D like the wrist color images, and sessions recorded before the IR cameras reached the rig skip this layer.
-The default blueprint has no IR views. Add a 2D view from the entity tree to see them.
+The default blueprint shows them under the `IR` tab of the wrist camera pane, beside the `RGB` tab carrying the colour streams.
 
 ### Properties layer
 

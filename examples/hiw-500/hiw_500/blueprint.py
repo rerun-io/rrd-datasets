@@ -26,6 +26,15 @@ BLUEPRINT_PATH = default_blueprint_path("hiw-500")
 LEFT_WRIST = "/camera/left_wrist/image/compressed"
 RIGHT_WRIST = "/camera/right_wrist/image/compressed"
 
+# The IR layer's streams: a stereo infrared pair per wrist. Episodes recorded before the IR
+# cameras reached the rig have no such entities, and the tab simply comes up empty for them.
+WRIST_IR = [
+    ("/camera/left_wrist/ir1/compressed", "L IR1"),
+    ("/camera/left_wrist/ir2/compressed", "L IR2"),
+    ("/camera/right_wrist/ir1/compressed", "R IR1"),
+    ("/camera/right_wrist/ir2/compressed", "R IR2"),
+]
+
 
 def _wrist_view(origin: str, name: str) -> rrb.Spatial2DView:
     # The decoder leaves CoordinateFrame:frame="" on the wrist cams, which keeps the image from
@@ -76,13 +85,27 @@ def build_blueprint() -> rrb.Blueprint:
                     rrb.StateTimelineView(origin="/task/subtask", name="Subtasks"),
                     row_shares=[6, 1],
                 ),
-                # Right: the four camera streams.
-                rrb.Grid(
-                    rrb.Spatial2DView(origin="/camera/head/left", name="Head L"),
-                    rrb.Spatial2DView(origin="/camera/head/right", name="Head R"),
-                    _wrist_view(LEFT_WRIST, "Wrist L"),
-                    _wrist_view(RIGHT_WRIST, "Wrist R"),
-                    grid_columns=2,
+                # Right: the head pair above the wrists, whose colour and infrared views
+                # share one slot as tabs — the same cameras, two modalities.
+                rrb.Vertical(
+                    rrb.Horizontal(
+                        rrb.Spatial2DView(origin="/camera/head/left", name="Head L"),
+                        rrb.Spatial2DView(origin="/camera/head/right", name="Head R"),
+                        name="Head",
+                    ),
+                    rrb.Tabs(
+                        rrb.Horizontal(
+                            _wrist_view(LEFT_WRIST, "Wrist L"),
+                            _wrist_view(RIGHT_WRIST, "Wrist R"),
+                            name="RGB",
+                        ),
+                        rrb.Grid(
+                            *(_wrist_view(origin, name) for origin, name in WRIST_IR),
+                            grid_columns=2,
+                            name="IR",
+                        ),
+                        name="Wrists",
+                    ),
                     name="Cameras",
                 ),
                 column_shares=[3, 2],
