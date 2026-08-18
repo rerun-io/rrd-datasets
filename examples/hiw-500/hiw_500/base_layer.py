@@ -8,9 +8,10 @@ kinematic is computed here — URDF FK is a separate layer.
 One `McapReader` stream, shaped by lenses. The reader decodes the well-known ROS2 types on its
 own (CompressedImage -> `EncodedImage`, std_msgs/String -> `TextDocument`); the custom
 `homies/*` / `unitree_go/*` messages arrive as `<name>:message` structs that `DeriveLens` +
-`Selector` turn into scalars and transforms. Only the sidecar files are hand-built: `info.json`
+`Selector` turn into scalars and transforms. Hand-built chunks are the sidecars — `info.json`
 (episode metadata + subtask labels) and the calibration files, which pass through verbatim so the
-RRD is a self-contained record of the episode. A channel census compares decoded rows against the
+RRD is a self-contained record of the episode — plus the static joint-name mapping beside the
+joint arrays. A channel census compares decoded rows against the
 MCAP's own per-channel counts and flags episodes with undecodable messages on `/episode`.
 
 Run:  pixi run -e hiw convert-base            # all episodes under data/HIW-500/
@@ -30,6 +31,7 @@ from typing import Any
 
 import numpy as np
 import pyarrow as pa
+import pyarrow.compute as pc
 import rerun as rr
 from PIL import Image
 from rerun.experimental import (
@@ -133,6 +135,9 @@ N_JOINTS = len(G1_JOINT_NAMES)
 VEC3 = pa.list_(pa.float32(), 3)
 QUAT = pa.list_(pa.float32(), 4)
 
+# pyarrow.compute ships incomplete stubs; alias once (used in the joint-array selector).
+list_slice = pc.list_slice  # type: ignore[attr-defined]
+
 _TJ = TurboJPEG()  # libjpeg-turbo handle for lossless compressed-domain cropping
 
 
@@ -212,29 +217,33 @@ def gripper_field(name: str) -> Callable[[pa.Array], pa.Array]:
 # --------------------------------------------------------------------------------------
 
 
-def _scalar_lens(msg: str, entity: str, selector: str) -> DeriveLens:
+def _scalar_lens(msg: str, entity: str, selector: Selector | str) -> DeriveLens:
     """One numeric field of a `:message` struct -> a Scalars entity."""
-    return DeriveLens(msg, output_entity=entity).to_component(rr.Scalars.descriptor_scalars(), Selector(selector))
+    sel = selector if isinstance(selector, Selector) else Selector(selector)
+    return DeriveLens(msg, output_entity=entity).to_component(rr.Scalars.descriptor_scalars(), sel)
+
+
+def _motors(field: str, element: str) -> Selector:
+    """
+    One element field of a motor array -> a width-29 array `Scalars` row, in G1 motor order.
+
+    The motor arrays are fixed 35-wide (indices 29-34 unused) and the selector can't slice, so
+    `list_slice` truncates to the 29 body joints before `[]` iterates the elements.
+    """
+    return Selector(f".data.{field}").pipe(lambda arr: list_slice(arr, 0, N_JOINTS)).pipe(Selector(f"[].{element}"))
 
 
 def joint_lenses() -> list[DeriveLens]:
-    """Per-joint q/dq/tau from lowstate and target q from lowcmd, named by G1 joint order."""
-    lenses: list[DeriveLens] = []
-    for i, name in enumerate(G1_JOINT_NAMES):
-        m = f".data.motor_state[{i}]"
-        lenses += [
-            _scalar_lens(MSG_LOWSTATE, f"/state/joint/{name}/q", f"{m}.q"),
-            _scalar_lens(MSG_LOWSTATE, f"/state/joint/{name}/dq", f"{m}.dq"),
-            _scalar_lens(MSG_LOWSTATE, f"/state/joint/{name}/tau", f"{m}.tau_est"),
-        ]
-    return lenses
+    """Joint-array q/dq/tau from lowstate: one width-29 `Scalars` entity per signal."""
+    return [
+        _scalar_lens(MSG_LOWSTATE, f"/state/joint/{short}", _motors("motor_state", element))
+        for short, element in (("q", "q"), ("dq", "dq"), ("tau", "tau_est"))
+    ]
 
 
 def cmd_lenses() -> list[DeriveLens]:
-    return [
-        _scalar_lens(MSG_LOWCMD, f"/cmd/joint/{name}/q", f".data.motor_cmd[{i}].q")
-        for i, name in enumerate(G1_JOINT_NAMES)
-    ]
+    """Commanded joint-array q from lowcmd, aligned to the same motor order."""
+    return [_scalar_lens(MSG_LOWCMD, "/cmd/joint/q", _motors("motor_cmd", "q"))]
 
 
 def imu_lenses() -> list[DeriveLens]:
@@ -413,6 +422,20 @@ class EpisodeInfo:
         )
 
 
+def joint_names_chunks() -> list[Chunk]:
+    """
+    Motor index -> joint name, static beside the joint arrays.
+
+    Series i of every width-29 joint array is the joint `joint_names[i]`. Logged on the array
+    parents, so one component per side covers q/dq/tau. The blueprint carries the display labels;
+    this component is the machine-readable mapping.
+    """
+    return [
+        Chunk.from_columns(entity, indexes=[], columns=rr.AnyValues.columns(joint_names=[G1_JOINT_NAMES]))
+        for entity in ("/state/joint", "/cmd/joint")
+    ]
+
+
 def sidecar_stream(info: EpisodeInfo) -> LazyChunkStream:
     """Episode metadata + subtask labels from info.json — the genuine hand-built sidecar."""
     chunks: list[Chunk] = [
@@ -512,8 +535,8 @@ CHANNEL_ID = "McapChannel:id"
 # with its input (`forward_unmatched` drops the consumed raw column and with it the raw rows).
 # Topics not listed keep rows on their own entity (the camera and /annotation passthroughs).
 CENSUS_PROXIES = {
-    "/stamped/lowstate": f"/state/joint/{G1_JOINT_NAMES[0]}/q",
-    "/stamped/lowcmd": f"/cmd/joint/{G1_JOINT_NAMES[0]}/q",
+    "/stamped/lowstate": "/state/joint/q",
+    "/stamped/lowcmd": "/cmd/joint/q",
     "/stamped/secondary_imu": "/state/imu/rpy/r",
     "/stamped/dex1/left/state": "/state/gripper/left/q",
     "/stamped/dex1/left/cmd": "/cmd/gripper/left/q",
@@ -628,15 +651,18 @@ def convert_episode(ep: Episode, rrd_root: Path) -> Path:
     """
     Convert one episode into an optimized base-layer `.rrd` and return its path.
 
-    Merges the base entity stream with the sidecars (`info.json` metadata plus the verbatim
-    calibration files), runs the channel census on the collected store, then writes a single
+    Merges the base entity stream with the sidecars (`info.json` metadata, the verbatim
+    calibration files, and the static joint-name mapping), runs the channel census on the
+    collected store, then writes a single
     object-store-optimized recording — census verdict on `/episode`, raw skeletons and reader
     bookkeeping dropped — stamped with `application_id` / `recording_id`.
     """
     out_path = rrd_root / layer_relpath("base", ep.recording_id)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     merged = LazyChunkStream.merge(
-        base_stream(ep.mcap), sidecar_stream(ep.info), LazyChunkStream.from_iter(calibration_chunks(ep))
+        base_stream(ep.mcap),
+        sidecar_stream(ep.info),
+        LazyChunkStream.from_iter(calibration_chunks(ep) + joint_names_chunks()),
     )
     store = merged.collect(optimize=OptimizationProfile.OBJECT_STORE)
     census = census_chunk(undecodable_topics(store.stream().to_chunks()))

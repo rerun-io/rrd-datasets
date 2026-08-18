@@ -1,5 +1,5 @@
 """
-Tests for the base layer's calibration passthrough and channel census — no MCAP, no network.
+Tests for the base layer's calibration passthrough, joint arrays, and channel census — no MCAP, no network.
 
 Calibration files are archived verbatim, so both halves of that promise are guarded here: the file
 text survives byte for byte, and the per-serial wrist files keep one entity path across rigs. The
@@ -20,12 +20,15 @@ from rerun.experimental import Chunk
 from hiw_500.base_layer import (
     CENSUS_PROXIES,
     CHANNEL_ID,
+    G1_JOINT_NAMES,
     STAT_CHANNEL_COUNTS,
     Episode,
     EpisodeInfo,
+    _motors,
     calibration_chunks,
     census_chunk,
     has_ir,
+    joint_names_chunks,
     undecodable_topics,
 )
 
@@ -119,6 +122,34 @@ def test_ir_is_inferred_from_the_wrist_calibrations(tmp_path: Path) -> None:
     assert has_ir(with_ir)
     assert not has_ir(without)
     assert not has_ir(_episode(tmp_path / "bare", {"info.json": "{}"}))
+
+
+def _motor_messages(rows: int) -> pa.Array:
+    """Lowstate-shaped rows as the reader emits them (a length-1 message list per row); q of motor i is 100r + i."""
+    return pa.array([
+        [{"data": {"motor_state": [{"q": 100.0 * r + i, "tau_est": 2000.0 + i} for i in range(35)]}}]
+        for r in range(rows)
+    ])
+
+
+def test_the_motor_selector_yields_29_joints_in_motor_order() -> None:
+    """The motor arrays are 35-wide with indices 29-34 unused; the joint arrays must stop at 29."""
+    values = _motors("motor_state", "q").execute_per_row(_motor_messages(2))
+    assert values is not None
+    assert values.to_pylist() == [[100.0 * r + i for i in range(29)] for r in range(2)]
+    taus = _motors("motor_state", "tau_est").execute_per_row(_motor_messages(1))
+    assert taus is not None
+    assert taus.to_pylist() == [[2000.0 + i for i in range(29)]]
+
+
+def test_joint_names_ride_statically_beside_the_arrays() -> None:
+    """Series i of every joint array is `joint_names[i]` — the mapping the arrays are read by."""
+    chunks = _by_entity(joint_names_chunks())
+    assert set(chunks) == {"/state/joint", "/cmd/joint"}
+    for chunk in chunks.values():
+        assert chunk.is_static
+        (row,) = chunk.to_record_batch().column("joint_names").to_pylist()
+        assert row == G1_JOINT_NAMES
 
 
 # `McapStatistics:channel_message_counts` as the reader emits it: one instance per row holding the
