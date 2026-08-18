@@ -17,6 +17,8 @@ The [Modal](https://modal.com/)-based [remote version](#remote-convert-example-o
 > Everything runs inside the pixi env: prefix task commands with `pixi run`, and direct tool commands (`hf`, `rerun`, `modal`) with `pixi run -e hiw`.
 > File paths in the commands below are relative to the repository root.
 
+> **Note:** this is an extended version of our previous repo, https://github.com/rerun-io/hiw-500_demo/. In this version, we includes the [IR layer](#wrist-ir-layer) and a [remote cloud-based conversion example](#remote-convert-example-on-modal).
+
 ## Dataset
 
 - **Source**: [BitRobot/HIW-500](https://huggingface.co/datasets/BitRobot/HIW-500) on Hugging Face
@@ -206,7 +208,7 @@ We share interesting observations on a subset of episodes, completing the offici
 
 ## More about Layers
 
-One module per layer, each writing its own `.rrd`.
+Each layer is a separate module that writes its own .rrd. (TODO update layer descriptions)
 
 ### Base layer
 
