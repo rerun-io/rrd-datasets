@@ -31,6 +31,9 @@ from rrd_datasets_common.paths import layer_relpath
 
 ROBOT = "unitree_g1"
 
+# The property every field hangs off, giving catalog columns `property:episode:<name>`.
+PROPERTY = "episode"
+
 
 def _task_group(ep: Episode) -> str:
     """Top-level dataset folder for the episode (e.g. `Move-The-Pillow-To-The-Sofa-From-Floor`)."""
@@ -47,19 +50,21 @@ def convert_episode(ep: Episode, rrd_root: Path) -> Path:
 
     with rr.RecordingStream(APPLICATION_ID, recording_id=ep.recording_id) as rec:
         rec.save(str(out_path))
-
-        def prop(name: str, value: object, dtype: type | None = None) -> None:
-            col: np.ndarray | list[object] = np.array([value], dtype=dtype) if dtype is not None else [value]
-            rec.send_property(name, rr.AnyValues(**{name: col}))  # type: ignore[arg-type]
-
-        prop("task", info.task)
-        prop("task_group", _task_group(ep))
-        prop("duration_sec", info.duration_sec, np.float64)
-        prop("num_subtasks", len(info.subtasks), np.int64)
-        prop("subtask_labels", ", ".join(s.task for s in info.subtasks))
-        prop("scene", info.scene, np.int64)  # -1 when the episode's info.json names no scene
-        prop("has_ir", has_ir(ep))
-        prop("robot", ROBOT)
+        # One property holding every field, so the catalog columns read `property:episode:<name>`.
+        # Sending each field as its own property would name it twice: `property:task:task`.
+        rec.send_property(
+            PROPERTY,
+            rr.AnyValues(
+                task=[info.task],
+                task_group=[_task_group(ep)],
+                duration_sec=np.array([info.duration_sec], dtype=np.float64),
+                num_subtasks=np.array([len(info.subtasks)], dtype=np.int64),
+                subtask_labels=[", ".join(s.task for s in info.subtasks)],
+                scene=np.array([info.scene], dtype=np.int64),  # -1 when info.json names no scene
+                has_ir=[has_ir(ep)],
+                robot=[ROBOT],
+            ),
+        )
     return out_path
 
 
