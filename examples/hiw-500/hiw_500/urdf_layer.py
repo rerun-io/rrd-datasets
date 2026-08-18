@@ -66,7 +66,7 @@ JOINT_NAMES_URDF = [f"{name}_joint" for name in G1_JOINT_NAMES]
 ROBOT_NAME = ET.parse(URDF_PATH).getroot().attrib["name"]
 COLLISION_GLOB = f"/{ENTITY_PREFIX}/{ROBOT_NAME}/collision_geometries/**"
 
-_OFFSETS = pa.array(np.arange(0, 4096 * N_JOINTS, N_JOINTS, dtype=np.int32))  # reused, sliced per call
+_OFFSETS = pa.array(np.arange(0, (4096 + 1) * N_JOINTS, N_JOINTS, dtype=np.int32))  # reused, sliced per call
 
 
 def _msg_struct(msgs: pa.Array) -> pa.Array:
