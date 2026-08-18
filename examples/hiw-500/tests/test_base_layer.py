@@ -10,6 +10,7 @@ id per raw topic, and decoded rows on the counting entity.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -20,6 +21,7 @@ from rerun.experimental import Chunk
 from hiw_500.base_layer import (
     CENSUS_PROXIES,
     CHANNEL_ID,
+    EE_NAMES,
     G1_JOINT_NAMES,
     STAT_CHANNEL_COUNTS,
     Episode,
@@ -27,8 +29,10 @@ from hiw_500.base_layer import (
     _motors,
     calibration_chunks,
     census_chunk,
+    ee_names_chunks,
     has_ir,
     joint_names_chunks,
+    json_array,
     undecodable_topics,
 )
 
@@ -140,6 +144,24 @@ def test_the_motor_selector_yields_29_joints_in_motor_order() -> None:
     taus = _motors("motor_state", "tau_est").execute_per_row(_motor_messages(1))
     assert taus is not None
     assert taus.to_pylist() == [[2000.0 + i for i in range(29)]]
+
+
+def test_the_ee_array_keeps_source_order_and_truncates_to_its_labels() -> None:
+    """`json_array` pins the width the series labels assume; the source lays out left before right."""
+    texts = pa.array([json.dumps({"ee_state": [float(i) for i in range(14)]})])
+    (row,) = json_array("ee_state", len(EE_NAMES))(texts).to_pylist()
+    assert row == [float(i) for i in range(12)]
+    assert EE_NAMES[0] == "left/px"
+    assert EE_NAMES[6] == "right/px"
+
+
+def test_ee_names_ride_statically_beside_the_arrays() -> None:
+    chunks = _by_entity(ee_names_chunks())
+    assert set(chunks) == {"/lerobot/ee_state", "/lerobot/ee_action"}
+    for chunk in chunks.values():
+        assert chunk.is_static
+        (row,) = chunk.to_record_batch().column("ee_names").to_pylist()
+        assert row == EE_NAMES
 
 
 def test_joint_names_ride_statically_beside_the_arrays() -> None:

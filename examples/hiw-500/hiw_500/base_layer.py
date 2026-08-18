@@ -131,6 +131,11 @@ G1_JOINT_NAMES = [
 ]
 N_JOINTS = len(G1_JOINT_NAMES)
 
+# Series order of the width-12 ee_state/ee_action arrays: the /wbc_lerobot JSON lays out the left
+# arm then the right, six pose fields each.
+EE_FIELDS = ("px", "py", "pz", "rx", "ry", "rz")
+EE_NAMES = [f"{arm}/{field}" for arm in ("left", "right") for field in EE_FIELDS]
+
 # Arrow types expected by Transform3D translation/quaternion components.
 VEC3 = pa.list_(pa.float32(), 3)
 QUAT = pa.list_(pa.float32(), 4)
@@ -193,13 +198,18 @@ def _records(textcol: pa.Array) -> list[dict[str, Any]]:
 
 
 def json_index(key: str, i: int) -> Callable[[pa.Array], pa.Array]:
-    """
-    One element of a JSON array field -> a single Scalar per row.
-
-    Per-element (not whole-vector) because a `Scalars` value that is itself a list nests as
-    `list<list<…>>`, which the time-series visualizer rejects; one scalar per entity stays flat.
-    """
+    """One element of a JSON array field -> a single Scalar per row (the pivot channels stay per-element)."""
     return lambda c: pa.array([r[key][i] for r in _records(c)], type=pa.float64())
+
+
+def json_array(key: str, width: int) -> Callable[[pa.Array], pa.Array]:
+    """
+    A JSON array field -> one list row per message, truncated to `width`.
+
+    A list row is not a valid `Scalars` value on its own; a following `Selector("[]")` fans it
+    into a width-`width` array `Scalars`. The truncation pins the width the series labels assume.
+    """
+    return lambda c: pa.array([r[key][:width] for r in _records(c)], type=pa.list_(pa.float64()))
 
 
 def json_pos(key: str, lo: int) -> Callable[[pa.Array], pa.Array]:
@@ -287,10 +297,16 @@ def _wbc_scalar_lens(entity: str, pipe: Callable[[pa.Array], pa.Array]) -> Deriv
 
 
 def lerobot_lenses() -> list[DeriveLens]:
-    """Parse /wbc_lerobot JSON into per-component EE state/action scalars + 3D EE poses, gripper, pivot."""
-    ee_fields = ("px", "py", "pz", "rx", "ry", "rz")
+    """Parse /wbc_lerobot JSON into EE state/action arrays + 3D EE poses, gripper, pivot."""
     lenses: list[DeriveLens] = []
     for kind in ("ee_state", "ee_action"):
+        # The 12 pose values as one array Scalars on the parent; series order in EE_NAMES.
+        lenses.append(
+            DeriveLens(TEXT, output_entity=f"/lerobot/{kind}").to_component(
+                rr.Scalars.descriptor_scalars(),
+                Selector(".").pipe(json_array(kind, len(EE_NAMES))).pipe(Selector("[]")),
+            )
+        )
         for arm, lo in (("left", 0), ("right", 6)):
             # 3D end-effector position marker (translation only).
             lenses.append(
@@ -298,9 +314,6 @@ def lerobot_lenses() -> list[DeriveLens]:
                     rr.Transform3D.descriptor_translation(), Selector(".").pipe(json_pos(kind, lo))
                 )
             )
-            # the 6 pose components as plottable scalars
-            for j, f in enumerate(ee_fields):
-                lenses.append(_wbc_scalar_lens(f"/lerobot/{kind}/{arm}/{f}", json_index(kind, lo + j)))
     for k in ("left_trigger", "left_squeeze", "right_trigger", "right_squeeze"):
         lenses.append(_wbc_scalar_lens(f"/lerobot/gripper/{k}", gripper_field(k)))
     for i in range(7):
@@ -440,6 +453,14 @@ def joint_names_chunks() -> list[Chunk]:
     return [
         Chunk.from_columns(entity, indexes=[], columns=rr.AnyValues.columns(joint_names=[G1_JOINT_NAMES]))
         for entity in ("/state/joint", "/cmd/joint")
+    ]
+
+
+def ee_names_chunks() -> list[Chunk]:
+    """Series index -> pose field, static on the width-12 ee arrays (same order for state and action)."""
+    return [
+        Chunk.from_columns(entity, indexes=[], columns=rr.AnyValues.columns(ee_names=[EE_NAMES]))
+        for entity in ("/lerobot/ee_state", "/lerobot/ee_action")
     ]
 
 
@@ -669,7 +690,7 @@ def convert_episode(ep: Episode, rrd_root: Path) -> Path:
     merged = LazyChunkStream.merge(
         base_stream(ep.mcap),
         sidecar_stream(ep.info),
-        LazyChunkStream.from_iter(calibration_chunks(ep) + joint_names_chunks()),
+        LazyChunkStream.from_iter(calibration_chunks(ep) + joint_names_chunks() + ee_names_chunks()),
     )
     store = merged.collect(optimize=OptimizationProfile.OBJECT_STORE)
     census = census_chunk(undecodable_topics(store.stream().to_chunks()))
