@@ -136,6 +136,9 @@ N_JOINTS = len(G1_JOINT_NAMES)
 EE_FIELDS = ("px", "py", "pz", "rx", "ry", "rz")
 EE_NAMES = [f"{arm}/{field}" for arm in ("left", "right") for field in EE_FIELDS]
 
+# Series order of the width-3 IMU arrays, per source field.
+IMU_NAMES = {"rpy": ["r", "p", "y"], "gyroscope": ["x", "y", "z"], "accelerometer": ["x", "y", "z"]}
+
 # Arrow types expected by Transform3D translation/quaternion components.
 VEC3 = pa.list_(pa.float32(), 3)
 QUAT = pa.list_(pa.float32(), 4)
@@ -264,12 +267,15 @@ def cmd_lenses() -> list[DeriveLens]:
 
 
 def imu_lenses() -> list[DeriveLens]:
-    """Per-axis IMU scalars (rpy / gyro / accel)."""
-    lenses: list[DeriveLens] = []
-    for name, axes in (("rpy", "rpy"), ("gyroscope", "xyz"), ("accelerometer", "xyz")):
-        for i, ax in enumerate(axes):
-            lenses.append(_scalar_lens(MSG_IMU, f"/state/imu/{name}/{ax}", f".data.{name}[{i}]"))
-    return lenses
+    """3-axis IMU arrays (rpy / gyro / accel): one width-3 `Scalars` entity each, f32 cast to f64 (see `_motors`)."""
+    return [
+        _scalar_lens(
+            MSG_IMU,
+            f"/state/imu/{name}",
+            Selector(f".data.{name}").pipe(Selector("[]")).pipe(lambda arr: arr.cast(pa.float64())),
+        )
+        for name in IMU_NAMES
+    ]
 
 
 def odom_lenses() -> list[DeriveLens]:
@@ -464,6 +470,14 @@ def ee_names_chunks() -> list[Chunk]:
     ]
 
 
+def imu_names_chunks() -> list[Chunk]:
+    """Series index -> axis, static on each width-3 IMU array."""
+    return [
+        Chunk.from_columns(f"/state/imu/{name}", indexes=[], columns=rr.AnyValues.columns(imu_names=[axes]))
+        for name, axes in IMU_NAMES.items()
+    ]
+
+
 def sidecar_stream(info: EpisodeInfo) -> LazyChunkStream:
     """Episode metadata + subtask labels from info.json — the genuine hand-built sidecar."""
     chunks: list[Chunk] = [
@@ -565,7 +579,7 @@ CHANNEL_ID = "McapChannel:id"
 CENSUS_PROXIES = {
     "/stamped/lowstate": "/state/joint/q",
     "/stamped/lowcmd": "/cmd/joint/q",
-    "/stamped/secondary_imu": "/state/imu/rpy/r",
+    "/stamped/secondary_imu": "/state/imu/rpy",
     "/stamped/dex1/left/state": "/state/gripper/left/q",
     "/stamped/dex1/left/cmd": "/cmd/gripper/left/q",
     "/stamped/dex1/right/state": "/state/gripper/right/q",
@@ -690,7 +704,9 @@ def convert_episode(ep: Episode, rrd_root: Path) -> Path:
     merged = LazyChunkStream.merge(
         base_stream(ep.mcap),
         sidecar_stream(ep.info),
-        LazyChunkStream.from_iter(calibration_chunks(ep) + joint_names_chunks() + ee_names_chunks()),
+        LazyChunkStream.from_iter(
+            calibration_chunks(ep) + joint_names_chunks() + ee_names_chunks() + imu_names_chunks()
+        ),
     )
     store = merged.collect(optimize=OptimizationProfile.OBJECT_STORE)
     census = census_chunk(undecodable_topics(store.stream().to_chunks()))

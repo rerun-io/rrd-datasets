@@ -23,6 +23,7 @@ from hiw_500.base_layer import (
     CHANNEL_ID,
     EE_NAMES,
     G1_JOINT_NAMES,
+    IMU_NAMES,
     STAT_CHANNEL_COUNTS,
     Episode,
     EpisodeInfo,
@@ -31,6 +32,7 @@ from hiw_500.base_layer import (
     census_chunk,
     ee_names_chunks,
     has_ir,
+    imu_names_chunks,
     joint_names_chunks,
     json_array,
     undecodable_topics,
@@ -162,6 +164,16 @@ def test_ee_names_ride_statically_beside_the_arrays() -> None:
         assert chunk.is_static
         (row,) = chunk.to_record_batch().column("ee_names").to_pylist()
         assert row == EE_NAMES
+
+
+def test_imu_names_ride_statically_beside_the_arrays() -> None:
+    chunks = _by_entity(imu_names_chunks())
+    assert set(chunks) == {f"/state/imu/{name}" for name in IMU_NAMES}
+    for name, axes in IMU_NAMES.items():
+        chunk = chunks[f"/state/imu/{name}"]
+        assert chunk.is_static
+        (row,) = chunk.to_record_batch().column("imu_names").to_pylist()
+        assert row == axes
 
 
 def test_joint_names_ride_statically_beside_the_arrays() -> None:
