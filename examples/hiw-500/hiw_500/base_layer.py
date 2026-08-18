@@ -228,9 +228,16 @@ def _motors(field: str, element: str) -> Selector:
     One element field of a motor array -> a width-29 array `Scalars` row, in G1 motor order.
 
     The motor arrays are fixed 35-wide (indices 29-34 unused) and the selector can't slice, so
-    `list_slice` truncates to the 29 body joints before `[]` iterates the elements.
+    `list_slice` truncates to the 29 body joints before `[]` iterates the elements. The f32
+    source values are cast to f64 — the `Scalars` datatype — because the viewer plots only the
+    first instance of a float32 array.
     """
-    return Selector(f".data.{field}").pipe(lambda arr: list_slice(arr, 0, N_JOINTS)).pipe(Selector(f"[].{element}"))
+    return (
+        Selector(f".data.{field}")
+        .pipe(lambda arr: list_slice(arr, 0, N_JOINTS))
+        .pipe(Selector(f"[].{element}"))
+        .pipe(lambda arr: arr.cast(pa.float64()))
+    )
 
 
 def joint_lenses() -> list[DeriveLens]:
