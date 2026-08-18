@@ -201,6 +201,17 @@ A worker downloads only what the selected layers read. The camera layer needs ju
 head calibration yaml and the properties layer only its sidecars, so neither pulls the episode
 MCAP, which runs to hundreds of MB. Rebuilding those two across the dataset costs almost nothing.
 
+### 4. Upload the blueprint
+
+`pixi run -e hiw blueprint` writes `blueprints/hiw-500/default.rbl`.
+To upload it to your HF bucket, run:
+
+```bash
+pixi run -e hiw upload-blueprint
+```
+
+This uploads the file to `s3://<bucket>/blueprints/`.
+
 ## Observations
 
 We share interesting observations on a subset of episodes, completing the official dataset card:

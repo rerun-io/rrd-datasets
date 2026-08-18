@@ -333,6 +333,11 @@ cmd = "modal run --detach -q -m hiw_500.modal_jobs.convert_episodes"
 cwd = "examples/hiw-500"
 description = "Convert HIW-500 episodes on Modal"
 
+[feature.hiw-500-tasks.tasks.upload-blueprint]
+cmd = "python -m hiw_500.upload_blueprint"
+cwd = "examples/hiw-500"
+description = "Upload the HIW-500 blueprint"
+
 
 [environments]
 default = { features = ["dev"] }
