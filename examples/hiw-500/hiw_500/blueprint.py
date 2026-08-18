@@ -16,7 +16,7 @@ from __future__ import annotations
 import rerun as rr
 import rerun.blueprint as rrb
 
-from hiw_500.base_layer import APPLICATION_ID
+from hiw_500.base_layer import APPLICATION_ID, EE_NAMES, G1_JOINT_NAMES
 from rrd_datasets_common.paths import default_blueprint_path
 
 # Regenerating overwrites the committed default, so the change shows up in
@@ -34,6 +34,27 @@ WRIST_IR = [
     ("/camera/right_wrist/ir1/compressed", "R IR1"),
     ("/camera/right_wrist/ir2/compressed", "R IR2"),
 ]
+
+
+def _joint_labels() -> dict[str, rr.SeriesLines]:
+    """
+    Legend labels for the width-29 joint arrays: `<joint>/<signal>`, series i named by motor order.
+
+    Arrays otherwise fall back to bare index labels 0-28, and the three signals share the plot, so
+    the signal suffix keeps every series distinct.
+    """
+    return {
+        f"/state/joint/{signal}": rr.SeriesLines(names=[f"{name}/{signal}" for name in G1_JOINT_NAMES])
+        for signal in ("q", "dq", "tau")
+    }
+
+
+def _ee_labels() -> dict[str, rr.SeriesLines]:
+    """Legend labels for the width-12 ee arrays: `<kind>/<arm>/<field>`, without the `ee_` stutter."""
+    return {
+        f"/lerobot/ee_{kind}": rr.SeriesLines(names=[f"{kind}/{name}" for name in EE_NAMES])
+        for kind in ("state", "action")
+    }
 
 
 def _wrist_view(origin: str, name: str) -> rrb.Spatial2DView:
@@ -111,13 +132,18 @@ def build_blueprint() -> rrb.Blueprint:
                 column_shares=[3, 2],
             ),
             rrb.Horizontal(
-                rrb.TimeSeriesView(origin="/state/joint", name="Joints"),
+                rrb.TimeSeriesView(
+                    origin="/state/joint",
+                    name="Joints",
+                    overrides=_joint_labels(),  # type: ignore[arg-type]
+                ),
                 # End-effector poses and gripper controls plot on unrelated scales, so they get
                 # a view each rather than one axis that flattens both.
                 rrb.TimeSeriesView(
                     origin="/lerobot",
                     name="End-effector",
                     contents=["+ /lerobot/ee_state/**", "+ /lerobot/ee_action/**"],
+                    overrides=_ee_labels(),  # type: ignore[arg-type]
                 ),
                 rrb.Tabs(
                     # What the gripper actually did: the dex1 jaw, measured against commanded.
