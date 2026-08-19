@@ -17,24 +17,23 @@ The [Modal](https://modal.com/)-based [remote version](#remote-convert-example-o
 > Everything runs inside the pixi env: prefix task commands with `pixi run`, and direct tool commands (`hf`, `rerun`, `modal`) with `pixi run -e hiw`.
 > File paths in the commands below are relative to the repository root.
 
-> **Note:** this is an extended version of our previous repo, https://github.com/rerun-io/hiw-500_demo/. In this version, we include the [IR layer](#wrist-ir-layer) and a [remote cloud-based conversion example](#remote-convert-example-on-modal).
+> **Note:** this is an extended version of our previous repo, https://github.com/rerun-io/hiw-500_demo/. In this version, we include the [IR layer](#ir-layer) and a [remote cloud-based conversion example](#remote-convert-example-on-modal).
 
 ## Dataset
 
 - **Source**: [BitRobot/HIW-500](https://huggingface.co/datasets/BitRobot/HIW-500) on Hugging Face
 - **License**: CC BY 4.0. Converted artifacts are derived from the dataset, so redistributing them is governed by the same terms.
-- **Subset used**: the local demo runs on four sample episodes (~450 MB) spanning four tasks (TODO add observations.md). Three carry the full sensor set; the fourth predates the wrist IR cameras and the calibration sidecars, so it exercises the skip paths. The Modal job converts the full dataset.
-- **Access**: public, no gating. A Hugging Face login only raises the download rate limit.
+- **Subset used**: the local demo runs on four sample episodes (~450 MB) spanning four tasks, all listed in [observations.md](observations.md#example-episodes). The Modal job supports the full dataset conversion with options to filter or limit episodes.
+- **Access**: public, not gated.
 
 This example does not redistribute the dataset.
 Data is downloaded at runtime from the original Hugging Face repo.
 
-A survey of the source episodes lists every source topic with its rate and where the converter puts it, and records what varies across episodes:
-(TODO add observations.md)
-
 ### Converted `.rrd` Dataset
 
 Converted recordings will be published to a Hugging Face bucket when ready.
+They are built from source revision [`2ca7ffcd`](https://huggingface.co/datasets/BitRobot/HIW-500/tree/2ca7ffcd85ec5212f81ae08491a4076bf48ea841), dated 2026-06-29.
+The converter follows `main` rather than pinning that revision, so a new upload changes what you get.
 
 ## Local Runs
 
@@ -48,8 +47,8 @@ pixi run -e hiw download
 
 To download different episodes, edit `SAMPLES` in [`hiw_500/download.py`](hiw_500/download.py).
 
-The downloader picks the sample files out of the repo's file listing, made once and cached against the revision.
-Avoid using `hf download --include` for this dataset: the Hugging Face CLI enumerates the entire repository (~106,000 entries) on every call before applying the pattern, which can look like a hang.
+The downloader caches a listing of the whole repo in `.cache/hf_files.json.gz`.
+Building it takes a while on the first run, and it is rebuilt when the dataset revision changes.
 
 ### 2. Convert (MCAP → RRD)
 
@@ -58,7 +57,7 @@ The viewer/catalog stacks them as **layers** of one logical recording: a base la
 plus other layers that augment the base recording (robot model, odometry, cameras, wrist IR, metadata properties).
 Each layer can be added, replaced, or re-run without touching the others.
 
-Build every layer for every episode in one command:
+Build every layer, for the whole set or one episode:
 
 ```bash
 pixi run -e hiw convert            # all episodes under data/HIW-500/
@@ -68,24 +67,18 @@ pixi run -e hiw convert <ep.mcap>  # a single episode
 > **Note:** This example also includes its own task for each layer (`convert-base`, `convert-urdf`, `convert-odom`,
 > `convert-cameras`, `convert-ir`, `convert-properties`) writing the corresponding `.rrd`.
 
-What each layer holds and where its entities land is in [More about Layers](#more-about-layers).
+See [More about Layers](#more-about-layers) for what each layer carries.
 
 ### 3. View
 
-An episode has up to six layers, and the `cameras` and `ir` layers exist only where the episode carries their inputs.
-
-Open the recordings straight in the viewer.
-Matching `recording_id`s merge into one recording per episode, so all layers line up:
+View a result in the Rerun Viewer:
 
 ```bash
 pixi run -e hiw rerun rrds/hiw-500/*/*.rrd        # every episode
-pixi run -e hiw rerun rrds/hiw-500/*/<id>.rrd     # one episode's layers
+pixi run -e hiw rerun rrds/hiw-500/*/<id>.rrd     # one episode
 ```
 
-Good for a quick look. No server, no registration.
-
-> Keep the `*` to load all layers. Opening only `base/<id>.rrd` gives you
-> the base layer alone, and the 3D scene comes up empty.
+> Keep the `*` to load all layers.
 
 View an episode with the default blueprint:
 
@@ -93,8 +86,8 @@ View an episode with the default blueprint:
 pixi run -e hiw rerun rrds/hiw-500/*/<id>.rrd blueprints/hiw-500/default.rbl
 ```
 
-> **Notes:** only the left head eye appears in the 3D view. The right one stays in its own 2D pane, where it does not overlap the scene.
-> Regenerate the blueprint with `pixi run -e hiw blueprint`, which overwrites the committed
+> **Notes:** only the left head eye appears in the 3D view.
+> To modify the blueprint, regenerate it with `pixi run -e hiw blueprint`, which overwrites
 > [`blueprints/hiw-500/default.rbl`](../../blueprints/hiw-500/default.rbl).
 
 ### 4. Local Catalog
@@ -154,7 +147,7 @@ the dataset's own layout under the bucket lives in [`storage.py`](hiw_500/storag
 | `HF_BUCKET`                                       | hf      | Bucket the RRDs are written to, `hiw-500` by default — create it first |
 | `HF_BUCKET_ACCESS_KEY_ID` / `…_SECRET_ACCESS_KEY` | hf      | The HF S3 credentials                                                  |
 
-`HF_NAMESPACE` has no default, and the bucket has to exist: `hf buckets create <namespace>/hiw-500 --private`.
+`HF_NAMESPACE` has no default, and the bucket has to exist.
 
 > **Note:** to store in an AWS S3 bucket instead, set `STORAGE_BACKEND=s3` and follow the
 > [S3 prerequisite in the ABC-130k example](../abc-130k/README.md#1-prerequisite-s3-storage).
@@ -162,14 +155,8 @@ the dataset's own layout under the bucket lives in [`storage.py`](hiw_500/storag
 ### 2. Prerequisite: Modal setup
 
 - `pixi run -e hiw modal setup` — authenticate the Modal CLI (one-time).
-- HuggingFace login (`pixi run -e hiw hf auth login`, or set `$HF_TOKEN`). The dataset is public, so
-  this is about rate limits rather than access: anonymous callers share a small per-IP quota,
-  which a wide fan-out exhausts quickly. The token ships as an ephemeral per-run secret, so
-  there is nothing stored on Modal to refresh.
-
-Discovering which episodes exist means listing the whole HuggingFace tree (~106,000 files). That
-list is cached in `.cache/hf_files.json.gz` and pinned to the dataset's commit sha, so only the
-first launch per revision pays for it. Delete the file to force a re-listing.
+- `pixi run -e hiw hf auth login`, or set `$HF_TOKEN` — not required since the dataset is public, but it raises the download quota.
+  (Anonymous callers share a smaller per-IP quota.)
 
 ### 3. Run Convert
 
@@ -189,15 +176,13 @@ pixi run -e hiw convert-on-modal --task-filter Sweep-Floor --limit 5 --overwrite
 pixi run -e hiw convert-on-modal --dry-run --limit 10
 ```
 
-Unless `--overwrite`, layers already in the bucket are dropped **before** any worker is spawned,
-so re-runs and incremental backfills don't pay container time for work already done. An episode
-missing even one selected layer is still spawned, and the worker rebuilds only what is absent,
-so an upload cut short finishes on the next run.
+> **Note:** Without `--overwrite`, anything already in the bucket is skipped.
+> The launcher spawns no worker for an episode whose layers are all present.
+> An episode missing even one layer still gets a worker, which then builds only what is missing.
 
 #### Picking layers
 
-`--layers` narrows the build to a subset, which is the cheap way to add or re-do one derived
-view across the dataset:
+`--layers` lets you choose which layers to build:
 
 ```bash
 # Only the base layer:
@@ -207,25 +192,21 @@ pixi run -e hiw convert-on-modal --layers base --limit 0
 pixi run -e hiw convert-on-modal --layers cameras,properties --limit 0 --overwrite
 ```
 
-A worker downloads only what the selected layers read. The camera layer needs just the episode's
-head calibration yaml and the properties layer only its sidecars, so neither pulls the episode
-MCAP, which runs to hundreds of MB. Rebuilding those two across the dataset costs almost nothing.
+A worker downloads only what the selected layers read.
 
 ### 4. Upload the blueprint
 
 `pixi run -e hiw blueprint` writes `blueprints/hiw-500/default.rbl`.
-To upload it to your HF bucket, run:
+To upload it to your HF bucket (`s3://<bucket>/blueprints/`), run:
 
 ```bash
 pixi run -e hiw upload-blueprint
 ```
 
-This uploads the file to `s3://<bucket>/blueprints/`.
-
 ## Observations
 
-We share interesting observations on a subset of episodes, completing the official dataset card:
-(TODO add observations.md)
+We share our observations including useful details beyond the dataset card.
+See [observations.md](observations.md) for the full survey.
 
 ## Mapping to Rerun
 
@@ -249,25 +230,19 @@ The table below shows where each source topic lands in the recording.
 
 ## More about Layers
 
-Each layer is a separate module that writes its own .rrd. (TODO update layer descriptions)
+Each layer is a separate module that writes its own .rrd.
 
 ### Base layer
 
-`hiw_500/base_layer.py` — a faithful conversion of the raw streams, no kinematics. A single
-`McapReader` stream shaped by lenses: cameras decode to `EncodedImage` (the stereo head is split
-into `/camera/head/{left,right}`), the custom `homies/*` / `unitree_go/*` messages become
-per-joint and end-effector scalars/transforms (`/state/…`, `/cmd/…`, `/lerobot/…`), and
-`info.json` becomes the `/episode` + `/task/subtask` sidecar. Entities keep the MCAP-native
-timelines.
-The episode's `calibration/` files ride along verbatim under `/calibration/…`, so the RRD is a self-contained record of the episode.
-A channel census compares decoded rows against the MCAP's own message counts and stamps `has_undecodable` / `undecodable_topics` on `/episode`, since a message that fails to decode is dropped silently.
+`hiw_500/base_layer.py` — This layer is a faithful conversion of the raw streams.
+[Mapping to Rerun](#mapping-to-rerun) shows where each topic lands.
+The sidecar files under `calibration/` are archived verbatim as `TextDocument` rather than converted, so the base layer is a self-contained record of the episode.
+A channel census compares decoded rows against the MCAP's own message counts, since a message that fails to decode is dropped silently.
+Its verdict joins the episode properties as `has_undecodable` and `undecodable_topics`, so the catalog can filter on it.
 
 ### URDF layer
 
-`hiw_500/urdf_layer.py` — the animated Unitree G1 mesh, driven by forward kinematics from the
-`/stamped/lowstate` joint positions (emitted to `/robot/transforms`). Its 29 revolute joints
-match the documented Unitree motor order. (The Dex1 finger joints stay at rest: no 1:1 mapping
-in the URDF.)
+`hiw_500/urdf_layer.py` — This layer carries the animated Unitree G1 mesh, driven by forward kinematics from the joint positions.
 
 The URDF is **not** part of the HF dataset. We use `g1_29dof_mode_15_with_dex1_1.urdf` from
 Unitree's [`unitree_ros`](https://github.com/unitreerobotics/unitree_ros/tree/master/robots/g1_description)
@@ -276,42 +251,31 @@ Unitree distributes it under the [BSD-3-Clause license](https://github.com/unitr
 
 ### Odometry layer
 
-`hiw_500/odom_layer.py` — connects the robot to the world. The URDF layer roots the G1 at
-`pelvis`, so on its own it animates in place; this layer adds the time-varying `odom → pelvis`
-transform from `/lf/odommodestate` so the whole robot moves through the scene.
+`hiw_500/odom_layer.py` — This layer connects the robot to the world by adding the `odom → pelvis`
+transform so the whole robot moves through the scene.
 
 ### Camera layer
 
-`hiw_500/camera_layer.py` — places the head camera in 3D. The head camera mount is a fixed
-joint in the URDF, so its position is already known; this layer adds the optical-frame
-transform plus per-eye `Pinhole` intrinsics from the episode's own stereo calibration
-(`calibration/params/head_camera_params.yaml`) so both stereo eyes project onto their image
-planes. Episodes without that calibration (the older sessions) skip this layer and keep their
-head images 2D. The **wrist cameras stay 2D**: the dataset provides no camera→robot
-(hand-eye) calibration for them.
+`hiw_500/camera_layer.py` — This layer places the head camera in 3D and adds the optical-frame
+transform. Episodes without that calibration skip this layer.
 
-### Wrist IR layer
+### IR layer
 
-`hiw_500/ir_layer.py` — the four wrist infrared streams (`/camera/{left,right}_wrist/ir{1,2}/compressed`), passed through as JPEG images on their own topic paths.
-The base layer leaves them out so its size does not double for imagery most workflows never look at.
-They stay 2D like the wrist color images, and sessions recorded before the IR cameras reached the rig skip this layer.
+`hiw_500/ir_layer.py` — This layer includes the four wrist IR streams only for episodes that recorded IR.
 The default blueprint shows them under the `IR` tab of the wrist camera pane, beside the `RGB` tab carrying the colour streams.
 
 ### Properties layer
 
-`hiw_500/properties_layer.py` — per-episode metadata logged as recording properties, which the
-catalog surfaces as **columns** to filter, sort, and search on: `task`, `task_group`,
-`duration_sec`, `num_subtasks`, `subtask_labels`, `scene`, `has_ir`, `robot`. Values come from
-`info.json`, the calibration sidecars, the dataset path, and a constant. `scene` is `-1` when the
-episode names none, and `has_ir` reads the presence of the wrist calibrations, which arrived on
-the rig together with the IR streams.
+`hiw_500/properties_layer.py` — This layer adds per-episode metadata logged as recording properties, which the
+catalog shows as columns to filter, sort, and search on: `task`,
+`duration_sec`, `num_subtasks`, `subtask_labels`, `scene`, `has_ir`, `robot`.
 
 ## Rerun APIs demonstrated
 
 - [`McapReader`](https://ref.rerun.io/docs/python/stable/experimental/#rerun.experimental.McapReader) decodes the episode topics, including the custom `homies/*` messages, into chunk streams (`base_layer.py`).
 - [Lenses](https://rerun.io/docs/concepts/query-and-transform/lenses) turn the raw messages into typed components: `Scalars` for the joint signals, `Transform3D` for the base pose, `EncodedImage` for the split stereo head (`base_layer.py`).
 - `rerun.urdf.UrdfTree` loads the vendored G1 model and runs forward kinematics from the joint states (`urdf_layer.py`).
-- The [blueprint](https://rerun.io/docs/concepts/visualization/blueprints) API composes the default layout, including the frame-targeted 3D view (`blueprint.py`).
+- The [blueprint](https://rerun.io/docs/concepts/visualization/blueprints) API composes the default layout, including the frame-targeted 3D view and the per-series joint labels (`blueprint.py`).
 - [`CatalogClient`](https://rerun.io/docs/concepts/query-and-transform/catalog-object-model) registers each episode as a dataset segment with named layers and installs the default blueprint (`catalog.py`).
 
 ## References
