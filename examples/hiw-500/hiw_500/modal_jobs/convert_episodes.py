@@ -65,12 +65,12 @@ URDF_DIR_IN_IMAGE = "/root/urdf"
 URDF_IN_IMAGE = f"{URDF_DIR_IN_IMAGE}/g1/g1_29dof_mode_15_with_dex1_1.urdf"
 
 HOUR = 60 * 60
-MEMORY_REQUEST = 4096
-CPU_REQUEST = 2.0
+MEMORY_REQUEST = 2048
+CPU_REQUEST = 1.0
 
 # Cap the workers so their Hub requests do not arrive as one burst — HuggingFace rate-limits the
 # metadata api by request count, and a worker makes about one request per file.
-MAX_CONTAINERS = 200
+MAX_CONTAINERS = 50
 
 # The native JPEG library behind pyturbojpeg.
 # PyTurboJPEG 2 needs libjpeg-turbo 3, and Debian stable still packages 2.1 (`apt libturbojpeg0`).
