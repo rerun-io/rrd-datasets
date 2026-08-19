@@ -102,14 +102,21 @@ pixi run -e hiw rerun rrds/hiw-500/*/<id>.rrd blueprints/hiw-500/default.rbl
 Register the converted episodes to a [catalog server](https://rerun.io/docs/concepts/how-does-rerun-work#catalog-server), then browse, sort, filter, and query the segments as one dataset.
 Once registered, episodes become queryable segments with named layers.
 
+Start a local server:
+
 ```bash
-pixi run serve             # start the in-memory Rerun catalog on :51234 (leave running)
-pixi run -e hiw register   # in another shell: register all episodes as the `hiw_500` dataset
+pixi run serve              # start an in-memory catalog server (leave running)
 ```
 
-> **Note:** each episode becomes one segment, keyed by its `recording_id`, and each `.rrd` of that episode attaches as one named layer of the segment.
+In another shell, register converted episodes and the default blueprint to a local catalog:
+
+```bash
+pixi run -e hiw register   # register all episodes as the `hiw_500` dataset
+```
+
+> **Note:** On a catalog, each episode becomes one segment, keyed by its `recording_id`. Each `.rrd` of that episode attaches as one named layer of the segment.
 > A layer name is an argument to the register call (`layer_name=` in `hiw_500/catalog.py`).
-> The `register` task creates the dataset, attaches each episode's RRDs as its named layers paired by `recording_id`, and installs [`blueprints/hiw-500/default.rbl`](../../blueprints/hiw-500/default.rbl) as the default blueprint.
+> The `register` task creates the dataset, attaches each episode's RRDs as its named layers, and installs [`blueprints/hiw-500/default.rbl`](../../blueprints/hiw-500/default.rbl) as the default blueprint.
 
 Browse them in the Rerun Viewer:
 
@@ -117,7 +124,7 @@ Browse them in the Rerun Viewer:
 pixi run -e hiw rerun rerun+http://127.0.0.1:51234
 ```
 
-https://github.com/user-attachments/assets/5180a716-9ceb-4209-a795-626053d59ba5
+The video below shows what it looks like.
 
 ## Remote Convert Example on Modal
 
