@@ -24,6 +24,7 @@ from hiw_500.base_layer import (
     EE_NAMES,
     G1_JOINT_NAMES,
     IMU_NAMES,
+    PROPERTY_PATH,
     STAT_CHANNEL_COUNTS,
     Episode,
     EpisodeInfo,
@@ -65,6 +66,13 @@ def _cell(chunk: Chunk, column: str) -> object:
     (row,) = chunk.to_record_batch().column(column).to_pylist()
     (value,) = row
     return value
+
+
+def _list_cell(chunk: Chunk, column: str) -> list[object]:
+    """The one list in a one-row chunk's list-valued component column."""
+    rows: list[list[object]] = chunk.to_record_batch().column(column).to_pylist()
+    (row,) = rows
+    return row
 
 
 def _by_entity(chunks: list[Chunk]) -> dict[str, Chunk]:
@@ -251,13 +259,13 @@ def test_topics_short_of_their_channel_count_are_flagged() -> None:
     assert undecodable_topics(chunks) == ["/annotation", DEX1_STATE]
 
 
-def test_the_census_verdict_is_stamped_on_episode() -> None:
+def test_the_census_verdict_is_an_episode_property() -> None:
     flagged = census_chunk([DEX1_STATE])
-    assert flagged.entity_path == "/episode"
+    assert flagged.entity_path == PROPERTY_PATH
     assert flagged.is_static
     assert _cell(flagged, "has_undecodable") is True
-    assert _cell(flagged, "undecodable_topics") == DEX1_STATE
+    assert _list_cell(flagged, "undecodable_topics") == [DEX1_STATE]
 
     clean = census_chunk([])
     assert _cell(clean, "has_undecodable") is False
-    assert _cell(clean, "undecodable_topics") == ""
+    assert _list_cell(clean, "undecodable_topics") == []

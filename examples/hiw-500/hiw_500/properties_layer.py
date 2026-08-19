@@ -21,6 +21,7 @@ import rerun as rr
 from hiw_500.base_layer import (
     APPLICATION_ID,
     DATASET_ROOT,
+    PROPERTY,
     RRD_ROOT,
     Episode,
     discover_episodes,
@@ -30,9 +31,6 @@ from hiw_500.base_layer import (
 from rrd_datasets_common.paths import layer_relpath
 
 ROBOT = "unitree_g1"
-
-# The property every field hangs off, giving catalog columns `property:episode:<name>`.
-PROPERTY = "episode"
 
 
 def convert_episode(ep: Episode, rrd_root: Path) -> Path:

@@ -12,7 +12,7 @@ own (CompressedImage -> `EncodedImage`, std_msgs/String -> `TextDocument`); the 
 (episode metadata + subtask labels) and the calibration files, which pass through verbatim so the
 RRD is a self-contained record of the episode — plus the static joint-name mapping beside the
 joint arrays. A channel census compares decoded rows against the
-MCAP's own per-channel counts and flags episodes with undecodable messages on `/episode`.
+MCAP's own per-channel counts and flags episodes with undecodable messages as recording properties.
 
 Run:  pixi run -e hiw convert-base            # all episodes under data/HIW-500/
       pixi run -e hiw convert-base <ep.mcap>  # a single episode mcap
@@ -51,6 +51,11 @@ from rrd_datasets_common.paths import dataset_data_dir, dataset_rrd_dir, layer_r
 DATASET_ROOT = dataset_data_dir("HIW-500")
 RRD_ROOT = dataset_rrd_dir("hiw-500")
 APPLICATION_ID = "hiw_500"
+
+# The recording property every per-episode field hangs off, so the catalog columns read
+# `property:episode:<name>`. `rr.RecordingStream.send_property(PROPERTY, …)` writes this path.
+PROPERTY = "episode"
+PROPERTY_PATH = f"/__properties/{PROPERTY}"
 
 # Component identifiers produced by McapReader's decoders.
 # Note that the package name "homies/* = Header + a unitree_hg payload"
@@ -624,11 +629,16 @@ def undecodable_topics(chunks: Iterable[Chunk]) -> list[str]:
 
 
 def census_chunk(topics: list[str]) -> Chunk:
-    """The census verdict as static `/episode` metadata, next to the info.json fields."""
+    """The census verdict as a recording property, so the catalog can filter on it."""
     return Chunk.from_columns(
-        "/episode",
+        PROPERTY_PATH,
         indexes=[],
-        columns=rr.AnyValues.columns(has_undecodable=[bool(topics)], undecodable_topics=[", ".join(topics)]),
+        columns=rr.AnyValues.columns(
+            has_undecodable=[bool(topics)],
+            # Typed explicitly: an inferred empty list arrives as `list<null>` and then drops
+            # the topics of every episode that does have failures.
+            undecodable_topics=pa.array([topics], type=pa.list_(pa.string())),
+        ),
     )
 
 
@@ -696,7 +706,7 @@ def convert_episode(ep: Episode, rrd_root: Path) -> Path:
     Merges the base entity stream with the sidecars (`info.json` metadata, the verbatim
     calibration files, and the static joint-name mapping), runs the channel census on the
     collected store, then writes a single
-    object-store-optimized recording — census verdict on `/episode`, raw skeletons and reader
+    object-store-optimized recording — census verdict as a recording property, raw skeletons and reader
     bookkeeping dropped — stamped with `application_id` / `recording_id`.
     """
     out_path = rrd_root / layer_relpath("base", ep.recording_id)
