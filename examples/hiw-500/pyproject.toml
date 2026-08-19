@@ -21,7 +21,6 @@ dependencies = [
     # PyTurboJPEG 2 needs libjpeg-turbo 3 — see the pixi feature's conda dependency.
     "pyturbojpeg>=2,<3",
     "huggingface_hub>=1.21.0,<2",
-    "tyro>=1.0.5,<2",
 ]
 
 [project.urls]

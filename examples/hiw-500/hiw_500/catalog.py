@@ -17,10 +17,9 @@ blueprint is installed on the dataset.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import argparse
 from pathlib import Path
 
-import tyro
 from rerun.catalog import CatalogClient, DatasetEntry, OnDuplicateSegmentLayer
 
 from hiw_500.blueprint import BLUEPRINT_PATH
@@ -28,6 +27,7 @@ from hiw_500.layers import LAYERS
 from rrd_datasets_common.paths import dataset_rrd_dir, layer_relpath
 
 DEFAULT_CATALOG_URL = "rerun+http://127.0.0.1:51234"
+DATASET_NAME = "hiw-500"
 
 
 def _base_rrds(rrd_dir: Path) -> list[Path]:
@@ -41,9 +41,14 @@ def register_episodes(
     rrd_dir: Path,
     blueprint: Path,
     *,
-    recreate: bool = True,
+    recreate: bool = False,
 ) -> DatasetEntry:
-    """Create (or replace) the dataset, register each episode's layers, and set the blueprint."""
+    """
+    Register each episode's layers as one segment of the dataset and set the blueprint.
+
+    The dataset is created if missing, and layers that are already there are replaced.
+    With `recreate`, an existing dataset of the same name is deleted first and rebuilt from scratch.
+    """
     base_rrds = _base_rrds(rrd_dir)
     if not base_rrds:
         raise FileNotFoundError(f"No base *.rrd files found in {rrd_dir}")
@@ -76,31 +81,39 @@ def register_episodes(
     return dataset
 
 
-@dataclass
-class CatalogConfig:
-    """Configuration for registering the HIW-500 RRDs into a local catalog."""
-
-    rrd_dir: Path = dataset_rrd_dir("hiw-500")
-    """Root of the per-layer recording directories (`<layer>/<recording_id>.rrd`)."""
-    catalog_url: str = DEFAULT_CATALOG_URL
-    """gRPC URL of the local Rerun catalog (`rerun server`)."""
-    dataset_name: str = "hiw_500"
-    """Catalog dataset name to (re)create."""
-    blueprint: Path = BLUEPRINT_PATH
-    """Default blueprint (`.rbl`) to install on the dataset, if present."""
-    recreate: bool = True
-    """Delete and recreate the dataset before registering. Pass `--no-recreate` to
-    re-register onto the existing dataset (REPLACE per layer)."""
-
-
-def main(cfg: CatalogConfig) -> None:
+def main() -> None:
     """Register every converted episode into the local catalog as one dataset."""
-    dataset = register_episodes(cfg.catalog_url, cfg.dataset_name, cfg.rrd_dir, cfg.blueprint, recreate=cfg.recreate)
+    parser = argparse.ArgumentParser(description="Register HIW-500 RRDs into the local Rerun catalog.")
+    parser.add_argument(
+        "--rrd-dir",
+        type=Path,
+        default=dataset_rrd_dir(DATASET_NAME),
+        help="Root of the per-layer recording directories (`<layer>/<recording_id>.rrd`).",
+    )
+    parser.add_argument(
+        "--catalog-url", default=DEFAULT_CATALOG_URL, help="gRPC URL of the local catalog (`pixi run serve`)."
+    )
+    parser.add_argument(
+        "--dataset-name", default=DATASET_NAME, help=f"Dataset to (re)create (default: {DATASET_NAME})."
+    )
+    parser.add_argument(
+        "--blueprint", type=Path, default=BLUEPRINT_PATH, help="Blueprint (.rbl) to install as the dataset default."
+    )
+    parser.add_argument(
+        "--recreate",
+        action="store_true",
+        help="Delete an existing dataset first and rebuild it from scratch.",
+    )
+    args = parser.parse_args()
+
+    dataset = register_episodes(
+        args.catalog_url, args.dataset_name, args.rrd_dir, args.blueprint, recreate=args.recreate
+    )
     segments = dataset.segment_ids()
-    print(f"Registered dataset '{dataset.name}' on {cfg.catalog_url} with {len(segments)} segment(s):")
+    print(f"Registered dataset '{dataset.name}' on {args.catalog_url} with {len(segments)} segment(s):")
     for segment in segments:
         print(f"  - {segment}")
 
 
 if __name__ == "__main__":
-    main(tyro.cli(CatalogConfig, description="Register HIW-500 RRDs into the local Rerun catalog"))
+    main()
