@@ -242,6 +242,7 @@ in the URDF.)
 The URDF is **not** part of the HF dataset. We use `g1_29dof_mode_15_with_dex1_1.urdf` from
 Unitree's [`unitree_ros`](https://github.com/unitreerobotics/unitree_ros/tree/master/robots/g1_description)
 (the Dex1 variant), vendored with its meshes under `urdf/g1/`.
+Unitree distributes it under the [BSD-3-Clause license](https://github.com/unitreerobotics/unitree_ros/blob/master/LICENSE); a copy is included at [`urdf/g1/LICENSE`](urdf/g1/LICENSE).
 
 ### Odometry layer
 
