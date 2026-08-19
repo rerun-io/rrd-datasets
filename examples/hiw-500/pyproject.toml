@@ -6,10 +6,7 @@ name = "hiw_500"
 dynamic = ["version"]
 requires-python = ">=3.12,<3.13"
 description = "Convert the BitRobot HIW-500 dataset into layered Rerun recordings."
-authors = [
-    { name = "Michael Grupp", email = "michael@rerun.io" },
-    { name = "Bhoram Lee", email = "bhoram@rerun.io" }
-]
+authors = [{ name = "Rerun.io", email = "opensource@rerun.io" }]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 dependencies = [
