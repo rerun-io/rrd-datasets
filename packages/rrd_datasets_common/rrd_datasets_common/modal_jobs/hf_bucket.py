@@ -2,8 +2,7 @@
 HF Storage Bucket access for Modal jobs: a boto3 client on the S3-compatible gateway.
 
 Namespaces are arguments rather than constants, so this file carries nothing private or specific
-to one dataset. The HFAK key pair rides in `RCLONE_CONFIG_HF_*` variables, so the same exports
-also configure an `rclone` remote for syncing the bucket locally.
+to one dataset. The HF S3 credentials ride in `HF_BUCKET_*` variables.
 """
 
 from __future__ import annotations
@@ -19,8 +18,8 @@ from botocore.exceptions import BotoCoreError, ClientError
 if TYPE_CHECKING:
     from mypy_boto3_s3.client import S3Client
 
-# The HFAK key pair: generated once from a fine-grained HF token scoped to the bucket.
-HF_S3_KEYS = ("RCLONE_CONFIG_HF_ACCESS_KEY_ID", "RCLONE_CONFIG_HF_SECRET_ACCESS_KEY")
+# The HF S3 credentials: generated once from a fine-grained HF token scoped to the bucket.
+HF_S3_KEYS = ("HF_BUCKET_ACCESS_KEY_ID", "HF_BUCKET_SECRET_ACCESS_KEY")
 
 # The gateway accepts only us-east-1 signatures and is served from us-east-1, so workers pin
 # there too.
@@ -38,13 +37,13 @@ HF_TRANSFER_CONFIG = TransferConfig(
 
 
 def missing_hf_s3_keys() -> list[str]:
-    """The HFAK variables not set in the caller's environment."""
+    """The HF S3 credential variables not set in the caller's environment."""
     return [key for key in HF_S3_KEYS if not os.environ.get(key)]
 
 
 def gateway_client(namespace: str) -> S3Client:
     """
-    An S3 client on the HF bucket gateway for `namespace`, authenticated with the HFAK key pair.
+    An S3 client on the HF bucket gateway for `namespace`, authenticated with the HF S3 credentials.
 
     The gateway serves one endpoint per namespace and speaks plain S3, with two deviations: no
     virtual-host bucket names (path-style addressing only), and no `aws-chunked` uploads
@@ -54,8 +53,8 @@ def gateway_client(namespace: str) -> S3Client:
         "s3",
         endpoint_url=f"https://s3.hf.co/{namespace}",
         region_name=HF_GATEWAY_REGION,
-        aws_access_key_id=os.environ["RCLONE_CONFIG_HF_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["RCLONE_CONFIG_HF_SECRET_ACCESS_KEY"],
+        aws_access_key_id=os.environ["HF_BUCKET_ACCESS_KEY_ID"],
+        aws_secret_access_key=os.environ["HF_BUCKET_SECRET_ACCESS_KEY"],
         config=Config(
             s3={"addressing_style": "path"},
             request_checksum_calculation="when_required",

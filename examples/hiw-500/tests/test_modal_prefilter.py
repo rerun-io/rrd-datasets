@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from mypy_boto3_s3.client import S3Client
 
 # Importing the launcher builds Modal objects, which read the launcher-side credentials: the
-# HuggingFace token, plus the HFAK pair on the default `hf` backend. No value here is ever used.
+# HuggingFace token, plus the HF S3 credentials on the default `hf` backend. No value here is ever used.
 os.environ.setdefault("HF_TOKEN", "unit-test-token")
 for _key in HF_S3_KEYS:
     os.environ.setdefault(_key, "unit-test-key")

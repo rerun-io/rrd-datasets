@@ -131,18 +131,19 @@ Converted RRDs land in a bucket, and `STORAGE_BACKEND` picks which kind.
 This example converts to a [HuggingFace Storage Bucket](https://huggingface.co/docs/hub/main/en/storage-buckets-s3)
 behind its S3-compatible gateway, reached with `boto3` like any S3 bucket.
 The `hiw` environments default `STORAGE_BACKEND` to `hf` and `HF_BUCKET` to `hiw-500`, so the namespace that owns the bucket is the one value you have to set.
-Access uses an HFAK key pair, generated once from a fine-grained HF token scoped to the bucket and shipped to the workers as an ephemeral per-run secret.
+Access uses [HF S3 credentials](https://huggingface.co/docs/hub/storage-buckets-s3#generating-s3-credentials): an access key ID prefixed `HFAK…` and a secret access key.
+Generate them from a fine-grained HF token scoped to the bucket. These credentials are shipped to the Modal workers as an ephemeral per-run secret.
 
 Set the env vars for your backend, or edit the placeholders in
 [`rrd_datasets_common/storage.py`](../../packages/rrd_datasets_common/rrd_datasets_common/storage.py) (buckets) and
 [`rrd_datasets_common/modal_jobs/store.py`](../../packages/rrd_datasets_common/rrd_datasets_common/modal_jobs/store.py) (role ARN);
 the dataset's own layout under the bucket lives in [`storage.py`](hiw_500/storage.py):
 
-| Env var                                                  | Backend | What it is                                                             |
-| -------------------------------------------------------- | ------- | ---------------------------------------------------------------------- |
-| `HF_NAMESPACE`                                           | hf      | The user or org that owns the bucket — set this one                    |
-| `HF_BUCKET`                                              | hf      | Bucket the RRDs are written to, `hiw-500` by default — create it first |
-| `RCLONE_CONFIG_HF_ACCESS_KEY_ID` / `…_SECRET_ACCESS_KEY` | hf      | The HFAK key pair (the names double as an `rclone` remote config)      |
+| Env var                                           | Backend | What it is                                                             |
+| ------------------------------------------------- | ------- | ---------------------------------------------------------------------- |
+| `HF_NAMESPACE`                                    | hf      | The user or org that owns the bucket — set this one                    |
+| `HF_BUCKET`                                       | hf      | Bucket the RRDs are written to, `hiw-500` by default — create it first |
+| `HF_BUCKET_ACCESS_KEY_ID` / `…_SECRET_ACCESS_KEY` | hf      | The HF S3 credentials                                                  |
 
 `HF_NAMESPACE` has no default, and the bucket has to exist: `hf buckets create <namespace>/hiw-500 --private`.
 

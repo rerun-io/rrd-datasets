@@ -30,7 +30,7 @@ def upload_blueprint(blueprint: Path, uri: str) -> None:
         raise ValueError(f"Expected an s3:// URI, got {uri}")
 
     if STORAGE_BACKEND == "hf" and (missing := missing_hf_s3_keys()):
-        raise SystemExit(f"Missing HF bucket credentials: {', '.join(missing)} — generate an HFAK key pair.")
+        raise SystemExit(f"Missing HF S3 credentials: {', '.join(missing)} — generate them from an HF access token.")
     check_bucket()
     upload_file(launcher_client(), str(blueprint), uri)
     print(f"Uploaded blueprint: {uri}")
