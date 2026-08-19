@@ -227,6 +227,26 @@ This uploads the file to `s3://<bucket>/blueprints/`.
 We share interesting observations on a subset of episodes, completing the official dataset card:
 (TODO add observations.md)
 
+## Mapping to Rerun
+
+The table below shows where each source topic lands in the recording.
+`<side>` is `left` or `right`.
+
+| Source                                    | Entity path                                                                                    | Archetype                  |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------- |
+| `/camera/head/image/compressed`           | `/camera/head/{left,right}`                                                                    | `EncodedImage`, `Pinhole`  |
+| `/camera/<side>_wrist/image/compressed`   | same path                                                                                      | `EncodedImage`             |
+| `/camera/<side>_wrist/ir{1,2}/compressed` | same path                                                                                      | `EncodedImage`             |
+| `/wbc_lerobot`                            | `/lerobot/{ee_state,ee_action}` (12-wide) `+ /<side>` 3D markers, `/lerobot/{gripper,pivot}/…` | `Scalars`, `Transform3D`   |
+| `/stamped/lowstate`                       | `/state/joint/{q,dq,tau}` (29-wide), and forward kinematics to `/robot/**`                     | `Scalars`, `Transform3D`   |
+| `/stamped/lowcmd`                         | `/cmd/joint/q` (29-wide)                                                                       | `Scalars`                  |
+| `/stamped/secondary_imu`                  | `/state/imu/{rpy,gyroscope,accelerometer}` (3-wide)                                            | `Scalars`                  |
+| `/stamped/dex1/<side>/{cmd,state}`        | `/{cmd,state}/gripper/<side>/q`                                                                | `Scalars`                  |
+| `/lf/odommodestate`                       | `/state/base/…`, and the `odom → pelvis` transform                                             | `Scalars`, `Transform3D`   |
+| `/annotation`                             | `/annotation`                                                                                  | `TextDocument`             |
+| `info.json` sidecar                       | `/episode`, `/task/subtask`                                                                    | `AnyValues`, `StateChange` |
+| `calibration/` sidecars                   | `/calibration/…`                                                                               | `TextDocument`             |
+
 ## More about Layers
 
 Each layer is a separate module that writes its own .rrd. (TODO update layer descriptions)
