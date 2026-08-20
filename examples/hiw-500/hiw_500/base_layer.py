@@ -513,6 +513,9 @@ def sidecar_stream(info: EpisodeInfo) -> LazyChunkStream:
 
 CALIBRATION_ARCHETYPE = "CalibrationFile"
 
+# Reserved for the sidecar's own filename, which no vendor field may take.
+_CALIBRATION_PATH = "path"
+
 _CALIBRATION_LOADERS: dict[str, Callable[[str], Any]] = {
     ".yaml": yaml.safe_load,
     ".yml": yaml.safe_load,
@@ -537,24 +540,42 @@ def _calibration_leaves(parsed: Any, prefix: str = "") -> dict[str, Any]:
     return leaves
 
 
-def _calibration_arrow_type(value: Any) -> pa.DataType:
-    """The arrow type of one leaf; a nested list nests its element type."""
+def _calibration_value(value: Any) -> Any:
+    """`value` with anything arrow has no type for replaced by its text, so no field is dropped."""
     if isinstance(value, list):
-        return pa.list_(_calibration_arrow_type(value[0]) if value else pa.float64())
-    return _CALIBRATION_ARROW_TYPES[type(value)]
+        return [_calibration_value(item) for item in value]
+    if value is None or type(value) in _CALIBRATION_ARROW_TYPES:
+        return value
+    return str(value)
+
+
+def _calibration_arrow_type(value: Any) -> pa.DataType:
+    """The arrow type of one leaf; a nested list nests its element type, and `None` reads as text."""
+    if isinstance(value, list):
+        first = next((item for item in value if item is not None), None)
+        return pa.list_(pa.float64() if first is None else _calibration_arrow_type(first))
+    return _CALIBRATION_ARROW_TYPES.get(type(value), pa.string())
 
 
 def _calibration_row(value: Any) -> pa.Array:
     """One row holding `value`, typed explicitly: an inferred empty list arrives as `list<null>`."""
-    return pa.array([value], type=_calibration_arrow_type(value))
+    normalized = _calibration_value(value)
+    return pa.array([normalized], type=_calibration_arrow_type(normalized))
 
 
 def calibration_components(file: Path, rel: Path) -> dict[str, pa.Array]:
-    """The sidecar's contents as `CalibrationFile` components, plus `path`; an unparsed suffix keeps its `text`."""
+    """
+    The sidecar's contents as `CalibrationFile` components, plus `path`; an unparsed suffix keeps its `text`.
+
+    `path` is reserved for the source filename, so a sidecar carrying its own is a hard error rather
+    than a silent overwrite.
+    """
     loader = _CALIBRATION_LOADERS.get(file.suffix)
     leaves = _calibration_leaves(loader(file.read_text())) if loader else {"text": file.read_text()}
+    if _CALIBRATION_PATH in leaves:
+        raise ValueError(f"{rel} has its own `{_CALIBRATION_PATH}` field, which the source filename would overwrite")
     components = {name: _calibration_row(value) for name, value in leaves.items()}
-    components["path"] = _calibration_row(rel.as_posix())
+    components[_CALIBRATION_PATH] = _calibration_row(rel.as_posix())
     return components
 
 

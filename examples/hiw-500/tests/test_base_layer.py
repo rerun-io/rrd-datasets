@@ -16,6 +16,7 @@ from typing import Any
 
 import numpy as np
 import pyarrow as pa
+import pytest
 import rerun as rr
 import yaml
 from rerun.experimental import Chunk
@@ -365,3 +366,21 @@ def test_an_empty_list_keeps_a_typed_element(tmp_path: Path) -> None:
     path.write_text(ROUND_TRIP_JSON)
     components = calibration_components(path, Path("camera_1.json"))
     assert pa.types.is_floating(components["color.intrinsics.coeffs"].type.value_type)
+
+
+def test_a_leaf_arrow_has_no_type_for_keeps_its_text(tmp_path: Path) -> None:
+    """A missing value or a YAML date must not fail the whole episode."""
+    path = tmp_path / "odd.yaml"
+    path.write_text("baseline:\ncalibrated_on: 2026-08-20\ncoeffs: [null, 1.0]\n")
+    components = calibration_components(path, Path("odd.yaml"))
+    assert components["baseline"].to_pylist() == [None]
+    assert components["calibrated_on"].to_pylist() == ["2026-08-20"]
+    assert components["coeffs"].to_pylist() == [[None, 1.0]]
+
+
+def test_a_sidecar_carrying_its_own_path_is_an_error(tmp_path: Path) -> None:
+    """`path` holds the source filename, so overwriting a vendor field with it would lose data."""
+    path = tmp_path / "camera_1.json"
+    path.write_text(json.dumps({"path": "vendor/original.json"}))
+    with pytest.raises(ValueError, match="path"):
+        calibration_components(path, Path("camera_1.json"))
