@@ -34,9 +34,11 @@ version = "0.1.0"
 python = "3.12.*"
 
 [feature.common.pypi-dependencies]
-# rerun-sdk is PyPI-only. Example pyprojects declare compatible ranges; this is
-# the single exact pin their environments solve against.
-rerun-sdk = "==0.34.*"
+# rerun-sdk is PyPI-only, and one version holds repo-wide. Pinned exact, not a
+# wildcard: `.rrd` and `.rbl` output depends on the version, so a patch release
+# arrives as a deliberate commit. The example pyprojects pin the same version —
+# theirs is what the Modal images install.
+rerun-sdk = "==0.34.1"
 # The shared tools every example composes; not declared in example pyprojects —
 # the Modal images ship its source instead (no index carries a path dependency).
 rrd_datasets_common = { path = "packages/rrd_datasets_common", editable = true }
@@ -202,7 +204,7 @@ mypy-boto3-s3 = ">=1.34"
 [feature.abc-130k.pypi-dependencies]
 abc_130k = { path = "examples/abc-130k", editable = true, extras = ["cloud"] }
 # PyPI-only notebook integration; not required by the conversion package.
-rerun-notebook = ">=0.34,<0.35"
+rerun-notebook = "==0.34.1"
 
 [feature.abc-130k.activation.env]
 PACKAGE_DIR = "examples/abc-130k"

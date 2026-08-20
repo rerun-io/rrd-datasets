@@ -14,6 +14,7 @@ import pytest
 from abc_130k import episode_index
 from rrd_datasets_common import hf_repo
 
+REPO_ID = "XDOF/ABC-130k"
 SHA = "a" * 40
 OTHER_SHA = "b" * 40
 
@@ -47,15 +48,17 @@ def _tree(counts: dict[str, int]) -> tuple[set[str], Expected]:
 
 
 class FakeApi:
-    """Stands in for `HfApi`, counting tree listings so a cache hit can be shown to make none."""
+    """Stands in for `HfApi`, counting both calls so a cache hit can be shown to make neither."""
 
     def __init__(self, files: set[str], sha: str | None) -> None:
         self._files = files
         self._sha = sha
         self.listings = 0
+        self.lookups = 0
 
     def repo_info(self, *args: Any, **kwargs: Any) -> Any:
         """The configured revision, or a connection failure when it is `None`."""
+        self.lookups += 1
         if self._sha is None:
             raise ConnectionError("offline")
         return SimpleNamespace(sha=self._sha)
@@ -66,11 +69,17 @@ class FakeApi:
         return self._files
 
 
-def _discover(files: set[str], sha: str | None, cache: Path, task_filter: str = "") -> tuple[Expected, int]:
+def _discover(
+    files: set[str], sha: str | None, cache: Path, task_filter: str = "", revision: str | None = SHA
+) -> tuple[Expected, int]:
     """Run `discover_episodes` against `FakeApi`, returning its result and the listings it made."""
     api = FakeApi(files, sha)
-    with patch.object(episode_index, "CACHE_PATH", cache), patch("huggingface_hub.HfApi", lambda: api):
-        items = episode_index.discover_episodes("XDOF/ABC-130k", task_filter)
+    with (
+        patch.object(episode_index, "CACHE_PATH", cache),
+        patch.object(episode_index, "HF_REVISION", revision),
+        patch("huggingface_hub.HfApi", lambda: api),
+    ):
+        items = episode_index.discover_episodes(REPO_ID, task_filter)
     return [(item.episode_dir, item.recording_id, item.has_annotation) for item in items], api.listings
 
 
@@ -104,7 +113,7 @@ def test_changed_revision_relists(cache: Path) -> None:
     files, expected = _tree({"train/taskA": 20})
     _discover(files, SHA, cache)
 
-    got, listings = _discover(files, OTHER_SHA, cache)
+    got, listings = _discover(files, OTHER_SHA, cache, revision=OTHER_SHA)
     assert got == expected
     assert listings == 1
     assert json.loads(gzip.decompress(cache.read_bytes()))["sha"] == OTHER_SHA
@@ -125,10 +134,11 @@ def test_older_cache_version_is_a_miss(cache: Path) -> None:
 
 
 def test_unreadable_revision_falls_back_to_the_cache(cache: Path) -> None:
+    """Without a pinned sha there is nothing to check the cache against, so it is used as-is."""
     files, expected = _tree({"train/taskA": 20})
-    _discover(files, SHA, cache)
+    _discover(files, SHA, cache, revision=None)
 
-    got, listings = _discover(files, None, cache)
+    got, listings = _discover(files, None, cache, revision=None)
     assert got == expected
     assert listings == 0
 
@@ -136,4 +146,30 @@ def test_unreadable_revision_falls_back_to_the_cache(cache: Path) -> None:
 def test_unreadable_revision_without_a_cache_exits(cache: Path) -> None:
     files, _ = _tree({"train/taskA": 20})
     with pytest.raises(SystemExit):
-        _discover(files, None, cache)
+        _discover(files, None, cache, revision=None)
+
+
+def test_a_pinned_sha_checks_the_cache_without_the_hub(cache: Path) -> None:
+    """A full sha already says what it pins, so a cache hit costs no api call even offline."""
+    files, _ = _tree({"train/taskA": 20})
+    api = FakeApi(files, None)
+
+    with patch("huggingface_hub.HfApi", lambda: api):
+        assert hf_repo.hf_file_index(REPO_ID, cache, SHA) == files
+        assert hf_repo.hf_file_index(REPO_ID, cache, SHA) == files
+
+    assert api.listings == 1
+    assert api.lookups == 0
+
+
+def test_a_pinned_sha_refuses_another_revisions_cache(cache: Path) -> None:
+    """The bug this guards: offline, a stale listing must not pass as the pinned revision."""
+    files, _ = _tree({"train/taskA": 20})
+    api = FakeApi(files, None)
+
+    with patch("huggingface_hub.HfApi", lambda: api):
+        hf_repo.hf_file_index(REPO_ID, cache, SHA)
+        hf_repo.hf_file_index(REPO_ID, cache, OTHER_SHA)
+
+    assert api.listings == 2
+    assert json.loads(gzip.decompress(cache.read_bytes()))["sha"] == OTHER_SHA

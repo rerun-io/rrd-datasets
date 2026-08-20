@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING
 
 import modal
 
-from hiw_500.episode_index import HF_REPO_ID, WorkItem, discover_episodes
+from hiw_500.episode_index import HF_REPO_ID, HF_REVISION, WorkItem, discover_episodes
 from hiw_500.layers import LAYERS
 from hiw_500.storage import DATASET_PREFIX
 from rrd_datasets_common.hf_repo import HF_HUB_ENV
@@ -179,26 +179,44 @@ def convert_episode_remote(item: WorkItem, layers: list[str], overwrite: bool) -
         if NEEDS_MCAP.intersection(todo):
             print(f"downloading {item.mcap}…")
             mcap = Path(
-                hf_hub_download(repo_id=HF_REPO_ID, repo_type="dataset", filename=item.mcap, local_dir=str(hf_dir))
+                hf_hub_download(
+                    repo_id=HF_REPO_ID,
+                    repo_type="dataset",
+                    revision=HF_REVISION,
+                    filename=item.mcap,
+                    local_dir=str(hf_dir),
+                )
             )
         info = EpisodeInfo()
         if item.info and NEEDS_INFO.intersection(todo):
             info_path = Path(
-                hf_hub_download(repo_id=HF_REPO_ID, repo_type="dataset", filename=item.info, local_dir=str(hf_dir))
+                hf_hub_download(
+                    repo_id=HF_REPO_ID,
+                    repo_type="dataset",
+                    revision=HF_REVISION,
+                    filename=item.info,
+                    local_dir=str(hf_dir),
+                )
             )
             info = EpisodeInfo.from_json(info_path)
         head_calib: Path | None = None
         if item.head_calib and NEEDS_HEAD_CALIB.intersection(todo):
             head_calib = Path(
                 hf_hub_download(
-                    repo_id=HF_REPO_ID, repo_type="dataset", filename=item.head_calib, local_dir=str(hf_dir)
+                    repo_id=HF_REPO_ID,
+                    repo_type="dataset",
+                    revision=HF_REVISION,
+                    filename=item.head_calib,
+                    local_dir=str(hf_dir),
                 )
             )
         if NEEDS_WRIST_CALIBS.intersection(todo):
             # Landing under their repo-relative paths beside the mcap, where the calibration
             # globs pick them up.
             for calib in item.wrist_calibs:
-                hf_hub_download(repo_id=HF_REPO_ID, repo_type="dataset", filename=calib, local_dir=str(hf_dir))
+                hf_hub_download(
+                    repo_id=HF_REPO_ID, repo_type="dataset", revision=HF_REVISION, filename=calib, local_dir=str(hf_dir)
+                )
 
         episode = Episode(mcap=mcap, info=info, recording_id=item.recording_id, head_calib=head_calib)
         out_dir = root / "rrds"

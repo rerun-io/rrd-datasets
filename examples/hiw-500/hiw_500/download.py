@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from huggingface_hub import hf_hub_download
 
-from hiw_500.episode_index import CACHE_PATH, HF_REPO_ID
+from hiw_500.episode_index import CACHE_PATH, HF_REPO_ID, HF_REVISION
 from rrd_datasets_common.hf_repo import hf_file_index
 from rrd_datasets_common.paths import dataset_data_dir
 
@@ -40,7 +40,7 @@ LOCAL_DIR = dataset_data_dir("HIW-500")
 
 def main() -> None:
     # Which files an episode ships varies, so the repo's cached file index says what to fetch.
-    files = hf_file_index(HF_REPO_ID, CACHE_PATH)
+    files = hf_file_index(HF_REPO_ID, CACHE_PATH, HF_REVISION)
     print(f"Downloading {len(SAMPLES)} sample episodes…")
     for sample in SAMPLES:
         sample_files = sorted(path for path in files if path.startswith(f"{sample}/"))
@@ -51,6 +51,7 @@ def main() -> None:
             hf_hub_download(  # It skips downloading if the file already exists.
                 repo_id=HF_REPO_ID,
                 repo_type="dataset",
+                revision=HF_REVISION,
                 filename=filename,
                 local_dir=LOCAL_DIR,
             )

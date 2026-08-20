@@ -14,6 +14,10 @@ from rrd_datasets_common.hf_repo import hf_file_index
 
 HF_REPO_ID = "XDOF/ABC-130k"
 
+# Pinned so a re-upload cannot change what the converter reads. A full sha, since branches and
+# tags move. Bump it deliberately to pick up newly published episodes.
+HF_REVISION = "29136bc9b9e38d320b00ffcddbbe4cd0e3278c58"
+
 # `.cache/` is gitignored. Delete this file to force a re-listing.
 CACHE_PATH = Path(__file__).resolve().parents[1] / ".cache" / "hf_files.json.gz"
 
@@ -56,4 +60,4 @@ def episodes_from_files(files: set[str], task_filter: str = "") -> list[WorkItem
 
 def discover_episodes(repo_id: str = HF_REPO_ID, task_filter: str = "") -> list[WorkItem]:
     """Every matching episode in `repo_id`, from the cached file listing."""
-    return episodes_from_files(hf_file_index(repo_id, CACHE_PATH), task_filter)
+    return episodes_from_files(hf_file_index(repo_id, CACHE_PATH, HF_REVISION), task_filter)

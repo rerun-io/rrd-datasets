@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -15,6 +16,8 @@ if TYPE_CHECKING:
 
 # Bump when the on-disk cache layout changes, so older files read as a miss.
 CACHE_VERSION = 2
+
+_COMMIT_SHA = re.compile(r"[0-9a-f]{40}")
 
 # Env vars for a worker image that reaches the Hub.
 HF_HUB_ENV = {
@@ -25,22 +28,27 @@ HF_HUB_ENV = {
 }
 
 
-def hf_file_index(repo_id: str, cache_path: Path) -> set[str]:
+def hf_file_index(repo_id: str, cache_path: Path, revision: str | None = None) -> set[str]:
     """
     Every file path in a HuggingFace dataset repo, cached at `cache_path` and pinned to its commit.
 
-    The cached copy is reused whenever the repo's sha still matches.
-    When the sha cannot be read at all — offline, rate-limited — an existing cache is used unverified
-    rather than failing the caller.
+    `revision` pins which commit is read; `None` follows the repo's default branch, so what comes
+    back changes when the dataset is re-uploaded.
+
+    The cached copy is reused whenever the repo's sha still matches. A `revision` that is already a
+    full commit sha needs no lookup to say what it pins, so the cache is checked offline and no api
+    call is spent. Anything else — a branch, a tag, a short sha — is resolved against the Hub, and
+    when that fails an existing cache is used unverified rather than failing the caller.
     """
     from huggingface_hub import HfApi
 
     api = HfApi()
-    sha: str | None = None
-    try:
-        sha = api.repo_info(repo_id, repo_type="dataset").sha
-    except Exception as exc:
-        print(f"Could not read the {repo_id} revision ({type(exc).__name__}).")
+    sha = revision if revision is not None and _COMMIT_SHA.fullmatch(revision) else None
+    if sha is None:
+        try:
+            sha = api.repo_info(repo_id, repo_type="dataset", revision=revision).sha
+        except Exception as exc:
+            print(f"Could not read the {repo_id} revision ({type(exc).__name__}).")
 
     cached = _read_cache(cache_path)
     if cached is not None and (sha is None or cached[0] == sha):
@@ -53,7 +61,7 @@ def hf_file_index(repo_id: str, cache_path: Path) -> set[str]:
         raise SystemExit(f"Cannot list {repo_id} and no usable cache at {cache_path}.")
 
     print(f"Listing {repo_id} (full repo tree, minutes for a large one; cached for {sha[:8]})…", flush=True)
-    files = set(api.list_repo_files(repo_id, repo_type="dataset"))
+    files = set(api.list_repo_files(repo_id, repo_type="dataset", revision=revision))
     _write_cache(cache_path, sha, files)
     return files
 

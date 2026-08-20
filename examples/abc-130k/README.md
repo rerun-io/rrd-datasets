@@ -31,6 +31,9 @@ Converted recordings are published at [`rerun/abc-130k`](https://huggingface.co/
 
 File paths below are relative to the repository root.
 
+The source revision is pinned to [`29136bc9`](https://huggingface.co/datasets/XDOF/ABC-130k/tree/29136bc9b9e38d320b00ffcddbbe4cd0e3278c58), dated 2026-07-02, to match with the published converted dataset.
+Bump `HF_REVISION` in [`abc_130k/episode_index.py`](abc_130k/episode_index.py) to work with newer episodes.
+
 ### 1. Download
 
 Download the sample episodes (~900 MB) into `data/ABC-130k/`:

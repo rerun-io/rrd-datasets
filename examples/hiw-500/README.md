@@ -33,7 +33,8 @@ Data is downloaded at runtime from the original Hugging Face repo.
 
 Converted recordings will be published to a Hugging Face bucket when ready.
 They are built from source revision [`2ca7ffcd`](https://huggingface.co/datasets/BitRobot/HIW-500/tree/2ca7ffcd85ec5212f81ae08491a4076bf48ea841), dated 2026-06-29.
-The converter follows `main` rather than pinning that revision, so a new upload changes what you get.
+The converter pins that revision, so every run reads the same data.
+Bump `HF_REVISION` in [`hiw_500/episode_index.py`](hiw_500/episode_index.py) to pick up newer episodes.
 
 ## Local Runs
 
