@@ -157,6 +157,17 @@ pixi run -e abc convert-on-modal --task-filter fold_and_stack_the_t_shirts --lim
 > The listing is cached in `examples/abc-130k/.cache/hf_files.json.gz` and reused until the dataset revision changes.
 > Delete the file to force a re-listing.
 
+### 4. Upload the blueprint
+
+`pixi run -e abc blueprint` writes `blueprints/abc-130k/default.rbl`.
+To upload it to your S3 bucket, run:
+
+```bash
+pixi run -e abc upload-blueprint
+```
+
+This uploads the file to `s3://<bucket>/abc-130k/blueprints/`.
+
 ## Observations
 
 Surveying a subset of the episodes surfaced several useful details beyond the dataset card. See [observations.md](observations.md) for the full survey.

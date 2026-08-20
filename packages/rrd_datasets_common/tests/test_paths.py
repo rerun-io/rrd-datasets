@@ -8,6 +8,7 @@ from rrd_datasets_common.paths import (
     dataset_data_dir,
     dataset_rrd_dir,
     default_blueprint_path,
+    layer_relpath,
     repo_root,
     resolve_input_path,
 )
@@ -59,3 +60,9 @@ def test_input_paths_resolve_against_the_workspace_root_as_a_fallback(
 
     # A path that exists nowhere comes back untouched, for the caller's error message.
     assert resolve_input_path(Path("missing.mcap")) == Path("missing.mcap")
+
+
+def test_layer_relpath_is_the_same_locally_and_in_the_bucket() -> None:
+    """One relative path per layer recording, so a layer directory syncs without renaming."""
+    assert layer_relpath("base", "TaskA__1") == "base/TaskA__1.rrd"
+    assert layer_relpath("urdf", "TaskA__1") == "urdf/TaskA__1.rrd"

@@ -11,9 +11,9 @@ import pytest
 if TYPE_CHECKING:
     from types import ModuleType
 
-HFAK_ENV = {
-    "RCLONE_CONFIG_HF_ACCESS_KEY_ID": "HFAKunittest",
-    "RCLONE_CONFIG_HF_SECRET_ACCESS_KEY": "unit-test-secret",
+HF_S3_ENV = {
+    "HF_BUCKET_ACCESS_KEY_ID": "HFAKunittest",
+    "HF_BUCKET_SECRET_ACCESS_KEY": "unit-test-secret",
 }
 
 
@@ -77,7 +77,7 @@ def test_an_unknown_backend_fails_loudly(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_hf_clients_point_at_the_gateway_on_both_sides(monkeypatch: pytest.MonkeyPatch) -> None:
-    _, store = _reload(monkeypatch, STORAGE_BACKEND="hf", HF_NAMESPACE="acme", **HFAK_ENV)
+    _, store = _reload(monkeypatch, STORAGE_BACKEND="hf", HF_NAMESPACE="acme", **HF_S3_ENV)
     for client in (store.worker_client(), store.launcher_client()):
         assert client.meta.endpoint_url == "https://s3.hf.co/acme"
 
@@ -89,14 +89,14 @@ def test_the_hf_backend_pins_workers_beside_the_gateway(monkeypatch: pytest.Monk
 
 def test_missing_hfak_keys_abort_the_launch_by_name(monkeypatch: pytest.MonkeyPatch) -> None:
     _, store = _reload(monkeypatch, STORAGE_BACKEND="hf")
-    for key in HFAK_ENV:
+    for key in HF_S3_ENV:
         monkeypatch.delenv(key, raising=False)
-    with pytest.raises(SystemExit, match="RCLONE_CONFIG_HF_ACCESS_KEY_ID"):
+    with pytest.raises(SystemExit, match="HF_BUCKET_ACCESS_KEY_ID"):
         store.extra_secrets()
 
 
 def test_present_hfak_keys_become_one_run_secret(monkeypatch: pytest.MonkeyPatch) -> None:
-    _, store = _reload(monkeypatch, STORAGE_BACKEND="hf", **HFAK_ENV)
+    _, store = _reload(monkeypatch, STORAGE_BACKEND="hf", **HF_S3_ENV)
     assert len(store.extra_secrets()) == 1
 
 
@@ -210,7 +210,7 @@ def test_check_bucket_is_a_no_op_on_the_s3_backend(monkeypatch: pytest.MonkeyPat
 
 def test_the_gateway_client_respects_the_gateway_deviations(monkeypatch: pytest.MonkeyPatch) -> None:
     """Path-style addressing and no unasked-for checksums — the two ways the gateway is not plain S3."""
-    for key, value in HFAK_ENV.items():
+    for key, value in HF_S3_ENV.items():
         monkeypatch.setenv(key, value)
     from rrd_datasets_common.modal_jobs.hf_bucket import gateway_client
 

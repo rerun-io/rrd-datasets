@@ -79,6 +79,10 @@ exclude = [
   # HF bucket gateway endpoints appear in code as templates, not documents.
   's3\.hf\.co',
 
+  # The libjpeg-turbo release prefix is assembled at runtime in a shell command,
+  # so lychee extracts the bare directory rather than a real download link.
+  'https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/',
+
   # Embedded demo videos: GitHub serves these only to authenticated requests,
   # so anonymous checks get 404 while the README embed renders fine.
   'https://github.com/user-attachments/assets/.*',

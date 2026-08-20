@@ -53,7 +53,7 @@ Currently supported datasets:
 | Dataset                       | Domain        | Input | Rerun HF bucket                                                   | Status |
 | ----------------------------- | ------------- | ----- | ----------------------------------------------------------------- | ------ |
 | [ABC-130k](examples/abc-130k) | Bi-manual arm | MCAP  | [`rerun/abc-130k`](https://huggingface.co/buckets/rerun/abc-130k) | ✅     |
-| HIW-500                       | Humanoid      | MCAP  | N/A                                                               | 🚧     |
+| [HIW-500](examples/hiw-500)   | Humanoid      | MCAP  | N/A                                                               | 🚧     |
 | _More to come_                |               |       |                                                                   |        |
 
 ## Repository structure

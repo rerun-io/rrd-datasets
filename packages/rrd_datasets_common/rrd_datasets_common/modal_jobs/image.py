@@ -111,9 +111,9 @@ def hf_token_secret() -> modal.Secret:
 
 def hf_s3_secret() -> modal.Secret:
     """
-    The caller's HFAK key pair as a per-run secret, for writing an HF Storage Bucket.
+    The caller's HF S3 credentials as a per-run secret, for writing an HF Storage Bucket.
 
-    Read on the launcher side from the `RCLONE_CONFIG_HF_*` variables, then bound to the run like
+    Read on the launcher side from the `HF_BUCKET_*` variables, then bound to the run like
     `hf_token_secret()`. Distinct from `$HF_TOKEN`: the token downloads the dataset, the key pair
     writes the bucket.
     """
@@ -124,5 +124,5 @@ def hf_s3_secret() -> modal.Secret:
 
     missing = missing_hf_s3_keys()
     if missing:
-        raise SystemExit(f"Missing HF bucket credentials: {', '.join(missing)} — generate an HFAK key pair.")
+        raise SystemExit(f"Missing HF S3 credentials: {', '.join(missing)} — generate them from an HF access token.")
     return modal.Secret.from_dict({key: os.environ[key] for key in HF_S3_KEYS})
