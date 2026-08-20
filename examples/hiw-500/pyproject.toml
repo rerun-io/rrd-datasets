@@ -11,7 +11,7 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 dependencies = [
     # Also the Modal image's pip installs — `modal_jobs/image.py` reads these at build time.
-    "rerun-sdk[datafusion]>=0.34,<0.35",
+    "rerun-sdk[datafusion]==0.34.1",
     "datafusion==53.0.0",
     "pyarrow>=14",
     "toml>=0.10",

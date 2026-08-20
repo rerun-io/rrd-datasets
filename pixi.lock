@@ -15572,7 +15572,7 @@ packages:
   - huggingface-hub>=1,<2
   - numpy>=1.26
   - pyarrow>=14
-  - rerun-sdk>=0.34,<0.35
+  - rerun-sdk==0.34.1
   - boto3>=1.34 ; extra == 'cloud'
   - botocore>=1.34 ; extra == 'cloud'
   - modal>=1,<2 ; extra == 'cloud'
@@ -15587,7 +15587,7 @@ packages:
   - pyarrow>=14
   - pyturbojpeg>=2,<3
   - pyyaml>=6,<7
-  - rerun-sdk[datafusion]>=0.34,<0.35
+  - rerun-sdk[datafusion]==0.34.1
   - toml>=0.10
   - boto3>=1.34 ; extra == 'cloud'
   - botocore>=1.34 ; extra == 'cloud'
