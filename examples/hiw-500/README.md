@@ -227,7 +227,7 @@ The table below shows where each source topic lands in the recording.
 | `/lf/odommodestate`                       | `/state/base/…`, and the `odom → pelvis` transform                                             | `Scalars`, `Transform3D`   |
 | `/annotation`                             | `/annotation`                                                                                  | `TextDocument`             |
 | `info.json` sidecar                       | `/episode`, `/task/subtask`                                                                    | `AnyValues`, `StateChange` |
-| `calibration/` sidecars                   | `/calibration/…`                                                                               | `TextDocument`             |
+| `calibration/` sidecars                   | `/calibration/…`                                                                               | `DynamicArchetype`         |
 
 ## More about Layers
 
@@ -237,7 +237,8 @@ Each layer is a separate module that writes its own .rrd.
 
 `hiw_500/base_layer.py` — This layer is a faithful conversion of the raw streams.
 [Mapping to Rerun](#mapping-to-rerun) shows where each topic lands.
-The sidecar files under `calibration/` are archived verbatim as `TextDocument` rather than converted, so the base layer is a self-contained record of the episode.
+The sidecar files under `calibration/` become a `CalibrationFile` archetype, one component per value, named by its path in the file — `ir1.intrinsics.fx`, `camera_matrix_left`.
+Every value is carried, so the base layer stays a self-contained record of the episode and a reader needs no YAML or JSON parser to reach the numbers.
 A channel census compares decoded rows against the MCAP's own message counts, since a message that fails to decode is dropped silently.
 Its verdict joins the episode properties as `has_undecodable` and `undecodable_topics`, so the catalog can filter on it.
 

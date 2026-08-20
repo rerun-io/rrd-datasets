@@ -558,29 +558,31 @@ def _calibration_row(value: Any) -> pa.Array:
 
 
 def calibration_components(file: Path, rel: Path) -> dict[str, pa.Array]:
-    """The sidecar's contents as `CalibrationFile` components, plus its true relative `path`."""
-    leaves = _calibration_leaves(_CALIBRATION_LOADERS[file.suffix](file.read_text()))
+    """
+    The sidecar's contents as `CalibrationFile` components, plus its true relative `path`.
+
+    A suffix with no loader keeps its whole text in a `text` component rather than being skipped,
+    so an unfamiliar file still reaches the recording.
+    """
+    loader = _CALIBRATION_LOADERS.get(file.suffix)
+    leaves = _calibration_leaves(loader(file.read_text())) if loader else {"text": file.read_text()}
     components = {name: _calibration_row(value) for name, value in leaves.items()}
     components["path"] = _calibration_row(rel.as_posix())
     return components
 
 
-# Calibration files are text; the media type lets a reader of the RRD know how to parse each.
-CALIBRATION_MEDIA_TYPES = {".json": "application/json", ".yaml": "application/x-yaml", ".yml": "application/x-yaml"}
-
-
 def calibration_chunks(ep: Episode) -> list[Chunk]:
     """
-    The episode's calibration sidecars passed through verbatim, one static chunk per file.
+    The episode's calibration sidecars as `CalibrationFile` components, one static chunk per file.
 
-    No reader parses these files and any parse would be lossy (float formatting, dropped unknown
-    keys), so the exact file text is preserved as a `TextDocument`. The entity path mirrors the
-    file's place in the episode directory, except that the per-serial wrist files become stable
-    `wrist_camera<N>` entities (sorted by filename) with the serial in an `id` component — the
-    serial differs per rig, and serial-named entities would give the same conceptual entity a
-    different path in every episode. `<N>` is sorted order, never a left/right guess: the
-    serial<->side mapping is only derivable from the calibration content. `path` keeps the true
-    relative filename. Episodes without a `calibration/` directory contribute no chunks.
+    Every value in the file becomes its own component named by its dotted path there, so a reader
+    gets the numbers without a YAML or JSON parser. The entity path mirrors the file's place in the
+    episode directory, except that the per-serial wrist files become stable `wrist_camera<N>`
+    entities (sorted by filename) — the serial differs per rig, and serial-named entities would give
+    the same conceptual entity a different path in every episode. `<N>` is sorted order, never a
+    left/right guess: the serial<->side mapping is only derivable from the calibration content, and
+    the file's own `serial_number` rides along as a component. Episodes without a `calibration/`
+    directory contribute no chunks.
     """
     calib_dir = ep.mcap.parent / "calibration"
     if not calib_dir.is_dir():
@@ -589,24 +591,19 @@ def calibration_chunks(ep: Episode) -> list[Chunk]:
     wrist_count = 0
     for file in sorted(path for path in calib_dir.rglob("*") if path.is_file()):
         rel = file.relative_to(ep.mcap.parent)
-        extra_columns = []
         if file.name.startswith("camera_") and file.suffix == ".json":
             wrist_count += 1
             stem = f"wrist_camera{wrist_count}"
-            extra_columns = list(rr.AnyValues.columns(id=[file.stem.removeprefix("camera_")]))
         else:
             stem = file.stem
-        entity = "/" + "/".join((*rel.parts[:-1], stem))
-        media_type = CALIBRATION_MEDIA_TYPES.get(file.suffix, "text/plain")
         chunks.append(
             Chunk.from_columns(
-                entity,
+                "/" + "/".join((*rel.parts[:-1], stem)),
                 indexes=[],
-                columns=[
-                    *rr.TextDocument.columns(text=[file.read_text()], media_type=[media_type]),
-                    *rr.AnyValues.columns(path=[str(rel)]),
-                    *extra_columns,
-                ],
+                columns=rr.DynamicArchetype.columns(
+                    archetype=CALIBRATION_ARCHETYPE,
+                    components=calibration_components(file, rel),
+                ),
             )
         )
     return chunks

@@ -49,7 +49,11 @@ HEAD_YAML = """\
 baseline: 60.530000000000001
 image_size: [640, 480]
 """
-WRIST_JSON = '{"color": {"intrinsics": {"fx": 435.96734619140625}}}\n'
+
+
+def _wrist_json(serial: str) -> str:
+    """A wrist sidecar carrying its own serial, which is where the serial now comes from."""
+    return json.dumps({"color": {"intrinsics": {"fx": 435.96734619140625}}, "serial_number": serial})
 
 
 def _episode(root: Path, sidecars: dict[str, str]) -> Episode:
@@ -84,7 +88,8 @@ def _by_entity(chunks: list[Chunk]) -> dict[str, Chunk]:
     return {chunk.entity_path: chunk for chunk in chunks}
 
 
-def test_calibration_files_are_archived_verbatim(tmp_path: Path) -> None:
+def test_calibration_values_land_as_named_components(tmp_path: Path) -> None:
+    """Each value gets its own component, so the numbers read without a YAML or JSON parser."""
     episode = _episode(
         tmp_path,
         {
@@ -97,10 +102,12 @@ def test_calibration_files_are_archived_verbatim(tmp_path: Path) -> None:
 
     head = chunks["/calibration/params/head_camera_params"]
     assert head.is_static
-    assert _cell(head, "TextDocument:text") == HEAD_YAML
-    assert _cell(head, "TextDocument:media_type") == "application/x-yaml"
-    assert _cell(head, "path") == "calibration/params/head_camera_params.yaml"
-    assert _cell(chunks["/calibration/notes"], "TextDocument:media_type") == "text/plain"
+    assert _cell(head, "CalibrationFile:baseline") == 60.530000000000001
+    assert _list_cell(head, "CalibrationFile:image_size") == [640, 480]
+    assert _cell(head, "CalibrationFile:path") == "calibration/params/head_camera_params.yaml"
+
+    # A suffix with no loader keeps its text rather than being dropped.
+    assert _cell(chunks["/calibration/notes"], "CalibrationFile:text") == "rig A\n"
 
 
 def test_wrist_calibrations_get_one_entity_path_across_rigs(tmp_path: Path) -> None:
@@ -108,18 +115,20 @@ def test_wrist_calibrations_get_one_entity_path_across_rigs(tmp_path: Path) -> N
     episode = _episode(
         tmp_path,
         {
-            "calibration/params/camera_409122273272.json": WRIST_JSON,
-            "calibration/params/camera_323622270214.json": WRIST_JSON,
+            "calibration/params/camera_409122273272.json": _wrist_json("409122273272"),
+            "calibration/params/camera_323622270214.json": _wrist_json("323622270214"),
         },
     )
     chunks = _by_entity(calibration_chunks(episode))
     assert set(chunks) == {"/calibration/params/wrist_camera1", "/calibration/params/wrist_camera2"}
 
     first = chunks["/calibration/params/wrist_camera1"]
-    assert _cell(first, "id") == "323622270214"  # numbered by sorted filename, never a left/right guess
-    assert _cell(first, "path") == "calibration/params/camera_323622270214.json"
-    assert _cell(first, "TextDocument:media_type") == "application/json"
-    assert _cell(chunks["/calibration/params/wrist_camera2"], "id") == "409122273272"
+    # Numbered by sorted filename, never a left/right guess; the serial rides in the file's own field.
+    assert _cell(first, "CalibrationFile:serial_number") == "323622270214"
+    assert _cell(first, "CalibrationFile:path") == "calibration/params/camera_323622270214.json"
+    assert _cell(first, "CalibrationFile:color.intrinsics.fx") == 435.96734619140625
+    second = chunks["/calibration/params/wrist_camera2"]
+    assert _cell(second, "CalibrationFile:serial_number") == "409122273272"
 
 
 def test_an_episode_without_calibration_contributes_no_chunks(tmp_path: Path) -> None:
@@ -136,7 +145,7 @@ def test_an_info_json_without_a_scene_reads_as_minus_one(tmp_path: Path) -> None
 
 def test_ir_is_inferred_from_the_wrist_calibrations(tmp_path: Path) -> None:
     """The properties layer answers this without the mcap, so the sidecars have to carry it."""
-    with_ir = _episode(tmp_path / "with", {"calibration/params/camera_409122273272.json": WRIST_JSON})
+    with_ir = _episode(tmp_path / "with", {"calibration/params/camera_409122273272.json": _wrist_json("409122273272")})
     without = _episode(tmp_path / "without", {"calibration/params/head_camera_params.yaml": HEAD_YAML})
     assert has_ir(with_ir)
     assert not has_ir(without)
