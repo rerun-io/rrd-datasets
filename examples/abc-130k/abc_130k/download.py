@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from huggingface_hub import hf_hub_download
 
-from abc_130k.episode_index import HF_REPO_ID
+from abc_130k.episode_index import HF_REPO_ID, HF_REVISION
 from rrd_datasets_common.paths import dataset_data_dir
 
 SAMPLES = [  # (filepath, has_annotation)
@@ -59,6 +59,7 @@ def main() -> None:
             hf_hub_download(  # It skips downloading if the file already exists.
                 repo_id=HF_REPO_ID,
                 repo_type="dataset",
+                revision=HF_REVISION,
                 filename=f"{sample}/{filename}",
                 local_dir=LOCAL_DIR,
             )

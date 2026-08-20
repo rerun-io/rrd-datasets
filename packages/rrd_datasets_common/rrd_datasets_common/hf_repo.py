@@ -25,9 +25,12 @@ HF_HUB_ENV = {
 }
 
 
-def hf_file_index(repo_id: str, cache_path: Path) -> set[str]:
+def hf_file_index(repo_id: str, cache_path: Path, revision: str | None = None) -> set[str]:
     """
     Every file path in a HuggingFace dataset repo, cached at `cache_path` and pinned to its commit.
+
+    `revision` pins which commit is read; `None` follows the repo's default branch, so what comes
+    back changes when the dataset is re-uploaded.
 
     The cached copy is reused whenever the repo's sha still matches.
     When the sha cannot be read at all — offline, rate-limited — an existing cache is used unverified
@@ -38,7 +41,7 @@ def hf_file_index(repo_id: str, cache_path: Path) -> set[str]:
     api = HfApi()
     sha: str | None = None
     try:
-        sha = api.repo_info(repo_id, repo_type="dataset").sha
+        sha = api.repo_info(repo_id, repo_type="dataset", revision=revision).sha
     except Exception as exc:
         print(f"Could not read the {repo_id} revision ({type(exc).__name__}).")
 
@@ -53,7 +56,7 @@ def hf_file_index(repo_id: str, cache_path: Path) -> set[str]:
         raise SystemExit(f"Cannot list {repo_id} and no usable cache at {cache_path}.")
 
     print(f"Listing {repo_id} (full repo tree, minutes for a large one; cached for {sha[:8]})…", flush=True)
-    files = set(api.list_repo_files(repo_id, repo_type="dataset"))
+    files = set(api.list_repo_files(repo_id, repo_type="dataset", revision=revision))
     _write_cache(cache_path, sha, files)
     return files
 

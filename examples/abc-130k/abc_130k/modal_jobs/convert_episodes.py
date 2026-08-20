@@ -19,7 +19,7 @@ from pathlib import Path
 
 import modal
 
-from abc_130k.episode_index import HF_REPO_ID, WorkItem, discover_episodes
+from abc_130k.episode_index import HF_REPO_ID, HF_REVISION, WorkItem, discover_episodes
 from abc_130k.storage import RRD_PREFIX
 from abc_130k.video_transcode import (
     DEFAULT_CRF,
@@ -95,7 +95,13 @@ def convert_episode_remote(item: WorkItem, overwrite: bool, crf: int) -> None:
         if item.has_annotation:
             filenames.append(f"{item.episode_dir}/annotation.mcap")
         for filename in filenames:
-            hf_hub_download(repo_id=HF_REPO_ID, repo_type="dataset", filename=filename, local_dir=str(root / "hf"))
+            hf_hub_download(
+                repo_id=HF_REPO_ID,
+                repo_type="dataset",
+                revision=HF_REVISION,
+                filename=filename,
+                local_dir=str(root / "hf"),
+            )
         print("download done.")
 
         video_setting = VideoSettings(crf=crf)
