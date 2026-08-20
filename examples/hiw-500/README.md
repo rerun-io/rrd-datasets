@@ -227,7 +227,7 @@ The table below shows where each source topic lands in the recording.
 | `/lf/odommodestate`                       | `/state/base/…`, and the `odom → pelvis` transform                                             | `Scalars`, `Transform3D`   |
 | `/annotation`                             | `/annotation`                                                                                  | `TextDocument`             |
 | `info.json` sidecar                       | `/episode`, `/task/subtask`                                                                    | `AnyValues`, `StateChange` |
-| `calibration/` sidecars                   | `/calibration/…`                                                                               | `DynamicArchetype`         |
+| `calibration/` sidecars                   | `/calibration/…`                                                                               | `CalibrationFile`          |
 
 ## More about Layers
 

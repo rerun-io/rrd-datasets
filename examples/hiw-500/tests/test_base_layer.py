@@ -89,7 +89,7 @@ def _by_entity(chunks: list[Chunk]) -> dict[str, Chunk]:
 
 
 def test_calibration_values_land_as_named_components(tmp_path: Path) -> None:
-    """Each value gets its own component, so the numbers read without a YAML or JSON parser."""
+    """Each value gets its own component, named by its path in the file."""
     episode = _episode(
         tmp_path,
         {
@@ -319,13 +319,7 @@ def _rebuild(leaves: dict[str, Any]) -> dict[str, Any]:
 
 
 def test_a_calibration_sidecar_survives_the_round_trip(tmp_path: Path) -> None:
-    """
-    The archetype replaces the verbatim text, so nothing may be lost on the way in.
-
-    Two halves: the dotted names rebuild the source structure exactly, and each leaf reaches its
-    component whole. A component is always a batch, so a scalar arrives as a one-element row —
-    which is why the leaf is compared against `[value]` rather than `value`.
-    """
+    """Names rebuild the source exactly, and each leaf reaches its component whole, as a one-row batch."""
     for name, text in (("head.yaml", ROUND_TRIP_YAML), ("camera_409122273272.json", ROUND_TRIP_JSON)):
         path = tmp_path / name
         path.write_text(text)
@@ -341,7 +335,7 @@ def test_a_calibration_sidecar_survives_the_round_trip(tmp_path: Path) -> None:
 
 
 def test_every_component_hangs_off_the_calibration_archetype(tmp_path: Path) -> None:
-    """One archetype for both vendor schemas, so a reader looks in one place whatever the rig."""
+    """One archetype for both vendor schemas, whatever the rig."""
     path = tmp_path / "head.yaml"
     path.write_text(ROUND_TRIP_YAML)
     components = calibration_components(path, Path("head.yaml"))
@@ -356,7 +350,7 @@ def test_every_component_hangs_off_the_calibration_archetype(tmp_path: Path) -> 
 
 
 def test_a_matrix_keeps_its_shape_without_a_shape_component(tmp_path: Path) -> None:
-    """Nesting the list is what makes the shape self-describing; a flattened one would need a sibling."""
+    """A nested list is self-describing; a flattened one would need a shape sibling."""
     path = tmp_path / "head.yaml"
     path.write_text(ROUND_TRIP_YAML)
     components = calibration_components(path, Path("head.yaml"))

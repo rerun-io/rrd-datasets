@@ -9,9 +9,8 @@ One `McapReader` stream, shaped by lenses. The reader decodes the well-known ROS
 own (CompressedImage -> `EncodedImage`, std_msgs/String -> `TextDocument`); the custom
 `homies/*` / `unitree_go/*` messages arrive as `<name>:message` structs that `DeriveLens` +
 `Selector` turn into scalars and transforms. Hand-built chunks are the sidecars — `info.json`
-(episode metadata + subtask labels) and the calibration files, which pass through verbatim so the
-RRD is a self-contained record of the episode — plus the static joint-name mapping beside the
-joint arrays. A channel census compares decoded rows against the
+(episode metadata + subtask labels) and the calibration files, one `CalibrationFile` component
+per value — plus the static joint-name mapping beside the joint arrays. A channel census compares decoded rows against the
 MCAP's own per-channel counts and flags episodes with undecodable messages as recording properties.
 
 Run:  pixi run -e hiw convert-base            # all episodes under data/HIW-500/
@@ -514,7 +513,6 @@ def sidecar_stream(info: EpisodeInfo) -> LazyChunkStream:
 
 CALIBRATION_ARCHETYPE = "CalibrationFile"
 
-# Sidecars are YAML or JSON; both parse to nested dicts, lists and scalars.
 _CALIBRATION_LOADERS: dict[str, Callable[[str], Any]] = {
     ".yaml": yaml.safe_load,
     ".yml": yaml.safe_load,
@@ -529,13 +527,7 @@ _CALIBRATION_ARROW_TYPES: dict[type, pa.DataType] = {
 
 
 def _calibration_leaves(parsed: Any, prefix: str = "") -> dict[str, Any]:
-    """
-    Every leaf of a parsed sidecar, keyed by its dotted path in the file.
-
-    Only dicts recurse; a list is a leaf and keeps its own shape, so a 3x3 stays a 3x3 and needs no
-    shape bookkeeping to read back. The walk names no expected keys, which is what stops an
-    unfamiliar vendor field from being dropped.
-    """
+    """Every leaf of a parsed sidecar, keyed by its dotted path; only dicts recurse, so a list keeps its shape."""
     leaves: dict[str, Any] = {}
     if isinstance(parsed, dict):
         for key, value in parsed.items():
@@ -546,7 +538,7 @@ def _calibration_leaves(parsed: Any, prefix: str = "") -> dict[str, Any]:
 
 
 def _calibration_arrow_type(value: Any) -> pa.DataType:
-    """The arrow type of one leaf; a nested list nests its element type so the shape survives."""
+    """The arrow type of one leaf; a nested list nests its element type."""
     if isinstance(value, list):
         return pa.list_(_calibration_arrow_type(value[0]) if value else pa.float64())
     return _CALIBRATION_ARROW_TYPES[type(value)]
@@ -558,12 +550,7 @@ def _calibration_row(value: Any) -> pa.Array:
 
 
 def calibration_components(file: Path, rel: Path) -> dict[str, pa.Array]:
-    """
-    The sidecar's contents as `CalibrationFile` components, plus its true relative `path`.
-
-    A suffix with no loader keeps its whole text in a `text` component rather than being skipped,
-    so an unfamiliar file still reaches the recording.
-    """
+    """The sidecar's contents as `CalibrationFile` components, plus `path`; an unparsed suffix keeps its `text`."""
     loader = _CALIBRATION_LOADERS.get(file.suffix)
     leaves = _calibration_leaves(loader(file.read_text())) if loader else {"text": file.read_text()}
     components = {name: _calibration_row(value) for name, value in leaves.items()}
@@ -575,14 +562,8 @@ def calibration_chunks(ep: Episode) -> list[Chunk]:
     """
     The episode's calibration sidecars as `CalibrationFile` components, one static chunk per file.
 
-    Every value in the file becomes its own component named by its dotted path there, so a reader
-    gets the numbers without a YAML or JSON parser. The entity path mirrors the file's place in the
-    episode directory, except that the per-serial wrist files become stable `wrist_camera<N>`
-    entities (sorted by filename) — the serial differs per rig, and serial-named entities would give
-    the same conceptual entity a different path in every episode. `<N>` is sorted order, never a
-    left/right guess: the serial<->side mapping is only derivable from the calibration content, and
-    the file's own `serial_number` rides along as a component. Episodes without a `calibration/`
-    directory contribute no chunks.
+    Wrist files become `wrist_camera<N>` in sorted filename order: a serial-named entity would move
+    between episodes, and the serial-to-side mapping is only in the file content.
     """
     calib_dir = ep.mcap.parent / "calibration"
     if not calib_dir.is_dir():
@@ -754,7 +735,7 @@ def convert_episode(ep: Episode, rrd_root: Path) -> Path:
     """
     Convert one episode into an optimized base-layer `.rrd` and return its path.
 
-    Merges the base entity stream with the sidecars (`info.json` metadata, the verbatim
+    Merges the base entity stream with the sidecars (`info.json` metadata, the parsed
     calibration files, and the static joint-name mapping), runs the channel census on the
     collected store, then writes a single
     object-store-optimized recording — census verdict as a recording property, raw skeletons and reader
