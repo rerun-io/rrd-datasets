@@ -33,6 +33,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import rerun as rr
+import yaml
 from PIL import Image
 from rerun.experimental import (
     Chunk,
@@ -509,6 +510,59 @@ def sidecar_stream(info: EpisodeInfo) -> LazyChunkStream:
             )
         )
     return LazyChunkStream.from_iter(chunks)
+
+
+CALIBRATION_ARCHETYPE = "CalibrationFile"
+
+# Sidecars are YAML or JSON; both parse to nested dicts, lists and scalars.
+_CALIBRATION_LOADERS: dict[str, Callable[[str], Any]] = {
+    ".yaml": yaml.safe_load,
+    ".yml": yaml.safe_load,
+    ".json": json.loads,
+}
+_CALIBRATION_ARROW_TYPES: dict[type, pa.DataType] = {
+    bool: pa.bool_(),
+    int: pa.int64(),
+    float: pa.float64(),
+    str: pa.string(),
+}
+
+
+def _calibration_leaves(parsed: Any, prefix: str = "") -> dict[str, Any]:
+    """
+    Every leaf of a parsed sidecar, keyed by its dotted path in the file.
+
+    Only dicts recurse; a list is a leaf and keeps its own shape, so a 3x3 stays a 3x3 and needs no
+    shape bookkeeping to read back. The walk names no expected keys, which is what stops an
+    unfamiliar vendor field from being dropped.
+    """
+    leaves: dict[str, Any] = {}
+    if isinstance(parsed, dict):
+        for key, value in parsed.items():
+            leaves.update(_calibration_leaves(value, f"{prefix}.{key}" if prefix else str(key)))
+    else:
+        leaves[prefix] = parsed
+    return leaves
+
+
+def _calibration_arrow_type(value: Any) -> pa.DataType:
+    """The arrow type of one leaf; a nested list nests its element type so the shape survives."""
+    if isinstance(value, list):
+        return pa.list_(_calibration_arrow_type(value[0]) if value else pa.float64())
+    return _CALIBRATION_ARROW_TYPES[type(value)]
+
+
+def _calibration_row(value: Any) -> pa.Array:
+    """One row holding `value`, typed explicitly: an inferred empty list arrives as `list<null>`."""
+    return pa.array([value], type=_calibration_arrow_type(value))
+
+
+def calibration_components(file: Path, rel: Path) -> dict[str, pa.Array]:
+    """The sidecar's contents as `CalibrationFile` components, plus its true relative `path`."""
+    leaves = _calibration_leaves(_CALIBRATION_LOADERS[file.suffix](file.read_text()))
+    components = {name: _calibration_row(value) for name, value in leaves.items()}
+    components["path"] = _calibration_row(rel.as_posix())
+    return components
 
 
 # Calibration files are text; the media type lets a reader of the RRD know how to parse each.

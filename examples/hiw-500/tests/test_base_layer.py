@@ -12,13 +12,16 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pyarrow as pa
 import rerun as rr
+import yaml
 from rerun.experimental import Chunk
 
 from hiw_500.base_layer import (
+    CALIBRATION_ARCHETYPE,
     CENSUS_PROXIES,
     CHANNEL_ID,
     EE_NAMES,
@@ -28,8 +31,10 @@ from hiw_500.base_layer import (
     STAT_CHANNEL_COUNTS,
     Episode,
     EpisodeInfo,
+    _calibration_leaves,
     _motors,
     calibration_chunks,
+    calibration_components,
     census_chunk,
     ee_names_chunks,
     has_ir,
@@ -269,3 +274,91 @@ def test_the_census_verdict_is_an_episode_property() -> None:
     clean = census_chunk([])
     assert _cell(clean, "has_undecodable") is False
     assert _list_cell(clean, "undecodable_topics") == []
+
+
+# A sidecar covering every leaf kind the vendors use: nested dicts, a matrix, flat lists of floats
+# and ints, an empty list, and the three scalar types.
+ROUND_TRIP_YAML = """\
+camera_matrix_left:
+- [316.297, 0.0, 331.734]
+- [0.0, 316.542, 228.072]
+- [0.0, 0.0, 1.0]
+dist_coeffs_left: [0.13826, -0.254975, -0.0167411]
+image_size: [640, 480]
+baseline: 59.7295
+rms_error: 3.34749
+success: true
+notes: rig A
+"""
+ROUND_TRIP_JSON = json.dumps({
+    "color": {"intrinsics": {"fx": 435.96734619140625, "width": 640, "model": "brown_conrady", "coeffs": []}},
+    "ir1": {"extrinsics_to_color": {"rotation": [1.0, 0.0, 0.0], "translation": [9.87e-06, 1e-05, 1e-05]}},
+    "serial_number": "409122273272",
+})
+
+
+def _rebuild(leaves: dict[str, Any]) -> dict[str, Any]:
+    """The inverse of the dotted naming: every `a.b.c` name back into nested dicts."""
+    root: dict[str, Any] = {}
+    for name, value in leaves.items():
+        node = root
+        *parents, last = name.split(".")
+        for part in parents:
+            node = node.setdefault(part, {})
+        node[last] = value
+    return root
+
+
+def test_a_calibration_sidecar_survives_the_round_trip(tmp_path: Path) -> None:
+    """
+    The archetype replaces the verbatim text, so nothing may be lost on the way in.
+
+    Two halves: the dotted names rebuild the source structure exactly, and each leaf reaches its
+    component whole. A component is always a batch, so a scalar arrives as a one-element row —
+    which is why the leaf is compared against `[value]` rather than `value`.
+    """
+    for name, text in (("head.yaml", ROUND_TRIP_YAML), ("camera_409122273272.json", ROUND_TRIP_JSON)):
+        path = tmp_path / name
+        path.write_text(text)
+        source = yaml.safe_load(text) if name.endswith(".yaml") else json.loads(text)
+
+        leaves = _calibration_leaves(source)
+        assert _rebuild(leaves) == source
+
+        components = calibration_components(path, Path("calibration/params") / name)
+        for key, value in leaves.items():
+            assert components[key].to_pylist() == [value], key
+        assert components["path"].to_pylist() == [f"calibration/params/{name}"]
+
+
+def test_every_component_hangs_off_the_calibration_archetype(tmp_path: Path) -> None:
+    """One archetype for both vendor schemas, so a reader looks in one place whatever the rig."""
+    path = tmp_path / "head.yaml"
+    path.write_text(ROUND_TRIP_YAML)
+    components = calibration_components(path, Path("head.yaml"))
+    chunk = Chunk.from_columns(
+        "/calibration/params/head",
+        indexes=[],
+        columns=rr.DynamicArchetype.columns(archetype=CALIBRATION_ARCHETYPE, components=components),
+    )
+    named = [f.name for f in chunk.to_record_batch().schema if f.name.startswith(CALIBRATION_ARCHETYPE)]
+    assert len(named) == len(components)
+    assert f"{CALIBRATION_ARCHETYPE}:camera_matrix_left" in named
+
+
+def test_a_matrix_keeps_its_shape_without_a_shape_component(tmp_path: Path) -> None:
+    """Nesting the list is what makes the shape self-describing; a flattened one would need a sibling."""
+    path = tmp_path / "head.yaml"
+    path.write_text(ROUND_TRIP_YAML)
+    components = calibration_components(path, Path("head.yaml"))
+    assert not [name for name in components if name.endswith(".shape")]
+    (matrix,) = components["camera_matrix_left"].to_pylist()
+    assert matrix == [[316.297, 0.0, 331.734], [0.0, 316.542, 228.072], [0.0, 0.0, 1.0]]
+
+
+def test_an_empty_list_keeps_a_typed_element(tmp_path: Path) -> None:
+    """Inference reads an empty list as `list<null>`, which then drops the values of other episodes."""
+    path = tmp_path / "camera_1.json"
+    path.write_text(ROUND_TRIP_JSON)
+    components = calibration_components(path, Path("camera_1.json"))
+    assert pa.types.is_floating(components["color.intrinsics.coeffs"].type.value_type)
