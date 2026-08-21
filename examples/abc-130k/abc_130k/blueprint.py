@@ -1,7 +1,7 @@
 """
 Default Rerun blueprint for the ABC-130k base-layer recordings.
 
-Writes the committed default `blueprints/abc-130k/default.rbl` bound to the shared application id
+Writes the default `blueprints/abc-130k/default.rbl` bound to the shared application id
 `abc_130k`, so it can be applied ad hoc (`rerun <rrds> blueprints/abc-130k/default.rbl`) or
 registered as a catalog dataset's default blueprint once that layer exists.
 There is no 3D view: the base layer carries no transforms or geometry that is useful for 3D view.
@@ -17,8 +17,6 @@ import rerun.blueprint as rrb
 from abc_130k.convert import APPLICATION_ID, ARM_JOINT_NAMES, Kind, Side
 from rrd_datasets_common.paths import default_blueprint_path
 
-# Regenerating overwrites the committed default, so the change shows up in
-# `git status` and ships with the next commit.
 BLUEPRINT_PATH = default_blueprint_path("abc-130k")
 
 

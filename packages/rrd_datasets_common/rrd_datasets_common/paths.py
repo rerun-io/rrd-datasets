@@ -2,7 +2,7 @@
 The shared filesystem layout of the workspace.
 
 One `data/` root holds the raw datasets, one `rrds/` root holds the converted
-recordings, and each example commits its default blueprint under
+recordings, and each example generates its default blueprint under
 `blueprints/<example>/`. Examples resolve every such path through this module
 instead of hard-coding locations relative to their own directory.
 """
@@ -44,7 +44,7 @@ def dataset_rrd_dir(example: str) -> Path:
 
 
 def default_blueprint_path(example: str) -> Path:
-    """The committed default blueprint of an example."""
+    """The generated default blueprint of an example."""
     return repo_root() / "blueprints" / example / "default.rbl"
 
 

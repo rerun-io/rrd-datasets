@@ -83,15 +83,15 @@ pixi run -e hiw rerun rrds/hiw-500/*/<id>.rrd     # one episode
 
 > Keep the `*` to load all layers.
 
-View an episode with the default blueprint:
+Generate the default blueprint, then view an episode with it:
 
 ```bash
+pixi run -e hiw blueprint
 pixi run -e hiw rerun rrds/hiw-500/*/<id>.rrd blueprints/hiw-500/default.rbl
 ```
 
 > **Notes:** only the left head eye appears in the 3D view.
-> To modify the blueprint, regenerate it with `pixi run -e hiw blueprint`, which overwrites
-> [`blueprints/hiw-500/default.rbl`](../../blueprints/hiw-500/default.rbl).
+> To modify the layout, edit `hiw_500/blueprint.py` and rerun the `blueprint` task.
 
 ### 4. Local Catalog
 
@@ -112,7 +112,7 @@ pixi run -e hiw register   # register all episodes as the `hiw_500` dataset
 
 > **Note:** On a catalog, each episode becomes one segment, keyed by its `recording_id`. Each `.rrd` of that episode attaches as one named layer of the segment.
 > A layer name is an argument to the register call (`layer_name=` in `hiw_500/catalog.py`).
-> The `register` task creates the dataset, attaches each episode's RRDs as its named layers, and installs [`blueprints/hiw-500/default.rbl`](../../blueprints/hiw-500/default.rbl) as the default blueprint.
+> The `register` task creates the dataset, attaches each episode's RRDs as its named layers, and installs `blueprints/hiw-500/default.rbl` as the default blueprint (generate it first with `pixi run -e hiw blueprint`).
 
 Browse them in the Rerun Viewer:
 

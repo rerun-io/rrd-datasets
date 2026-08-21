@@ -58,11 +58,11 @@ Currently supported datasets:
 
 ## Repository structure
 
-The repository is organized around self-contained dataset examples, with shared utilities and committed viewer blueprints kept alongside them.
+The repository is organized around self-contained dataset examples, with shared utilities kept alongside them.
 
     examples/       one directory per dataset — the conversion code
     packages/       shared utilities used by the examples
-    blueprints/     each dataset's committed default viewer layout
+    blueprints/     each dataset's generated default viewer layout (gitignored)
     data/  rrds/    created locally by the tasks: downloads and converted recordings (gitignored)
 
 Each example is a small Python package:
@@ -72,7 +72,7 @@ Each example is a small Python package:
         <dataset>/      the conversion code: download.py, convert.py, blueprint.py, catalog.py, …
         tests/
 
-It registers its pixi tasks in `pixi.toml` and commits its default blueprint under `blueprints/<dataset>/`.
+It registers its pixi tasks in `pixi.toml` and generates its default blueprint under `blueprints/<dataset>/`.
 
 ## How it works
 

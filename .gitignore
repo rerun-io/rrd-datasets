@@ -20,6 +20,9 @@ venv
 data/
 rrds/
 
+# Generated viewer layouts — rebuilt by each example's `blueprint` task, published via `upload-blueprint`:
+blueprints/
+
 # Cached HuggingFace repo listings, regenerated per revision:
 .cache/
 
