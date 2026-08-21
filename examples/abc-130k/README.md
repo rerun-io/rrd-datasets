@@ -26,12 +26,12 @@ Data is downloaded at runtime from the original Hugging Face repo.
 ### Converted `.rrd` Dataset
 
 Converted recordings are published at [`rerun/abc-130k`](https://huggingface.co/buckets/rerun/abc-130k) — download them directly if you only want the `.rrd` data.
+They are built from source revision [`29136bc9`](https://huggingface.co/datasets/XDOF/ABC-130k/tree/29136bc9b9e38d320b00ffcddbbe4cd0e3278c58), dated 2026-07-02, with rerun-sdk 0.34.1.
 
 ## Local Runs
 
 File paths below are relative to the repository root.
-
-The source revision is pinned to [`29136bc9`](https://huggingface.co/datasets/XDOF/ABC-130k/tree/29136bc9b9e38d320b00ffcddbbe4cd0e3278c58), dated 2026-07-02, to match with the published converted dataset.
+The source data revision is pinned in this example.
 Bump `HF_REVISION` in [`abc_130k/episode_index.py`](abc_130k/episode_index.py) to work with newer episodes.
 
 ### 1. Download
