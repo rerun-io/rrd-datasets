@@ -19,8 +19,6 @@ import rerun.blueprint as rrb
 from hiw_500.base_layer import APPLICATION_ID, EE_NAMES, G1_JOINT_NAMES
 from rrd_datasets_common.paths import default_blueprint_path
 
-# Regenerating overwrites the committed default, so the change shows up in
-# `git status` and ships with the next commit.
 BLUEPRINT_PATH = default_blueprint_path("hiw-500")
 
 LEFT_WRIST = "/camera/left_wrist/image/compressed"

@@ -1,7 +1,7 @@
 """
 Upload the ABC-130k blueprint (`.rbl`) to the storage bucket.
 
-`pixi run -e abc blueprint` writes the committed default `blueprints/abc-130k/default.rbl`; this
+`pixi run -e abc blueprint` writes the default `blueprints/abc-130k/default.rbl`; this
 uploads it to the bucket, under the dataset's `blueprints/` prefix.
 
 Run:  pixi run -e abc blueprint         # (re)generate the default blueprint

@@ -76,16 +76,17 @@ pixi run -e abc rerun rrds/abc-130k/base/*.rrd        # every episode
 pixi run -e abc rerun rrds/abc-130k/base/<id>.rrd     # one episode
 ```
 
-View the result with the default blueprint:
+Generate the default blueprint, then view the result with it:
 
 ```sh
+pixi run -e abc blueprint
 pixi run -e abc rerun rrds/abc-130k/base/<episode>.rrd blueprints/abc-130k/default.rbl
 ```
 
 > **Notes:** The blueprint produces the three-row layout described above.
 > Two views sit behind tabs and are easy to miss: the top-camera slot has a second tab for the ZED stereo pair, and the instruction view has one for the subtask timeline.
 > It also carries the per-joint legend labels (array entities would otherwise show bare indices) and splits `q`, `dq`, and `tau` into separate plots so each keeps its own value range.
-> Regenerate it with `pixi run -e abc blueprint`, which overwrites the committed `.rbl`.
+> To modify the layout, edit `abc_130k/blueprint.py` and rerun the `blueprint` task.
 
 ### 4. Local Catalog
 
