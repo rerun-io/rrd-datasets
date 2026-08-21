@@ -9,9 +9,8 @@ One `McapReader` stream, shaped by lenses. The reader decodes the well-known ROS
 own (CompressedImage -> `EncodedImage`, std_msgs/String -> `TextDocument`); the custom
 `homies/*` / `unitree_go/*` messages arrive as `<name>:message` structs that `DeriveLens` +
 `Selector` turn into scalars and transforms. Hand-built chunks are the sidecars — `info.json`
-(episode metadata + subtask labels) and the calibration files, which pass through verbatim so the
-RRD is a self-contained record of the episode — plus the static joint-name mapping beside the
-joint arrays. A channel census compares decoded rows against the
+(episode metadata + subtask labels) and the calibration files, one `CalibrationFile` component
+per value — plus the static joint-name mapping beside the joint arrays. A channel census compares decoded rows against the
 MCAP's own per-channel counts and flags episodes with undecodable messages as recording properties.
 
 Run:  pixi run -e hiw convert-base            # all episodes under data/HIW-500/
@@ -33,6 +32,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import rerun as rr
+import yaml
 from PIL import Image
 from rerun.experimental import (
     Chunk,
@@ -511,22 +511,80 @@ def sidecar_stream(info: EpisodeInfo) -> LazyChunkStream:
     return LazyChunkStream.from_iter(chunks)
 
 
-# Calibration files are text; the media type lets a reader of the RRD know how to parse each.
-CALIBRATION_MEDIA_TYPES = {".json": "application/json", ".yaml": "application/x-yaml", ".yml": "application/x-yaml"}
+CALIBRATION_ARCHETYPE = "CalibrationFile"
+
+# Reserved for the sidecar's own filename, which no vendor field may take.
+_CALIBRATION_PATH = "path"
+
+_CALIBRATION_LOADERS: dict[str, Callable[[str], Any]] = {
+    ".yaml": yaml.safe_load,
+    ".yml": yaml.safe_load,
+    ".json": json.loads,
+}
+_CALIBRATION_ARROW_TYPES: dict[type, pa.DataType] = {
+    bool: pa.bool_(),
+    int: pa.int64(),
+    float: pa.float64(),
+    str: pa.string(),
+}
+
+
+def _calibration_leaves(parsed: Any, prefix: str = "") -> dict[str, Any]:
+    """Every leaf of a parsed sidecar, keyed by its dotted path; only dicts recurse, so a list keeps its shape."""
+    leaves: dict[str, Any] = {}
+    if isinstance(parsed, dict):
+        for key, value in parsed.items():
+            leaves.update(_calibration_leaves(value, f"{prefix}.{key}" if prefix else str(key)))
+    else:
+        leaves[prefix] = parsed
+    return leaves
+
+
+def _calibration_value(value: Any) -> Any:
+    """`value` with anything arrow has no type for replaced by its text, so no field is dropped."""
+    if isinstance(value, list):
+        return [_calibration_value(item) for item in value]
+    if value is None or type(value) in _CALIBRATION_ARROW_TYPES:
+        return value
+    return str(value)
+
+
+def _calibration_arrow_type(value: Any) -> pa.DataType:
+    """The arrow type of one leaf; a nested list nests its element type, and `None` reads as text."""
+    if isinstance(value, list):
+        first = next((item for item in value if item is not None), None)
+        return pa.list_(pa.float64() if first is None else _calibration_arrow_type(first))
+    return _CALIBRATION_ARROW_TYPES.get(type(value), pa.string())
+
+
+def _calibration_row(value: Any) -> pa.Array:
+    """One row holding `value`, typed explicitly: an inferred empty list arrives as `list<null>`."""
+    normalized = _calibration_value(value)
+    return pa.array([normalized], type=_calibration_arrow_type(normalized))
+
+
+def calibration_components(file: Path, rel: Path) -> dict[str, pa.Array]:
+    """
+    The sidecar's contents as `CalibrationFile` components, plus `path`; an unparsed suffix keeps its `text`.
+
+    `path` is reserved for the source filename, so a sidecar carrying its own is a hard error rather
+    than a silent overwrite.
+    """
+    loader = _CALIBRATION_LOADERS.get(file.suffix)
+    leaves = _calibration_leaves(loader(file.read_text())) if loader else {"text": file.read_text()}
+    if _CALIBRATION_PATH in leaves:
+        raise ValueError(f"{rel} has its own `{_CALIBRATION_PATH}` field, which the source filename would overwrite")
+    components = {name: _calibration_row(value) for name, value in leaves.items()}
+    components[_CALIBRATION_PATH] = _calibration_row(rel.as_posix())
+    return components
 
 
 def calibration_chunks(ep: Episode) -> list[Chunk]:
     """
-    The episode's calibration sidecars passed through verbatim, one static chunk per file.
+    The episode's calibration sidecars as `CalibrationFile` components, one static chunk per file.
 
-    No reader parses these files and any parse would be lossy (float formatting, dropped unknown
-    keys), so the exact file text is preserved as a `TextDocument`. The entity path mirrors the
-    file's place in the episode directory, except that the per-serial wrist files become stable
-    `wrist_camera<N>` entities (sorted by filename) with the serial in an `id` component — the
-    serial differs per rig, and serial-named entities would give the same conceptual entity a
-    different path in every episode. `<N>` is sorted order, never a left/right guess: the
-    serial<->side mapping is only derivable from the calibration content. `path` keeps the true
-    relative filename. Episodes without a `calibration/` directory contribute no chunks.
+    Wrist files become `wrist_camera<N>` in sorted filename order: a serial-named entity would move
+    between episodes, and the serial-to-side mapping is only in the file content.
     """
     calib_dir = ep.mcap.parent / "calibration"
     if not calib_dir.is_dir():
@@ -535,24 +593,19 @@ def calibration_chunks(ep: Episode) -> list[Chunk]:
     wrist_count = 0
     for file in sorted(path for path in calib_dir.rglob("*") if path.is_file()):
         rel = file.relative_to(ep.mcap.parent)
-        extra_columns = []
         if file.name.startswith("camera_") and file.suffix == ".json":
             wrist_count += 1
             stem = f"wrist_camera{wrist_count}"
-            extra_columns = list(rr.AnyValues.columns(id=[file.stem.removeprefix("camera_")]))
         else:
             stem = file.stem
-        entity = "/" + "/".join((*rel.parts[:-1], stem))
-        media_type = CALIBRATION_MEDIA_TYPES.get(file.suffix, "text/plain")
         chunks.append(
             Chunk.from_columns(
-                entity,
+                "/" + "/".join((*rel.parts[:-1], stem)),
                 indexes=[],
-                columns=[
-                    *rr.TextDocument.columns(text=[file.read_text()], media_type=[media_type]),
-                    *rr.AnyValues.columns(path=[str(rel)]),
-                    *extra_columns,
-                ],
+                columns=rr.DynamicArchetype.columns(
+                    archetype=CALIBRATION_ARCHETYPE,
+                    components=calibration_components(file, rel),
+                ),
             )
         )
     return chunks
@@ -703,7 +756,7 @@ def convert_episode(ep: Episode, rrd_root: Path) -> Path:
     """
     Convert one episode into an optimized base-layer `.rrd` and return its path.
 
-    Merges the base entity stream with the sidecars (`info.json` metadata, the verbatim
+    Merges the base entity stream with the sidecars (`info.json` metadata, the parsed
     calibration files, and the static joint-name mapping), runs the channel census on the
     collected store, then writes a single
     object-store-optimized recording — census verdict as a recording property, raw skeletons and reader
