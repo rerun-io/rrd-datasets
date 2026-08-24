@@ -1,0 +1,33 @@
+# Package metadata only — the workspace root pixi.toml owns environments,
+# tasks, and lint configuration.
+
+[project]
+name = "libero"
+dynamic = ["version"]
+requires-python = ">=3.12,<3.13"
+description = "Convert the LIBERO benchmark demos into layered Rerun recordings."
+authors = [{ name = "Rerun.io", email = "opensource@rerun.io" }]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+dependencies = [
+    "rerun-sdk[datafusion]==0.36.1",
+    "datafusion==54.0.0",
+    "pyarrow>=14",
+    "numpy>=1.26",
+    "huggingface_hub>=1.21.0,<2",
+]
+
+[project.urls]
+Homepage = "https://rerun.io"
+Repository = "https://github.com/rerun-io/rrd-datasets"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["libero"]
+
+[tool.hatch.version]
+path = "libero/__init__.py"
+variable = "__version__"
