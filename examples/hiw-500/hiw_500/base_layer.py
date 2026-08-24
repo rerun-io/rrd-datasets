@@ -10,7 +10,7 @@ own (CompressedImage -> `EncodedImage`, std_msgs/String -> `TextDocument`); the 
 `homies/*` / `unitree_go/*` messages arrive as `<name>:message` structs that `DeriveLens` +
 `Selector` turn into scalars and transforms. Hand-built chunks are the sidecars — `info.json`
 (episode metadata + subtask labels) and the calibration files, one `CalibrationFile` component
-per value — plus the static joint-name mapping beside the joint arrays. A channel census compares decoded rows against the
+per value — plus the static joint-name mapping and controller gains beside the joint arrays. A channel census compares decoded rows against the
 MCAP's own per-channel counts and flags episodes with undecodable messages as recording properties.
 
 Run:  pixi run -e hiw convert-base            # all episodes under data/HIW-500/
@@ -22,7 +22,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -136,6 +136,10 @@ G1_JOINT_NAMES = [
 ]
 N_JOINTS = len(G1_JOINT_NAMES)
 
+# LowState carries two temperature sensors per motor. The source does not document which is which,
+# so each lands on its own width-29 entity, named by index.
+N_MOTOR_TEMPS = 2
+
 # Series order of the width-12 ee_state/ee_action arrays: the /wbc_lerobot JSON lays out the left
 # arm then the right, six pose fields each.
 EE_FIELDS = ("px", "py", "pz", "rx", "ry", "rz")
@@ -143,6 +147,11 @@ EE_NAMES = [f"{arm}/{field}" for arm in ("left", "right") for field in EE_FIELDS
 
 # Series order of the width-3 IMU arrays, per source field.
 IMU_NAMES = {"rpy": ["r", "p", "y"], "gyroscope": ["x", "y", "z"], "accelerometer": ["x", "y", "z"]}
+
+# The robot carries two IMUs: one embedded in LowState (pelvis) and one standalone. They are
+# separate sensors reading different orientations, so both are kept, each under its own name.
+# The value is the message id and the struct path its 3-axis fields hang off.
+IMU_SOURCES = {"pelvis": (MSG_LOWSTATE, ".data.imu_state"), "secondary": (MSG_IMU, ".data")}
 
 # Arrow types expected by Transform3D translation/quaternion components.
 VEC3 = pa.list_(pa.float32(), 3)
@@ -259,28 +268,60 @@ def _motors(field: str, element: str) -> Selector:
 
 
 def joint_lenses() -> list[DeriveLens]:
-    """Joint-array q/dq/tau from lowstate: one width-29 `Scalars` entity per signal."""
-    return [
+    """Per-joint lowstate signals: one width-29 `Scalars` entity per signal, in G1 motor order."""
+    lenses = [
         _scalar_lens(MSG_LOWSTATE, f"/state/joint/{short}", _motors("motor_state", element))
-        for short, element in (("q", "q"), ("dq", "dq"), ("tau", "tau_est"))
+        for short, element in (
+            ("q", "q"),
+            ("dq", "dq"),
+            ("tau", "tau_est"),
+            ("voltage", "vol"),
+            # Per-motor status bitfield. Zero on healthy hardware; a set bit marks a motor fault.
+            ("status", "motorstate"),
+            # Reported per-motor mode. Constant for most episodes, but it does switch mid-episode,
+            # so it rides the timeline rather than a static row.
+            ("mode", "mode"),
+        )
     ]
+    lenses += [
+        _scalar_lens(MSG_LOWSTATE, f"/state/joint/temperature/{i}", _motors("motor_state", f"temperature[{i}]"))
+        for i in range(N_MOTOR_TEMPS)
+    ]
+    return lenses
 
 
 def cmd_lenses() -> list[DeriveLens]:
-    """Commanded joint-array q from lowcmd, aligned to the same motor order."""
-    return [_scalar_lens(MSG_LOWCMD, "/cmd/joint/q", _motors("motor_cmd", "q"))]
-
-
-def imu_lenses() -> list[DeriveLens]:
-    """3-axis IMU arrays (rpy / gyro / accel): one width-3 `Scalars` entity each, f32 cast to f64 (see `_motors`)."""
+    """Commanded joint arrays from lowcmd, aligned to the same motor order."""
     return [
+        _scalar_lens(MSG_LOWCMD, f"/cmd/joint/{short}", _motors("motor_cmd", element))
+        for short, element in (("q", "q"), ("tau", "tau"))
+    ]
+
+
+def imu_lenses(imu: str) -> list[DeriveLens]:
+    """
+    One IMU's signals: a width-3 `Scalars` entity per 3-axis field, plus its die temperature.
+
+    `imu` keys `IMU_SOURCES`, which picks the message and the struct path. f32 values are cast to
+    f64 for the same reason as `_motors`.
+    """
+    msg, root = IMU_SOURCES[imu]
+    lenses = [
         _scalar_lens(
-            MSG_IMU,
-            f"/state/imu/{name}",
-            Selector(f".data.{name}").pipe(Selector("[]")).pipe(lambda arr: arr.cast(pa.float64())),
+            msg,
+            f"/state/imu/{imu}/{name}",
+            Selector(f"{root}.{name}").pipe(Selector("[]")).pipe(lambda arr: arr.cast(pa.float64())),
         )
         for name in IMU_NAMES
     ]
+    lenses.append(
+        _scalar_lens(
+            msg,
+            f"/state/imu/{imu}/temperature",
+            Selector(f"{root}.temperature").pipe(lambda arr: arr.cast(pa.float64())),
+        )
+    )
+    return lenses
 
 
 def odom_lenses() -> list[DeriveLens]:
@@ -332,17 +373,20 @@ def lerobot_lenses() -> list[DeriveLens]:
     return lenses
 
 
-def gripper_lenses() -> list[tuple[str, DeriveLens]]:
-    """(content, lens) pairs for the four dex1 gripper topics (single joint each)."""
-    out = []
+def gripper_lenses() -> list[tuple[str, list[DeriveLens]]]:
+    """(content, lenses) pairs for the four dex1 gripper topics (single joint each)."""
+    out: list[tuple[str, list[DeriveLens]]] = []
     for side in ("left", "right"):
         out.append((
             f"/stamped/dex1/{side}/state",
-            _scalar_lens(MSG_MOTOR_STATE, f"/state/gripper/{side}/q", ".data.states[0].q"),
+            [
+                _scalar_lens(MSG_MOTOR_STATE, f"/state/gripper/{side}/{short}", f".data.states[0].{element}")
+                for short, element in (("q", "q"), ("dq", "dq"), ("tau", "tau_est"))
+            ],
         ))
         out.append((
             f"/stamped/dex1/{side}/cmd",
-            _scalar_lens(MSG_MOTOR_CMD, f"/cmd/gripper/{side}/q", ".data.cmds[0].q"),
+            [_scalar_lens(MSG_MOTOR_CMD, f"/cmd/gripper/{side}/q", ".data.cmds[0].q")],
         ))
     return out
 
@@ -403,11 +447,15 @@ def base_stream(path: Path) -> LazyChunkStream:
     bookkeeping after the census.
     """
     stream = McapReader(str(path), include_topic_regex=KEEP_TOPICS).stream()
-    stream = stream.lenses(joint_lenses(), content="/stamped/lowstate", output_mode="forward_unmatched")
+    # The joint arrays and the pelvis IMU both come out of lowstate, so they share one pass: a
+    # second `lenses` call would find the message column already consumed.
+    stream = stream.lenses(
+        joint_lenses() + imu_lenses("pelvis"), content="/stamped/lowstate", output_mode="forward_unmatched"
+    )
     stream = stream.lenses(cmd_lenses(), content="/stamped/lowcmd", output_mode="forward_unmatched")
-    for content, lens in gripper_lenses():
-        stream = stream.lenses(lens, content=content, output_mode="forward_unmatched")
-    stream = stream.lenses(imu_lenses(), content="/stamped/secondary_imu", output_mode="forward_unmatched")
+    for content, lenses in gripper_lenses():
+        stream = stream.lenses(lenses, content=content, output_mode="forward_unmatched")
+    stream = stream.lenses(imu_lenses("secondary"), content="/stamped/secondary_imu", output_mode="forward_unmatched")
     stream = stream.lenses(odom_lenses(), content="/lf/odommodestate", output_mode="forward_unmatched")
     stream = stream.lenses(lerobot_lenses(), content="/wbc_lerobot", output_mode="forward_unmatched")
     stream = stream.lenses(
@@ -453,6 +501,94 @@ class EpisodeInfo:
         )
 
 
+# --------------------------------------------------------------------------------------
+# static configuration
+# --------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class StaticConfig:
+    """One configuration field that holds for a whole episode, logged once beside its signals."""
+
+    topic: str
+    message: str
+    path: str  # dotted field path inside the `:message` struct
+    entity: str
+    name: str  # AnyValues component name
+    width: int  # leading values kept per message (motor arrays are 35-wide, only 29 are real)
+
+
+STATIC_CONFIGS = (
+    StaticConfig("/stamped/lowcmd", MSG_LOWCMD, "data.motor_cmd.kp", "/cmd/joint", "kp", N_JOINTS),
+    StaticConfig("/stamped/lowcmd", MSG_LOWCMD, "data.motor_cmd.kd", "/cmd/joint", "kd", N_JOINTS),
+    *(
+        StaticConfig(f"/stamped/dex1/{side}/cmd", MSG_MOTOR_CMD, f"data.cmds.{gain}", f"/cmd/gripper/{side}", gain, 1)
+        for side in ("left", "right")
+        for gain in ("kp", "kd")
+    ),
+)
+
+
+def _message_field(column: pa.Array, path: str) -> pa.Array:
+    """Follow a dotted path into a `:message` struct column, flattening every list level on the way."""
+    arr = column
+    while not pa.types.is_struct(arr.type):
+        arr = arr.flatten()
+    for part in path.split("."):
+        arr = arr.field(part)
+        while pa.types.is_list(arr.type) or pa.types.is_large_list(arr.type) or pa.types.is_fixed_size_list(arr.type):
+            arr = arr.flatten()
+    return arr
+
+
+def static_config_chunks(path: Path) -> list[Chunk]:
+    """
+    Controller gains and the motor enable mask, read once and logged as static rows.
+
+    These hold for a whole episode, so one static row carries what would otherwise repeat on every
+    message. Constancy is verified while reading, so a source that varies one of them raises here
+    instead of silently recording only the first value.
+    """
+    by_topic: dict[str, list[StaticConfig]] = defaultdict(list)
+    for config in STATIC_CONFIGS:
+        by_topic[config.topic].append(config)
+    values: dict[str, dict[str, list[float]]] = defaultdict(dict)
+    stream = McapReader(str(path), include_topic_regex=[f"^{topic}$" for topic in by_topic]).stream()
+    for chunk in stream.to_chunks():
+        configs = by_topic.get(chunk.entity_path)
+        if configs is None:
+            continue
+        batch = chunk.to_record_batch()
+        column = next((name for name in batch.schema.names if name.endswith(":message")), None)
+        if column is None or batch.num_rows == 0:
+            continue
+        for config in configs:
+            raw = _message_field(batch.column(column), config.path).to_numpy(zero_copy_only=False)
+            rows = np.asarray(raw, dtype=np.float64).reshape(batch.num_rows, -1)[:, : config.width]
+            if not bool(np.all(rows == rows[0])):
+                row, column = (int(index[0]) for index in np.nonzero(rows != rows[0])[:2])
+                raise ValueError(
+                    f"{path.name}: {config.topic} {config.path} varies within the episode "
+                    f"(row {row} index {column}: {rows[0][column]} -> {rows[row][column]}); "
+                    "a field that changes has to be logged on the timeline, not as a static row"
+                )
+            first: list[float] = rows[0].tolist()
+            seen = values[config.entity].get(config.name)
+            if seen is not None and seen != first:
+                raise ValueError(f"{path.name}: {config.topic} {config.path} disagrees between chunks")
+            values[config.entity][config.name] = first
+    return [
+        Chunk.from_columns(
+            entity,
+            indexes=[],
+            # The stub cannot express that these dynamic keys never collide with the leading
+            # `drop_untyped_nones` parameter, so it reads every value as that flag.
+            columns=rr.AnyValues.columns(**{name: [value] for name, value in fields.items()}),  # type: ignore[arg-type]
+        )
+        for entity, fields in values.items()
+    ]
+
+
 def joint_names_chunks() -> list[Chunk]:
     """
     Motor index -> joint name, static beside the joint arrays.
@@ -476,9 +612,10 @@ def ee_names_chunks() -> list[Chunk]:
 
 
 def imu_names_chunks() -> list[Chunk]:
-    """Series index -> axis, static on each width-3 IMU array."""
+    """Series index -> axis, static on each width-3 IMU array, for both IMUs."""
     return [
-        Chunk.from_columns(f"/state/imu/{name}", indexes=[], columns=rr.AnyValues.columns(imu_names=[axes]))
+        Chunk.from_columns(f"/state/imu/{imu}/{name}", indexes=[], columns=rr.AnyValues.columns(imu_names=[axes]))
+        for imu in IMU_SOURCES
         for name, axes in IMU_NAMES.items()
     ]
 
@@ -637,7 +774,7 @@ CHANNEL_ID = "McapChannel:id"
 CENSUS_PROXIES = {
     "/stamped/lowstate": "/state/joint/q",
     "/stamped/lowcmd": "/cmd/joint/q",
-    "/stamped/secondary_imu": "/state/imu/rpy",
+    "/stamped/secondary_imu": "/state/imu/secondary/rpy",
     "/stamped/dex1/left/state": "/state/gripper/left/q",
     "/stamped/dex1/left/cmd": "/cmd/gripper/left/q",
     "/stamped/dex1/right/state": "/state/gripper/right/q",
@@ -768,7 +905,11 @@ def convert_episode(ep: Episode, rrd_root: Path) -> Path:
         base_stream(ep.mcap),
         sidecar_stream(ep.info),
         LazyChunkStream.from_iter(
-            calibration_chunks(ep) + joint_names_chunks() + ee_names_chunks() + imu_names_chunks()
+            calibration_chunks(ep)
+            + joint_names_chunks()
+            + ee_names_chunks()
+            + imu_names_chunks()
+            + static_config_chunks(ep.mcap)
         ),
     )
     store = merged.collect(optimize=OptimizationProfile.OBJECT_STORE)

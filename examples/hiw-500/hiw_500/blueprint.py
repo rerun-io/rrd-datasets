@@ -133,6 +133,9 @@ def build_blueprint() -> rrb.Blueprint:
                 rrb.TimeSeriesView(
                     origin="/state/joint",
                     name="Joints",
+                    # Voltage, temperature and the status bitfield also live under this origin and
+                    # read in the tens or hundreds, which would flatten the radian-scale angles.
+                    contents=["+ /state/joint/q", "+ /state/joint/dq", "+ /state/joint/tau"],
                     overrides=_joint_labels(),  # type: ignore[arg-type]
                 ),
                 # End-effector poses and gripper controls plot on unrelated scales, so they get
@@ -148,7 +151,15 @@ def build_blueprint() -> rrb.Blueprint:
                     rrb.TimeSeriesView(
                         origin="/",
                         name="Gripper(Dex1)",
-                        contents=["+ /state/gripper/**", "+ /cmd/gripper/**"],
+                        # Jaw velocity reaches ±10 and would flatten the angle beside it, so the
+                        # angles are listed rather than taking the whole subtree. `/**` is the only
+                        # wildcard the grammar has, so each path is spelled out.
+                        contents=[
+                            "+ /state/gripper/left/q",
+                            "+ /state/gripper/right/q",
+                            "+ /cmd/gripper/left/q",
+                            "+ /cmd/gripper/right/q",
+                        ],
                     ),
                     # The teleop inputs behind it, whose 0-10 range would flatten the jaw angle.
                     rrb.TimeSeriesView(origin="/lerobot/gripper", name="Gripper(LeRobot)"),

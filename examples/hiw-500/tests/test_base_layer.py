@@ -28,11 +28,15 @@ from hiw_500.base_layer import (
     EE_NAMES,
     G1_JOINT_NAMES,
     IMU_NAMES,
+    IMU_SOURCES,
+    N_JOINTS,
     PROPERTY_PATH,
     STAT_CHANNEL_COUNTS,
+    STATIC_CONFIGS,
     Episode,
     EpisodeInfo,
     _calibration_leaves,
+    _message_field,
     _motors,
     calibration_chunks,
     calibration_components,
@@ -171,6 +175,43 @@ def test_the_motor_selector_yields_29_joints_in_motor_order() -> None:
     assert taus.to_pylist() == [[2000.0 + i for i in range(29)]]
 
 
+def _motor_health_messages(rows: int) -> pa.Array:
+    """Lowstate-shaped rows carrying the per-motor health fields; motor i reads 50+i volts, 40+i / 60+i degrees."""
+    return pa.array([
+        [{"data": {"motor_state": [{"vol": 50.0 + i, "temperature": [40 + i, 60 + i]} for i in range(35)]}}]
+        for _ in range(rows)
+    ])
+
+
+def test_voltage_reads_the_same_29_joints_as_the_other_signals() -> None:
+    values = _motors("motor_state", "vol").execute_per_row(_motor_health_messages(1))
+    assert values is not None
+    assert values.to_pylist() == [[50.0 + i for i in range(29)]]
+
+
+def test_the_two_motor_temperature_sensors_split_into_one_array_each() -> None:
+    """`temperature` is a two-element vendor list per motor, so each sensor needs its own width-29 array."""
+    messages = _motor_health_messages(1)
+    first = _motors("motor_state", "temperature[0]").execute_per_row(messages)
+    second = _motors("motor_state", "temperature[1]").execute_per_row(messages)
+    assert first is not None and second is not None
+    assert first.to_pylist() == [[40.0 + i for i in range(29)]]
+    assert second.to_pylist() == [[60.0 + i for i in range(29)]]
+
+
+def test_the_message_field_walk_flattens_every_list_level() -> None:
+    """Gains sit under a message list and a motor list; the walk has to flatten both to reach them."""
+    messages = pa.array([[{"data": {"motor_cmd": [{"kp": float(i)} for i in range(3)]}}]])
+    assert _message_field(messages, "data.motor_cmd.kp").to_pylist() == [0.0, 1.0, 2.0]
+
+
+def test_static_configs_are_as_wide_as_the_arrays_they_annotate() -> None:
+    """A gain array is read positionally beside its signal array, so the two widths have to agree."""
+    for config in STATIC_CONFIGS:
+        expected = N_JOINTS if config.entity.endswith("joint") else 1
+        assert config.width == expected, config
+
+
 def test_the_ee_array_keeps_source_order_and_truncates_to_its_labels() -> None:
     """`json_array` pins the width the series labels assume; the source lays out left before right."""
     texts = pa.array([json.dumps({"ee_state": [float(i) for i in range(14)]})])
@@ -190,13 +231,15 @@ def test_ee_names_ride_statically_beside_the_arrays() -> None:
 
 
 def test_imu_names_ride_statically_beside_the_arrays() -> None:
+    """Both IMUs carry the mapping: the pelvis one inside lowstate and the standalone secondary."""
     chunks = _by_entity(imu_names_chunks())
-    assert set(chunks) == {f"/state/imu/{name}" for name in IMU_NAMES}
-    for name, axes in IMU_NAMES.items():
-        chunk = chunks[f"/state/imu/{name}"]
-        assert chunk.is_static
-        (row,) = chunk.to_record_batch().column("imu_names").to_pylist()
-        assert row == axes
+    assert set(chunks) == {f"/state/imu/{imu}/{name}" for imu in IMU_SOURCES for name in IMU_NAMES}
+    for imu in IMU_SOURCES:
+        for name, axes in IMU_NAMES.items():
+            chunk = chunks[f"/state/imu/{imu}/{name}"]
+            assert chunk.is_static
+            (row,) = chunk.to_record_batch().column("imu_names").to_pylist()
+            assert row == axes
 
 
 def test_joint_names_ride_statically_beside_the_arrays() -> None:
