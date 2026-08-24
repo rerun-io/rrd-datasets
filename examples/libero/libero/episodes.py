@@ -70,4 +70,6 @@ def discover_local_task_files(data_dir: Path | None = None) -> list[WorkItem]:
     """Every downloaded task file under `data_dir`, keyed like the repo listing."""
     root = data_dir if data_dir is not None else LOCAL_DIR
     files = {file.relative_to(root).as_posix() for file in root.glob(f"*/*{_TASK_FILE_SUFFIX}")}
+    if not files:
+        raise RuntimeError(f"No task files under {root} — run `pixi run -e libero download` first.")
     return task_files_from_files(files)

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from libero.download import SAMPLES
 from libero.episodes import WorkItem, discover_local_task_files, recording_id, task_files_from_files, task_id
 
@@ -47,6 +49,11 @@ def test_local_discovery_matches_the_repo_layout(tmp_path: Path) -> None:
     assert discover_local_task_files(tmp_path) == [
         WorkItem("libero_goal/turn_on_the_stove_demo.hdf5", "libero_goal/turn_on_the_stove")
     ]
+
+
+def test_local_discovery_raises_without_downloads(tmp_path: Path) -> None:
+    with pytest.raises(RuntimeError, match="download"):
+        discover_local_task_files(tmp_path)
 
 
 def test_samples_cover_every_suite_once() -> None:
