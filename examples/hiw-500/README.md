@@ -32,7 +32,7 @@ Data is downloaded at runtime from the original Hugging Face repo.
 ### Converted `.rrd` Dataset
 
 Converted recordings will be published to a Hugging Face bucket when ready.
-They are built from source revision [`2ca7ffcd`](https://huggingface.co/datasets/BitRobot/HIW-500/tree/2ca7ffcd85ec5212f81ae08491a4076bf48ea841), dated 2026-06-29, with rerun-sdk 0.34.1.
+They are built from source revision [`2ca7ffcd`](https://huggingface.co/datasets/BitRobot/HIW-500/tree/2ca7ffcd85ec5212f81ae08491a4076bf48ea841), dated 2026-06-29, with rerun-sdk 0.36.1.
 
 ## Local Runs
 
