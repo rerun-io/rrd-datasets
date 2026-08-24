@@ -147,6 +147,7 @@ depends-on = [
     { task = "py-lint", environment = "common-dev" },
     { task = "py-lint", environment = "abc-dev" },
     { task = "py-lint", environment = "hiw-dev" },
+    { task = "py-lint", environment = "libero-dev" },
 ]
 description = "Type-check the repo root and every package"
 
@@ -155,6 +156,7 @@ depends-on = [
     { task = "tests", environment = "common-dev" },
     { task = "tests", environment = "abc-dev" },
     { task = "tests", environment = "hiw-dev" },
+    { task = "tests", environment = "libero-dev" },
 ]
 description = "Run every package's tests"
 
@@ -341,13 +343,61 @@ cwd = "examples/hiw-500"
 description = "Upload the HIW-500 blueprint"
 
 
+# ─── libero ───────────────────────────────────────────────────────────────────
+
+[feature.libero.pypi-dependencies]
+libero = { path = "examples/libero", editable = true }
+
+[feature.libero.activation.env]
+PACKAGE_DIR = "examples/libero"
+
+# Dataset tasks sit in their own feature, included only in the libero environment.
+# Every dataset names its stages the same way (download, convert, register, …),
+# and the environment selects the dataset: `pixi run -e libero download`.
+
+[feature.libero-tasks.tasks.download]
+cmd = "python -m libero.download"
+cwd = "examples/libero"
+description = "Download the LIBERO sample task files"
+
+
 [environments]
 default = { features = ["dev"] }
 serve = { features = ["common", "serve-tasks"], no-default-feature = true }
-common-dev = { features = ["common", "common-package", "dev"], no-default-feature = true }
+common-dev = { features = [
+    "common",
+    "common-package",
+    "dev",
+], no-default-feature = true }
 # The example feature comes before dev: on activation.env conflicts the first
 # feature wins, and PACKAGE_DIR must be the example's.
-abc = { features = ["common", "abc-130k", "abc-130k-tasks"], solve-group = "abc", no-default-feature = true }
-abc-dev = { features = ["common", "abc-130k", "dev"], solve-group = "abc", no-default-feature = true }
-hiw = { features = ["common", "hiw-500", "hiw-500-tasks"], solve-group = "hiw", no-default-feature = true }
-hiw-dev = { features = ["common", "hiw-500", "dev"], solve-group = "hiw", no-default-feature = true }
+abc = { features = [
+    "common",
+    "abc-130k",
+    "abc-130k-tasks",
+], solve-group = "abc", no-default-feature = true }
+abc-dev = { features = [
+    "common",
+    "abc-130k",
+    "dev",
+], solve-group = "abc", no-default-feature = true }
+hiw = { features = [
+    "common",
+    "hiw-500",
+    "hiw-500-tasks",
+], solve-group = "hiw", no-default-feature = true }
+hiw-dev = { features = [
+    "common",
+    "hiw-500",
+    "dev",
+], solve-group = "hiw", no-default-feature = true }
+libero = { features = [
+    "common",
+    "libero",
+    "libero-tasks",
+], solve-group = "libero", no-default-feature = true }
+libero-dev = { features = [
+    "common",
+    "libero",
+    "dev",
+], solve-group = "libero", no-default-feature = true }
