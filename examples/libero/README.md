@@ -1,6 +1,6 @@
 # LIBERO
 
-[LIBERO](https://libero-project.github.io/) is a lifelong-learning manipulation benchmark simulated in [robosuite](https://robosuite.ai/)/[MuJoCo](https://mujoco.org/): 130 tabletop tasks across five suites, each task shipping ~50 teleoperated demos as one HDF5 file.
+[LIBERO](https://libero-project.github.io/) is a lifelong-learning manipulation benchmark simulated in [robosuite](https://robosuite.ai/)-based environments: 130 tabletop tasks across five suites, each task shipping ~50 teleoperated demos as one HDF5 file.
 This example converts each demo into Rerun recordings (`.rrd`).
 
 **Status: incubating.** The conversion is under construction; only the sample download below works today.
