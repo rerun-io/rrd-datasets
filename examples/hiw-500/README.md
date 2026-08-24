@@ -215,6 +215,7 @@ See [observations.md](observations.md) for the full survey.
 
 The table below shows where each source topic lands in the recording.
 `<side>` is `left` or `right`.
+[observations.md](observations.md#base-layer-entity-paths) lists every entity in full, and which of them the default blueprint shows.
 
 | Source                                    | Entity path                                                                                    | Archetype                  |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------- |
@@ -222,14 +223,28 @@ The table below shows where each source topic lands in the recording.
 | `/camera/<side>_wrist/image/compressed`   | same path                                                                                      | `EncodedImage`             |
 | `/camera/<side>_wrist/ir{1,2}/compressed` | same path                                                                                      | `EncodedImage`             |
 | `/wbc_lerobot`                            | `/lerobot/{ee_state,ee_action}` (12-wide) `+ /<side>` 3D markers, `/lerobot/{gripper,pivot}/…` | `Scalars`, `Transform3D`   |
-| `/stamped/lowstate`                       | `/state/joint/{q,dq,tau}` (29-wide), and forward kinematics to `/robot/**`                     | `Scalars`, `Transform3D`   |
-| `/stamped/lowcmd`                         | `/cmd/joint/q` (29-wide)                                                                       | `Scalars`                  |
-| `/stamped/secondary_imu`                  | `/state/imu/{rpy,gyroscope,accelerometer}` (3-wide)                                            | `Scalars`                  |
-| `/stamped/dex1/<side>/{cmd,state}`        | `/{cmd,state}/gripper/<side>/q`                                                                | `Scalars`                  |
+| `/stamped/lowstate`                       | `/state/joint/…` (29-wide), `/state/imu/pelvis/…`, and forward kinematics to `/robot/**`       | `Scalars`, `Transform3D`   |
+| `/stamped/lowcmd`                         | `/cmd/joint/…` (29-wide), plus the gains as static rows                                        | `Scalars`, `AnyValues`     |
+| `/stamped/secondary_imu`                  | `/state/imu/secondary/…` (3-wide)                                                              | `Scalars`                  |
+| `/stamped/dex1/<side>/{cmd,state}`        | `/{state,cmd}/gripper/<side>/…`, plus the gains as static rows                                 | `Scalars`, `AnyValues`     |
 | `/lf/odommodestate`                       | `/state/base/…`, and the `odom → pelvis` transform                                             | `Scalars`, `Transform3D`   |
 | `/annotation`                             | `/annotation`                                                                                  | `TextDocument`             |
 | `info.json` sidecar                       | `/episode`, `/task/subtask`                                                                    | `AnyValues`, `StateChange` |
 | `calibration/` sidecars                   | `/calibration/…`                                                                               | `CalibrationFile`          |
+
+### Not in the default view
+
+The blueprint plots what an episode is usually opened for.
+The recording carries more; open a view to read any of it.
+
+- **Motor health** — `/state/joint/voltage`, `/state/joint/temperature/{0,1}`, `/state/joint/status` and `/state/joint/mode`, from `lowstate`.
+- **Commands** — `/cmd/joint/q` and `/cmd/joint/tau`, from `lowcmd`.
+- **Gripper rates** — `/state/gripper/<side>/dq` and `/tau`, from the dex1 state topics. The plot shows the jaw angle only.
+- **IMUs** — `/state/imu/pelvis/…` and `/state/imu/secondary/…`, two separate sensors: one inside `lowstate`, one on its own topic.
+- **Base motion** — `/state/base/…` position, velocity, height and yaw rate, from `/lf/odommodestate`.
+- **Teleop pivot** — `/lerobot/pivot/0…6`, from `/wbc_lerobot`.
+
+The `kp` and `kd` gains hold for a whole episode, so they are static rows on `/cmd/joint` and `/cmd/gripper/<side>`.
 
 ## More about Layers
 
