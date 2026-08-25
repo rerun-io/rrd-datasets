@@ -29,6 +29,7 @@ PROPERTY = "episode"
 
 # libero_10/90 filenames carry a scene prefix the task language drops, e.g. `KITCHEN_SCENE3`.
 _SCENE_PREFIX = re.compile(r"([A-Z0-9]+_SCENE\d+)_")
+_SCENE_PREFIX = re.compile(r"([A-Z0-9_]+_SCENE\d+)_")
 
 
 @dataclass

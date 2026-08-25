@@ -187,3 +187,16 @@ def test_properties_layer_round_trip(tmp_path: Path) -> None:
         "num_samples",
         "source_file",
     }
+
+
+def test_scene_prefix_covers_multi_word_scenes(tmp_path: Path) -> None:
+    fixture = tmp_path / "demo.hdf5"
+    _write_fixture(fixture)
+    reader = Hdf5Reader(fixture)
+
+    def scene(task: str) -> str:
+        return properties_layer.task_facts(reader, task).scene
+
+    assert scene("libero_90/LIVING_ROOM_SCENE1_pick_up_the_ketchup") == "LIVING_ROOM_SCENE1"
+    assert scene("libero_10/KITCHEN_SCENE10_put_the_yellow_mug_on_the_plate") == "KITCHEN_SCENE10"
+    assert scene("libero_goal/turn_on_the_stove") == ""
