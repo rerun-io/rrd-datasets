@@ -39,8 +39,6 @@ def build_blueprint() -> rrb.Blueprint:
             ),
             # Right: one plot per signal group — their value ranges differ too much to share axes.
             rrb.Vertical(
-                # Series names ride as view defaults — an `overrides=` SeriesLines collapses the
-                # plot to a single empty series under the pinned SDK; `defaults=` names all of them.
                 rrb.TimeSeriesView(
                     origin="/robot/joint_states",
                     name="Joints",

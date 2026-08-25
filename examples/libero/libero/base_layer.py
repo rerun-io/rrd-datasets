@@ -104,7 +104,14 @@ def flip_vertical(height: int, width: int) -> Callable[[pa.Array], pa.Array]:
 
 
 def to_scalars(arr: pa.Array) -> pa.Array:
-    """Any numeric column — plain or list-valued — as the f64 lists `Scalars` stores."""
+    """
+    Any numeric column — plain or list-valued — as one f64 list per row.
+
+    The caller's selector chain must follow with `Selector("[]")`: iterating the list turns its
+    elements into per-row `Scalars` instances (`list<double>`). A list returned from a Python
+    callback alone becomes a single list-valued instance per row — an encoding parts of the
+    viewer reject.
+    """
     if pa.types.is_list(arr.type) or pa.types.is_fixed_size_list(arr.type):
         return pc.cast(arr, _SCALARS)
     values = pc.cast(arr, pa.float64())
@@ -132,7 +139,7 @@ def demo_lenses(cameras: list[Camera]) -> list[DeriveLens]:
     ]
     lenses += [
         DeriveLens(source, output_entity=entity).to_component(
-            rr.Scalars.descriptor_scalars(), Selector(".").pipe(to_scalars)
+            rr.Scalars.descriptor_scalars(), Selector(".").pipe(to_scalars).pipe(Selector("[]"))
         )
         for source, entity in scalar_targets.items()
     ]
@@ -196,7 +203,8 @@ def convert_demo(reader: Hdf5Reader, task: str, demo: str, rrd_root: Path) -> Pa
             "/task/instruction", indexes=[], columns=rr.TextDocument.columns(text=[task_language(reader)])
         )
     )
-    # Entities that share a plot need per-entity legend labels, which ride statically in the data.
+    # Legend labels ride statically in the data, so every view — including manually added ones —
+    # shows named series without blueprint styling.
     series_labels: dict[str, list[str]] = {
         "/reward": ["reward"],
         "/done": ["done"],

@@ -146,13 +146,14 @@ def test_base_layer_round_trip(tmp_path: Path) -> None:
     converted = np.asarray(buffers, dtype=np.uint8).reshape(NUM_STEPS, HEIGHT, WIDTH, 3)
     np.testing.assert_array_equal(converted, source_images[:, ::-1])
 
-    rotvecs = np.asarray(_rows(batches["/robot/ee_ori"], "Scalars:scalars"))
-    np.testing.assert_array_equal(rotvecs, source_ori)
+    ori_column = _column(batches["/robot/ee_ori"], "Scalars:scalars")
+    assert pa.types.is_float64(ori_column.type.value_type), "Scalars rows must be instances, not nested lists"
+    np.testing.assert_array_equal(np.asarray(ori_column.to_pylist()), source_ori)
     assert _column(batches["/robot/ee_ori"], "SeriesLines:names").to_pylist() == [["rx", "ry", "rz"]]
 
     sim_time = _column(batches["/reward"], "sim_time")
     assert sim_time.cast(pa.int64()).to_pylist() == [250_000_000 + 50_000_000 * i for i in range(NUM_STEPS)]
-    assert _rows(batches["/reward"], "Scalars:scalars") == [[0.0], [0.0], [1.0]]
+    assert _column(batches["/reward"], "Scalars:scalars").to_pylist() == [[0.0], [0.0], [1.0]]
     assert _rows(batches["/reward"], "SeriesLines:names") == ["reward"]
     assert _rows(batches["/done"], "SeriesLines:names") == ["done"]
 
