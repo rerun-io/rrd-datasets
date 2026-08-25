@@ -5,13 +5,12 @@ This writes the *base* layer: everything is converted to one RRD per demo with a
 `recording_id` (`<suite>/<task>/<demo>`). The mapping and the three dropped items are
 documented in `observations.md`.
 
-One `Hdf5Reader` stream per demo, shaped by `DeriveLens`es. The base preserves the raw
-representations — lossless format changes only, so downstream readers get the values as stored;
-anything derived (e.g. the rotation vectors as a `Transform3D`) belongs to later layers. Cameras
-are discovered from their `[N, H, W, 3]` uint8 shape and flipped upright (robosuite stores OpenGL
-bottom-up buffers); the float arrays become `Scalars`; the `model_file` and `init_state`
-attributes land statically at `/replay/*`, which together may be used to replay the trajectory in
-robosuite.
+One `Hdf5Reader` stream per demo, shaped by `DeriveLens`es. The base keeps the raw
+representations — lossless format changes only; anything derived (e.g. the rotation vectors as a
+`Transform3D`) belongs to later layers. Cameras are discovered from their `[N, H, W, 3]` uint8
+shape and flipped upright (robosuite stores OpenGL bottom-up buffers); the float arrays become
+`Scalars`; the `model_file` and `init_state` attributes land statically at `/replay/*`, enough to
+replay the demo in robosuite.
 
 Run:  pixi run -e libero convert-base              # every downloaded task file
       pixi run -e libero convert-base <task.hdf5>  # a single task file
@@ -44,7 +43,7 @@ from rrd_datasets_common.paths import dataset_rrd_dir, layer_relpath, resolve_in
 RRD_ROOT = dataset_rrd_dir("libero")
 APPLICATION_ID = "libero"
 
-# These three items are redundant or uninterpretable — see observations.md for detail.
+# Redundant or uninterpretable — see observations.md.
 IGNORED_DATASETS = ["states", "robot_states", "obs/ee_states"]
 
 # The verified sim timebase: the first sample at 0.25 s, then exactly 20 Hz, in every surveyed demo.
@@ -113,7 +112,7 @@ def to_scalars(arr: pa.Array) -> pa.Array:
 
 
 def demo_lenses(cameras: list[Camera]) -> list[DeriveLens]:
-    """The full source-to-entity mapping of one demo, per the table in observations.md."""
+    """The full source-to-entity mapping of one demo, per the table in the README."""
     scalar_targets = {
         "joint_states": "/robot/joint_states",
         "gripper_states": "/robot/gripper_states",
@@ -152,8 +151,8 @@ def with_sim_time(chunk: Chunk) -> list[Chunk]:
     """
     Attach the `sim_time` timeline to a temporal chunk.
 
-    The source stores no time item, but the timebase is exact (observations.md), so the
-    timeline derives from each chunk's own `row_index` values — chunks carry offsets.
+    The source stores no time item, but the timebase is exact (observations.md), so the timeline
+    derives from each chunk's own `row_index` values — a chunk may start at any step.
     """
     if chunk.is_static:
         return [chunk]
@@ -174,7 +173,10 @@ def image_format_chunks(cameras: list[Camera]) -> list[Chunk]:
             columns=rr.Image.columns(
                 format=[
                     rr.components.ImageFormat(
-                        width=camera.width, height=camera.height, color_model="RGB", channel_datatype="U8"
+                        width=camera.width,
+                        height=camera.height,
+                        color_model=rr.ColorModel.RGB,
+                        channel_datatype=rr.ChannelDatatype.U8,
                     )
                 ]
             ),

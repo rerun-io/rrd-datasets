@@ -60,7 +60,7 @@ def task_facts(reader: Hdf5Reader, task: str) -> TaskFacts:
 def convert_demo(reader: Hdf5Reader, facts: TaskFacts, demo: str, rrd_root: Path) -> Path:
     """Write one demo's properties layer; returns the written path."""
     num_samples = int(str(reader.attributes(f"/data/{demo}")["num_samples"]))
-    rec_id = recording_id(facts.suite + "/" + facts.task, demo)
+    rec_id = recording_id(f"{facts.suite}/{facts.task}", demo)
     out_path = rrd_root / layer_relpath("properties", rec_id)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 

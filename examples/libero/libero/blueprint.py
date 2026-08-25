@@ -1,9 +1,9 @@
 """
 Build the default Rerun blueprint for LIBERO demos and save it as an `.rbl`.
 
-The blueprint decides how a demo is shown. The `register` task installs this as the dataset's
-default so every segment opens with the same layout: the two camera panes with the task
-instruction above them, and the joint / gripper / action / end-effector plots.
+The blueprint decides how a demo is shown. Registered as the dataset's default, every segment
+opens with the same layout: the two camera panes with the task instruction above them, and the
+joint / gripper / action / end-effector plots.
 
 Run:  pixi run -e libero blueprint   # regenerates blueprints/libero/default.rbl
 """
