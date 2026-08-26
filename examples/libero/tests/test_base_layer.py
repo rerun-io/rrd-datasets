@@ -11,13 +11,7 @@ from conftest import HEIGHT, MODEL_FILE, NUM_STEPS, WIDTH, write_fixture
 from rerun.experimental import Hdf5Reader, RrdReader
 
 from libero import properties_layer
-from libero.base_layer import (
-    convert_demo,
-    demo_keys,
-    discover_cameras,
-    flip_vertical,
-    to_scalars,
-)
+from libero.base_layer import convert_demo, demo_keys, discover_cameras, flip_vertical
 
 
 def test_flip_reverses_rows_and_keeps_pixels_intact() -> None:
@@ -26,11 +20,6 @@ def test_flip_reverses_rows_and_keeps_pixels_intact() -> None:
     flipped = flip_vertical(HEIGHT, WIDTH)(arr)
     result = np.asarray(flipped.to_pylist()[0], dtype=np.uint8).reshape(HEIGHT, WIDTH, 3)
     np.testing.assert_array_equal(result, image[::-1])
-
-
-def test_scalars_wrap_plain_and_list_columns_alike() -> None:
-    assert to_scalars(pa.array([0, 1], type=pa.uint8())).to_pylist() == [[0.0], [1.0]]
-    assert to_scalars(pa.array([[1.0, 2.0]], type=pa.list_(pa.float64()))).to_pylist() == [[1.0, 2.0]]
 
 
 def _chunks_by_entity(rrd_path: Path) -> dict[str, list[pa.RecordBatch]]:
@@ -73,7 +62,7 @@ def test_cameras_are_discovered_by_shape(tmp_path: Path) -> None:
 
 
 def test_base_layer_round_trip(tmp_path: Path) -> None:
-    """The synthesized file converts into exactly the documented entities, values intact."""
+    """The synthesized file converts into the reflected entities, values and dtypes intact."""
     fixture = tmp_path / "kitchen_demo.hdf5"
     write_fixture(fixture)
     reader = Hdf5Reader(fixture)
@@ -86,24 +75,20 @@ def test_base_layer_round_trip(tmp_path: Path) -> None:
 
     batches = _chunks_by_entity(out)
     assert sorted(batches) == [
-        "/action",
         "/camera/agentview",
         "/camera/eye_in_hand",
-        "/done",
-        "/replay/init_state",
-        "/replay/model_file",
-        "/reward",
-        "/robot/ee_ori",
-        "/robot/ee_pos",
-        "/robot/gripper_states",
-        "/robot/joint_states",
+        "/demo",
+        "/demo/__hdf5_properties",
+        "/demo/obs",
         "/task/instruction",
     ]
 
     with h5py.File(fixture) as file:
-        source_images = np.asarray(file["data/demo_0/obs/agentview_rgb"])
-        source_ori = np.asarray(file["data/demo_0/obs/ee_ori"])
-        source_init = np.asarray(file["data/demo_0"].attrs["init_state"])
+        demo = file["data/demo_0"]
+        source_images = np.asarray(demo["obs/agentview_rgb"])
+        source_ori = np.asarray(demo["obs/ee_ori"])
+        source_states = np.asarray(demo["states"])
+        source_init = np.asarray(demo.attrs["init_state"])
 
     buffer_column = _column(batches["/camera/agentview"], "Image:buffer")
     assert not buffer_column.type.value_type.value_field.nullable, "viewers reject nullable blob elements"
@@ -111,20 +96,26 @@ def test_base_layer_round_trip(tmp_path: Path) -> None:
     converted = np.asarray(buffers, dtype=np.uint8).reshape(NUM_STEPS, HEIGHT, WIDTH, 3)
     np.testing.assert_array_equal(converted, source_images[:, ::-1])
 
-    ori_column = _column(batches["/robot/ee_ori"], "Scalars:scalars")
-    assert pa.types.is_float64(ori_column.type.value_type), "Scalars rows must be instances, not nested lists"
-    np.testing.assert_array_equal(np.asarray(ori_column.to_pylist()), source_ori)
-    assert _column(batches["/robot/ee_ori"], "SeriesLines:names").to_pylist() == [["rx", "ry", "rz"]]
+    obs_columns = {name for batch in batches["/demo/obs"] for name in batch.schema.names}
+    assert {"ee_ori", "ee_pos", "ee_states", "gripper_states", "joint_states"} <= obs_columns
+    assert not {"agentview_rgb", "eye_in_hand_rgb"} & obs_columns, "the bottom-up blobs leave with the flip"
+    np.testing.assert_array_equal(np.asarray(_rows(batches["/demo/obs"], "ee_ori")), source_ori)
 
-    sim_time = _column(batches["/reward"], "sim_time")
+    root_columns = {name for batch in batches["/demo"] for name in batch.schema.names}
+    assert {"actions", "dones", "rewards", "robot_states", "states"} <= root_columns
+    np.testing.assert_array_equal(np.asarray(_rows(batches["/demo"], "states")), source_states)
+    assert pa.types.is_uint8(_column(batches["/demo"], "rewards").type.value_type), "dtypes survive"
+    assert _rows(batches["/demo"], "rewards") == [0, 0, 1]
+
+    sim_time = _column(batches["/demo"], "sim_time")
     assert sim_time.cast(pa.int64()).to_pylist() == [250_000_000 + 50_000_000 * i for i in range(NUM_STEPS)]
-    assert _column(batches["/reward"], "Scalars:scalars").to_pylist() == [[0.0], [0.0], [1.0]]
-    assert _rows(batches["/reward"], "SeriesLines:names") == ["reward"]
-    assert _rows(batches["/done"], "SeriesLines:names") == ["done"]
+
+    attrs = batches["/demo/__hdf5_properties"]
+    assert _rows(attrs, "model_file") == [MODEL_FILE]
+    assert _rows(attrs, "num_samples") == [NUM_STEPS]
+    np.testing.assert_allclose(np.asarray(_rows(attrs, "init_state")[0]), source_init)
 
     assert _rows(batches["/task/instruction"], "TextDocument:text") == ["turn on the stove"]
-    assert _rows(batches["/replay/model_file"], "model_file") == [MODEL_FILE]
-    np.testing.assert_allclose(np.asarray(_rows(batches["/replay/init_state"], "init_state")[0]), source_init)
 
 
 def test_properties_layer_round_trip(tmp_path: Path) -> None:

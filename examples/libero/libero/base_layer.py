@@ -1,16 +1,9 @@
 """
-Convert LIBERO demos into per-demo Rerun RRDs.
+Convert LIBERO demos into per-demo Rerun RRDs: the base layer.
 
-This writes the *base* layer: everything is converted to one RRD per demo with a stable
-`recording_id` (`<suite>/<task>/<demo>`). The mapping and the three dropped items are
-documented in `observations.md`.
-
-One `Hdf5Reader` stream per demo, shaped by `DeriveLens`es. The base keeps the raw
-representations — lossless format changes only; anything derived (e.g. the rotation vectors as a
-`Transform3D`) belongs to later layers. Cameras are discovered from their `[N, H, W, 3]` uint8
-shape and flipped upright (robosuite stores OpenGL bottom-up buffers); the float arrays become
-`Scalars`; the `model_file` and `init_state` attributes land statically at `/replay/*`, enough to
-replay the demo in robosuite.
+Each demo group is written as `Hdf5Reader` emits it, one RRD per demo with a stable
+`recording_id` (`<suite>/<task>/<demo>`). Nothing is dropped; only the camera frames are reshaped,
+into upright `Image`s.
 
 Run:  pixi run -e libero convert-base              # every downloaded task file
       pixi run -e libero convert-base <task.hdf5>  # a single task file
@@ -26,7 +19,6 @@ from pathlib import Path
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.compute as pc
 import rerun as rr
 from rerun.experimental import (
     Chunk,
@@ -43,8 +35,10 @@ from rrd_datasets_common.paths import dataset_rrd_dir, layer_relpath, resolve_in
 RRD_ROOT = dataset_rrd_dir("libero")
 APPLICATION_ID = "libero"
 
-# Redundant or uninterpretable — see observations.md.
-IGNORED_DATASETS = ["states", "robot_states", "obs/ee_states"]
+# The demo group's datasets keep their names as components under this prefix; its attributes land
+# statically on `/demo/__hdf5_properties`.
+DEMO_ENTITY = "/demo"
+OBS_ENTITY = f"{DEMO_ENTITY}/obs"
 
 # The verified sim timebase: the first sample at 0.25 s, then exactly 20 Hz, in every surveyed demo.
 SIM_T0_NS = 250_000_000
@@ -87,7 +81,6 @@ def task_language(reader: Hdf5Reader) -> str:
 # Lens outputs must use non-nullable element types: the viewer deserializes components strictly,
 # and pyarrow's default nullable elements read as a different datatype that renders as nothing.
 _BLOB = pa.list_(pa.field("item", pa.uint8(), nullable=False))
-_SCALARS = pa.list_(pa.field("item", pa.float64(), nullable=False))
 
 
 def flip_vertical(height: int, width: int) -> Callable[[pa.Array], pa.Array]:
@@ -103,55 +96,19 @@ def flip_vertical(height: int, width: int) -> Callable[[pa.Array], pa.Array]:
     return flip
 
 
-def to_scalars(arr: pa.Array) -> pa.Array:
+def camera_lenses(cameras: list[Camera]) -> list[DeriveLens]:
     """
-    Any numeric column — plain or list-valued — as one f64 list per row.
+    One lens per camera: the `obs/<name>_rgb` blobs become upright `Image` buffers at `/camera/<name>`.
 
-    The caller's selector chain must follow with `Selector("[]")`: iterating the list turns its
-    elements into per-row `Scalars` instances (`list<double>`). A list returned from a Python
-    callback alone becomes a single list-valued instance per row — an encoding parts of the
-    viewer reject.
+    Apply with `output_mode="forward_unmatched"`: the bottom-up blobs leave the stream with the flip,
+    and every other `/demo/obs` column passes through as the reader emitted it.
     """
-    if pa.types.is_list(arr.type) or pa.types.is_fixed_size_list(arr.type):
-        return pc.cast(arr, _SCALARS)
-    values = pc.cast(arr, pa.float64())
-    return pa.ListArray.from_arrays(pa.array(np.arange(len(arr) + 1), type=pa.int32()), values).cast(_SCALARS)
-
-
-def demo_lenses(cameras: list[Camera]) -> list[DeriveLens]:
-    """The full source-to-entity mapping of one demo, per the table in the README."""
-    scalar_targets = {
-        "joint_states": "/robot/joint_states",
-        "gripper_states": "/robot/gripper_states",
-        # The rotation vector stays as stored (its magnitude may exceed π and carries the winding);
-        # deriving a Transform3D from it belongs to a later layer.
-        "ee_pos": "/robot/ee_pos",
-        "ee_ori": "/robot/ee_ori",
-        "actions": "/action",
-        "rewards": "/reward",
-        "dones": "/done",
-    }
-    lenses = [
+    return [
         DeriveLens(camera.source, output_entity=f"/camera/{camera.name}").to_component(
             rr.Image.descriptor_buffer(), Selector(".").pipe(flip_vertical(camera.height, camera.width))
         )
         for camera in cameras
     ]
-    lenses += [
-        DeriveLens(source, output_entity=entity).to_component(
-            rr.Scalars.descriptor_scalars(), Selector(".").pipe(to_scalars).pipe(Selector("[]"))
-        )
-        for source, entity in scalar_targets.items()
-    ]
-    lenses += [
-        DeriveLens("model_file", output_entity="/replay/model_file").to_component(
-            rr.ComponentDescriptor("model_file"), Selector(".")
-        ),
-        DeriveLens("init_state", output_entity="/replay/init_state").to_component(
-            rr.ComponentDescriptor("init_state"), Selector(".")
-        ),
-    ]
-    return lenses
 
 
 def with_sim_time(chunk: Chunk) -> list[Chunk]:
@@ -169,6 +126,20 @@ def with_sim_time(chunk: Chunk) -> list[Chunk]:
     sim_ns = batch.column("row_index").to_numpy() * SIM_DT_NS + SIM_T0_NS
     batch = batch.append_column(pa.field("sim_time", pa.duration("ns")), pa.array(sim_ns, type=pa.duration("ns")))
     return Chunk.from_record_batch(batch, index=["row_index", "sim_time"])
+
+
+def demo_stream(reader: Hdf5Reader, demo: str, cameras: list[Camera]) -> LazyChunkStream:
+    """
+    The demo group as the reader emits it, with the cameras as `Image`s and `sim_time` attached.
+
+    No dataset is ignored and no scalar is derived: the blueprint maps its series onto the reflected
+    columns, and the redundant `states`, `robot_states` and `ee_states` stay queryable. Each dataset
+    is its own component (`use_structs=False`) so the camera lenses can consume the two blobs and
+    leave the rest untouched.
+    """
+    stream = reader.stream(root_group=f"/data/{demo}", entity_path_prefix=DEMO_ENTITY, use_structs=False)
+    stream = stream.lenses(camera_lenses(cameras), content=OBS_ENTITY, output_mode="forward_unmatched")
+    return stream.flat_map(with_sim_time)
 
 
 def image_format_chunks(cameras: list[Camera]) -> list[Chunk]:
@@ -192,30 +163,18 @@ def image_format_chunks(cameras: list[Camera]) -> list[Chunk]:
     ]
 
 
+def instruction_chunk(reader: Hdf5Reader) -> Chunk:
+    """The task's language instruction as a static `TextDocument`, so a text view can show it."""
+    return Chunk.from_columns(
+        "/task/instruction", indexes=[], columns=rr.TextDocument.columns(text=[task_language(reader)])
+    )
+
+
 def convert_demo(reader: Hdf5Reader, task: str, demo: str, rrd_root: Path) -> Path:
     """Write one demo's base layer; returns the written path."""
     cameras = discover_cameras(reader, demo)
-    stream = reader.stream(root_group=f"/data/{demo}", ignore_datasets=IGNORED_DATASETS, use_structs=False)
-    stream = stream.lenses(demo_lenses(cameras), output_mode="drop_unmatched").flat_map(with_sim_time)
-    statics = image_format_chunks(cameras)
-    statics.append(
-        Chunk.from_columns(
-            "/task/instruction", indexes=[], columns=rr.TextDocument.columns(text=[task_language(reader)])
-        )
-    )
-    # Legend labels ride statically in the data, so every view — including manually added ones —
-    # shows named series without blueprint styling.
-    series_labels: dict[str, list[str]] = {
-        "/reward": ["reward"],
-        "/done": ["done"],
-        "/robot/ee_pos": ["x", "y", "z"],
-        "/robot/ee_ori": ["rx", "ry", "rz"],
-    }
-    statics += [
-        Chunk.from_columns(entity, indexes=[], columns=rr.SeriesLines.columns(names=names).partition([len(names)]))
-        for entity, names in series_labels.items()
-    ]
-    merged = LazyChunkStream.merge(stream, LazyChunkStream.from_iter(statics))
+    statics = [*image_format_chunks(cameras), instruction_chunk(reader)]
+    merged = LazyChunkStream.merge(demo_stream(reader, demo, cameras), LazyChunkStream.from_iter(statics))
 
     rec_id = recording_id(task, demo)
     out_path = rrd_root / layer_relpath("base", rec_id)
