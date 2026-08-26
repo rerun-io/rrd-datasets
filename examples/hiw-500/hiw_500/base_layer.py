@@ -105,9 +105,8 @@ G1_JOINT_NAMES = [
 ]
 N_JOINTS = len(G1_JOINT_NAMES)
 
-# Arrow types expected by Transform3D translation/quaternion components.
+# Arrow type of a Transform3D translation.
 VEC3 = pa.list_(pa.float32(), 3)
-QUAT = pa.list_(pa.float32(), 4)
 
 _TJ = TurboJPEG()  # libjpeg-turbo handle for lossless compressed-domain cropping
 
@@ -115,16 +114,6 @@ _TJ = TurboJPEG()  # libjpeg-turbo handle for lossless compressed-domain croppin
 # --------------------------------------------------------------------------------------
 # lens pipe callbacks (PyArrow transforms run inside Selector.pipe — the idiomatic place)
 # --------------------------------------------------------------------------------------
-
-
-def to_vec3(arr: pa.Array) -> pa.Array:
-    """A list<float>[3] field -> Transform3D translation type."""
-    return pa.array([list(v) for v in arr.to_pylist()], type=VEC3)
-
-
-def quat_wxyz_to_xyzw(arr: pa.Array) -> pa.Array:
-    """Unitree quaternions are [w, x, y, z]; Rerun wants [x, y, z, w]."""
-    return pa.array([[v[1], v[2], v[3], v[0]] for v in arr.to_pylist()], type=QUAT)
 
 
 def const_str(value: str) -> Callable[[pa.Array], pa.Array]:

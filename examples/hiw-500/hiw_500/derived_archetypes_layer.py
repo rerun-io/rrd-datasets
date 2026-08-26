@@ -18,6 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import rerun as rr
 from rerun.experimental import Chunk, DeriveLens, LazyChunkStream, McapReader, OptimizationProfile, Selector
 
@@ -48,28 +49,35 @@ def json_struct(textcol: pa.Array) -> pa.Array:
     return pa.array([json.loads(text) for text in textcol.to_pylist()])
 
 
-def json_pos(key: str, lo: int) -> Callable[[pa.Array], pa.Array]:
-    """A 3-slice of a JSON array field -> Transform3D translation (EE position)."""
-    return lambda textcol: pa.array([json.loads(text)[key][lo : lo + 3] for text in textcol.to_pylist()], type=VEC3)
+def position(lo: int) -> Callable[[pa.Array], pa.Array]:
+    """Three consecutive elements of a list field -> Transform3D translation type."""
+    return lambda arr: pc.list_slice(arr, lo, lo + 3, return_fixed_size_list=True).cast(VEC3)
 
 
-def wbc_lenses() -> list[DeriveLens]:
+def wbc_struct_lens() -> DeriveLens:
     """
-    The `/wbc_lerobot` JSON as one struct per message, plus the four end-effector position markers.
+    The `/wbc_lerobot` JSON as one struct per message.
 
     The struct keeps every key (`pivot`, `ee_state`, `ee_action`, `gripper_controls`) for the
-    blueprint to plot. The markers are the part the 3D view needs typed: a `Transform3D`
-    translation per arm, for measured and commanded pose alike.
+    blueprint to plot; the text is parsed once, here.
     """
-    lenses = [DeriveLens(TEXT, output_entity=WBC_TOPIC).to_component(MSG_WBC, Selector(".").pipe(json_struct))]
-    for kind in ("ee_state", "ee_action"):
-        for arm, lo in (("left", 0), ("right", 6)):
-            lenses.append(
-                DeriveLens(TEXT, output_entity=f"{MARKER_ROOT}/{kind}/{arm}").to_component(
-                    rr.Transform3D.descriptor_translation(), Selector(".").pipe(json_pos(kind, lo))
-                )
-            )
-    return lenses
+    return DeriveLens(TEXT, output_entity=WBC_TOPIC).to_component(MSG_WBC, Selector(".").pipe(json_struct))
+
+
+def marker_lenses() -> list[DeriveLens]:
+    """
+    The four end-effector position markers, read out of the struct.
+
+    The 12-wide `ee_state` / `ee_action` arrays pack the left arm before the right, six pose fields
+    each; the first three of each half are the position the 3D view needs as a `Transform3D`.
+    """
+    return [
+        DeriveLens(MSG_WBC, output_entity=f"{MARKER_ROOT}/{kind}/{arm}").to_component(
+            rr.Transform3D.descriptor_translation(), Selector(f".{kind}").pipe(position(lo))
+        )
+        for kind in ("ee_state", "ee_action")
+        for arm, lo in (("left", 0), ("right", 6))
+    ]
 
 
 def ee_names_chunk() -> Chunk:
@@ -80,7 +88,9 @@ def ee_names_chunk() -> Chunk:
 def derived_stream(path: Path) -> LazyChunkStream:
     """The struct, the markers and the labels; the text and its bookkeeping stay in the base layer."""
     stream = McapReader(str(path), include_topic_regex=[f"^{WBC_TOPIC}$"]).stream()
-    stream = stream.lenses(wbc_lenses(), content=WBC_TOPIC, output_mode="drop_unmatched")
+    stream = stream.lenses(wbc_struct_lens(), content=WBC_TOPIC, output_mode="drop_unmatched")
+    # forward_all: the struct is the marker lenses' input and has to survive beside them.
+    stream = stream.lenses(marker_lenses(), content=WBC_TOPIC, output_mode="forward_all")
     derived = stream.filter(content=[WBC_TOPIC, f"{MARKER_ROOT}/**"])
     return LazyChunkStream.merge(derived, LazyChunkStream.from_iter([ee_names_chunk()]))
 

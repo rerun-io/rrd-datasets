@@ -19,6 +19,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import numpy as np
+import pyarrow as pa
+import pyarrow.compute as pc
 import rerun as rr
 from rerun.experimental import (
     DeriveLens,
@@ -32,12 +35,11 @@ from hiw_500.base_layer import (
     DATASET_ROOT,
     MSG_ODOM,
     RRD_ROOT,
+    VEC3,
     Episode,
     const_str,
     discover_episodes,
     episode_from_mcap,
-    quat_wxyz_to_xyzw,
-    to_vec3,
 )
 from rrd_datasets_common.paths import layer_relpath
 
@@ -45,6 +47,20 @@ ODOM_TOPIC = "/lf/odommodestate"
 WORLD_FRAME = "odom"
 ROOT_FRAME = "pelvis"  # the URDF root frame (verified via UrdfTree.root_link())
 EDGE_ENTITY = "/odom/pelvis"
+# Arrow type of a Transform3D quaternion.
+QUAT = pa.list_(pa.float32(), 4)
+
+
+def to_vec3(arr: pa.Array) -> pa.Array:
+    """A list<float>[3] field -> Transform3D translation type."""
+    return pa.FixedSizeListArray.from_arrays(pc.list_flatten(arr).cast(pa.float32()), 3).cast(VEC3)
+
+
+def quat_wxyz_to_xyzw(arr: pa.Array) -> pa.Array:
+    """Unitree quaternions are [w, x, y, z]; Rerun wants [x, y, z, w]."""
+    wxyz: np.ndarray = pc.list_flatten(arr).to_numpy(zero_copy_only=False).reshape(-1, 4)
+    xyzw = wxyz[:, [1, 2, 3, 0]].astype(np.float32).reshape(-1)
+    return pa.FixedSizeListArray.from_arrays(pa.array(xyzw), 4).cast(QUAT)
 
 
 def odom_edge_lens() -> DeriveLens:
