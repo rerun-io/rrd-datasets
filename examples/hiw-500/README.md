@@ -251,6 +251,11 @@ Every other field sits in the same structs, ready to plot: add the entity to a t
 - **Base motion** — `position`, `velocity`, `body_height`, `yaw_speed` and the `foot_*` arrays in `/lf/odommodestate`.
 - **Teleop pivot** — `pivot[0…6]` in the `/wbc_lerobot` struct.
 
+### Round trip test (MCAP → RRD → MCAP)
+
+A few basic tests check that the conversion keeps what it should.
+They run on a synthetic file and on a downloaded episode: [`test_camera_roundtrip.py`](tests/test_camera_roundtrip.py) re-encodes every camera message and compares the bytes with the recording, [`test_inventory.py`](tests/test_inventory.py) holds the layers against the MCAP summary, and [`test_census.py`](tests/test_census.py) checks that an undecodable channel keeps its raw bytes. The camera test is byte-level, and the other two only check structure.
+
 ## More about Layers
 
 Each layer is a separate module that writes its own .rrd.
