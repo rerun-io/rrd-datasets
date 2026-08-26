@@ -15,7 +15,6 @@ from pathlib import Path
 
 import numpy as np
 import pyarrow as pa
-import pytest
 from mcap_ros2.writer import Writer
 from PIL import Image
 from rerun.experimental import ChunkStore, LazyChunkStream, McapReader
@@ -23,7 +22,6 @@ from rerun.experimental import ChunkStore, LazyChunkStream, McapReader
 from hiw_500.base_layer import (
     CAMERA_FORMAT,
     CAMERA_HEADER,
-    DATASET_ROOT,
     IR_TOPICS,
     RGB_CAMERA_TOPICS,
     base_stream,
@@ -185,19 +183,9 @@ def test_a_camera_message_round_trips_byte_for_byte(tmp_path: Path) -> None:
     assert_same_messages(raw_messages(again, WRIST_TOPIC), raw_messages(source, WRIST_TOPIC))
 
 
-def _cached_episode() -> Path | None:
-    """The smallest episode under the dataset root, or `None` when nothing is downloaded."""
-    episodes = (
-        sorted(DATASET_ROOT.rglob("episode_*.mcap"), key=lambda p: p.stat().st_size) if DATASET_ROOT.is_dir() else []
-    )
-    return episodes[0] if episodes else None
-
-
-@pytest.mark.skipif(_cached_episode() is None, reason="no HIW-500 episode under data/")
-def test_the_cached_episode_cameras_round_trip_byte_for_byte(tmp_path: Path) -> None:
+def test_the_cached_episode_cameras_round_trip_byte_for_byte(cached_episode: Path, tmp_path: Path) -> None:
     """Against a rosbag2-written file: the re-encoded CDR of every camera message equals the recorded bytes."""
-    mcap = _cached_episode()
-    assert mcap is not None
+    mcap = cached_episode
     topics = [
         channel.topic for channel in McapReader(str(mcap)).info().channels if channel.topic.startswith("/camera/")
     ]
