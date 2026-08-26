@@ -10,6 +10,7 @@ import numpy as np
 
 NUM_STEPS = 3
 HEIGHT, WIDTH = 4, 2
+SIM_T0, SIM_DT = 0.25, 0.05  # seconds; the timebase every surveyed demo follows
 
 # LIBERO stands the arm on a table; the urdf layer reads this pose out of the MuJoCo XML.
 BASE_POS = [-0.66, 0.0, 0.912]
@@ -37,12 +38,14 @@ def _write_demo(data: h5py.Group, demo: str, rng: np.random.Generator) -> None:
     # robosuite signs the two fingers against each other.
     opening = np.linspace(0.010, 0.039, NUM_STEPS)
     obs["gripper_states"] = np.stack([opening, -opening], axis=1)
-    obs["ee_states"] = rng.random((NUM_STEPS, 6))  # dropped
+    obs["ee_states"] = rng.random((NUM_STEPS, 6))
     group["actions"] = rng.random((NUM_STEPS, 7))
     group["rewards"] = np.array([0, 0, 1], dtype=np.uint8)
     group["dones"] = np.array([0, 0, 1], dtype=np.uint8)
-    group["states"] = rng.random((NUM_STEPS, 5))  # dropped
-    group["robot_states"] = rng.random((NUM_STEPS, 9))  # dropped
+    states = rng.random((NUM_STEPS, 5))
+    states[:, 0] = SIM_T0 + SIM_DT * np.arange(NUM_STEPS)  # column 0 is MuJoCo's clock, as in the real files
+    group["states"] = states
+    group["robot_states"] = rng.random((NUM_STEPS, 9))
     group.attrs["model_file"] = MODEL_FILE
     group.attrs["init_state"] = group["states"][0]
     group.attrs["num_samples"] = NUM_STEPS
