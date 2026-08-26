@@ -278,6 +278,11 @@ PACKAGE_DIR = "examples/hiw-500"
 STORAGE_BACKEND = "${STORAGE_BACKEND:-hf}"
 HF_BUCKET = "${HF_BUCKET:-hiw-500}"
 
+# Test-only: writes and reads small MCAPs to check that camera messages round-trip.
+[feature.hiw-500-dev.pypi-dependencies]
+mcap = ">=1.2"
+mcap-ros2-support = ">=0.5"
+
 # Dataset tasks sit in their own feature, included only in the hiw environment.
 # Every dataset names its stages the same way (download, convert, register, …),
 # and the environment selects the dataset: `pixi run -e hiw convert`.
@@ -389,6 +394,7 @@ hiw = { features = [
 hiw-dev = { features = [
     "common",
     "hiw-500",
+    "hiw-500-dev",
     "dev",
 ], solve-group = "hiw", no-default-feature = true }
 libero = { features = [
