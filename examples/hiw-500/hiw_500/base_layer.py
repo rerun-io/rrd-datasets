@@ -57,9 +57,14 @@ MSG_ODOM = "unitree_go.msg.SportModeState:message"
 MSG_WBC = "wbc_lerobot:message"
 TEXT = "TextDocument:text"
 BLOB = "EncodedImage:blob"
+# The camera message as `ros2_reflection` decodes it, and the two fields kept from it per row.
+CAMERA_MSG = "sensor_msgs.msg.CompressedImage:message"
+CAMERA_FORMAT = "sensor_msgs.msg.CompressedImage:format"
+CAMERA_HEADER = "sensor_msgs.msg.CompressedImage:header"
 
 # The wrist IR streams have their own layer (`ir_layer`); every other topic comes through.
 IR_TOPICS = ["^/camera/(left|right)_wrist/ir[12]/compressed$"]
+RGB_CAMERA_TOPICS = ["^/camera/(head|left_wrist|right_wrist)/image/compressed$"]
 HEAD_TOPIC = "/camera/head/image/compressed"
 
 # Unitree G1 29-DoF motor order (G1JointIndex).
@@ -226,6 +231,23 @@ def media_type_lens() -> DeriveLens:
 # --------------------------------------------------------------------------------------
 # stream assembly
 # --------------------------------------------------------------------------------------
+
+
+def camera_fields_stream(path: Path, topics: list[str]) -> LazyChunkStream:
+    """
+    The camera messages' `header` and `format`, one row per image, beside the decoded blob.
+
+    `ros2msg` folds `header.stamp` into the `ros2_timestamp` timeline and discards `format`; a
+    reflection-only read of the same topics keeps both as columns, so every message field is
+    recoverable. Only the lens outputs leave here; the bookkeeping rows arrive with the main stream.
+    """
+    fields = (
+        DeriveLens(CAMERA_MSG)
+        .to_component(CAMERA_FORMAT, Selector(".format"))
+        .to_component(CAMERA_HEADER, Selector(".header"))
+    )
+    stream = McapReader(str(path), decoders=["ros2_reflection"], include_topic_regex=topics).stream()
+    return stream.lenses(fields, content="/camera/**", output_mode="drop_unmatched").filter(content="/camera/**")
 
 
 def base_stream(path: Path) -> LazyChunkStream:
@@ -564,6 +586,7 @@ def convert_episode(ep: Episode, rrd_root: Path) -> Path:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     merged = LazyChunkStream.merge(
         base_stream(ep.mcap),
+        camera_fields_stream(ep.mcap, RGB_CAMERA_TOPICS),
         sidecar_stream(ep.info),
         LazyChunkStream.from_iter(calibration_chunks(ep) + names_chunks()),
     )

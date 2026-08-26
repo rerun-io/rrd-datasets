@@ -28,6 +28,7 @@ from hiw_500.base_layer import (
     IR_TOPICS,
     RRD_ROOT,
     Episode,
+    camera_fields_stream,
     discover_episodes,
     episode_from_mcap,
     media_type_lens,
@@ -39,11 +40,11 @@ MCAP_BOOKKEEPING = ["/__mcap_metadata", "/__mcap_properties"]
 
 
 def ir_stream(path: Path) -> LazyChunkStream:
-    """The wrist IR streams as EncodedImage entities at their topic paths, tagged as JPEG, with their schema and channel rows."""
+    """The wrist IR streams as EncodedImage entities at their topic paths, tagged as JPEG, with every message field kept."""
     stream = McapReader(str(path), include_topic_regex=IR_TOPICS).stream()
     # forward_all so the blob (the lens's input, hence "consumed") survives alongside the new tag.
     stream = stream.lenses(media_type_lens(), content="/camera/**", output_mode="forward_all")
-    return stream.drop(content=MCAP_BOOKKEEPING)
+    return LazyChunkStream.merge(stream.drop(content=MCAP_BOOKKEEPING), camera_fields_stream(path, IR_TOPICS))
 
 
 def convert_episode(ep: Episode, rrd_root: Path) -> Path | None:
