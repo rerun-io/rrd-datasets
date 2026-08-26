@@ -1,12 +1,9 @@
 """
 Build the default Rerun blueprint for HIW-500 episodes and save it as an `.rbl`.
 
-The blueprint decides how an episode is shown. The `register` task installs this as the dataset's default
-so every segment opens with a sensible humanoid-manipulation layout: a 3D scene, the four camera
-streams, the task log, and the joint / end-effector signal plots.
-
-The 3D scene must target the `odom` frame — the robot pose lives in a named frame graph
-(`odom -> pelvis -> ...`), so a view left at the root frame renders empty ("No transform path").
+The blueprint decides how an episode is shown: a 3D scene, the camera streams, the subtask lane and
+the signal plots. The plots read the raw message structs through component mappings, so no scalar
+is materialised in any layer. The `register` task installs the result as the dataset's default.
 
 Run:  pixi run -e hiw blueprint   # regenerates blueprints/hiw-500/default.rbl
 """
@@ -15,9 +12,11 @@ from __future__ import annotations
 
 import rerun as rr
 import rerun.blueprint as rrb
+from rerun.blueprint.datatypes import ComponentSourceKind, VisualizerComponentMapping
+from rerun.blueprint.visualizers import Visualizer
 
-from hiw_500.base_layer import APPLICATION_ID, G1_JOINT_NAMES
-from hiw_500.derived_archetypes_layer import EE_NAMES
+from hiw_500.base_layer import APPLICATION_ID, G1_JOINT_NAMES, MSG_LOWSTATE, MSG_MOTOR_CMD, MSG_MOTOR_STATE
+from hiw_500.derived_archetypes_layer import EE_NAMES, MSG_WBC, WBC_TOPIC
 from rrd_datasets_common.paths import default_blueprint_path
 
 BLUEPRINT_PATH = default_blueprint_path("hiw-500")
@@ -35,24 +34,65 @@ WRIST_IR = [
 ]
 
 
-def _joint_labels() -> dict[str, rr.SeriesLines]:
+LOWSTATE_TOPIC = "/stamped/lowstate"
+
+
+def _series(component: str, selector: str, name: str) -> Visualizer:
     """
-    Legend labels for the width-29 joint arrays: `<joint>/<signal>`, series i named by motor order.
+    One plotted series, read straight out of a message struct.
 
-    Arrays otherwise fall back to bare index labels 0-28, and the three signals share the plot, so
-    the signal suffix keeps every series distinct.
+    A `SeriesLines` visualizer takes its `Scalars` input from `selector` applied to `component`
+    on the view's entity. `Selector` has no slice, so a series per array index is one instruction each.
     """
-    return {
-        f"/state/joint/{signal}": rr.SeriesLines(names=[f"{name}/{signal}" for name in G1_JOINT_NAMES])
-        for signal in ("q", "dq", "tau")
-    }
+    return rr.SeriesLines(names=name).visualizer(
+        mappings=[
+            VisualizerComponentMapping(
+                target="Scalars:scalars",
+                source_kind=ComponentSourceKind.SourceComponent,
+                source_component=component,
+                selector=selector,
+            )
+        ]
+    )
 
 
-def _ee_labels() -> dict[str, rr.SeriesLines]:
-    """Legend labels for the width-12 ee arrays: `<kind>/<arm>/<field>`, without the `ee_` stutter."""
-    return {
-        f"/lerobot/ee_{kind}": rr.SeriesLines(names=[f"{kind}/{name}" for name in EE_NAMES])
+def joint_series() -> list[Visualizer]:
+    """`<joint>/<signal>` for the 29 real motors of the 35-slot `motor_state` array, three signals each."""
+    return [
+        _series(MSG_LOWSTATE, f".data.motor_state[{index}].{signal}", f"{joint}/{signal}")
+        for signal in ("q", "dq", "tau_est")
+        for index, joint in enumerate(G1_JOINT_NAMES)
+    ]
+
+
+def ee_series() -> list[Visualizer]:
+    """`<kind>/<arm>/<field>` for the two width-12 end-effector arrays of the wbc struct."""
+    return [
+        _series(MSG_WBC, f".ee_{kind}[{index}]", f"{kind}/{name}")
         for kind in ("state", "action")
+        for index, name in enumerate(EE_NAMES)
+    ]
+
+
+def gripper_control_series() -> list[Visualizer]:
+    """The four teleop gripper inputs of the wbc struct."""
+    return [
+        _series(MSG_WBC, f".gripper_controls.{control}", control)
+        for control in ("left_trigger", "left_squeeze", "right_trigger", "right_squeeze")
+    ]
+
+
+def dex1_series() -> dict[str, list[Visualizer]]:
+    """The measured and commanded jaw angle of each dex1 gripper, on its own topic entity."""
+    return {
+        **{
+            f"/stamped/dex1/{side}/state": [_series(MSG_MOTOR_STATE, ".data.states[0].q", f"state/{side}/q")]
+            for side in ("left", "right")
+        },
+        **{
+            f"/stamped/dex1/{side}/cmd": [_series(MSG_MOTOR_CMD, ".data.cmds[0].q", f"cmd/{side}/q")]
+            for side in ("left", "right")
+        },
     }
 
 
@@ -75,13 +115,14 @@ def build_blueprint() -> rrb.Blueprint:
                 # Left: 3D scene with the subtask state timeline beneath it.
                 rrb.Vertical(
                     # 3D scene in the odom frame: robot mesh + FK, base, EE positions, left head cam.
+                    # The pose lives in the named frame graph (`odom -> pelvis -> …`), so the view has to
+                    # target `odom`; left at the root frame it renders empty ("No transform path").
                     rrb.Spatial3DView(
                         origin="/",
                         name="Scene",
                         contents=[
                             "+ /robot/**",
                             "+ /odom/**",
-                            "+ /state/base",
                             # Only the left head eye in 3D — the right overlaps it distractingly (it
                             # stays in its own 2D pane). TODO(michael): include the wrist cams here
                             # too once we have gripper cam extrinsics; for now they have no real frame.
@@ -130,40 +171,34 @@ def build_blueprint() -> rrb.Blueprint:
                 ),
                 column_shares=[3, 2],
             ),
+            # Every plot maps its series out of a struct; the instructions on an entity replace the
+            # viewer's defaults, so voltage, temperature and the other fields stay off these axes.
             rrb.Horizontal(
                 rrb.TimeSeriesView(
-                    origin="/state/joint",
+                    origin=LOWSTATE_TOPIC,
                     name="Joints",
-                    # Voltage, temperature and the status bitfield also live under this origin and
-                    # read in the tens or hundreds, which would flatten the radian-scale angles.
-                    contents=["+ /state/joint/q", "+ /state/joint/dq", "+ /state/joint/tau"],
-                    overrides=_joint_labels(),  # type: ignore[arg-type]
+                    overrides={LOWSTATE_TOPIC: joint_series()},  # type: ignore[dict-item]
                 ),
                 # End-effector poses and gripper controls plot on unrelated scales, so they get
                 # a view each rather than one axis that flattens both.
                 rrb.TimeSeriesView(
-                    origin="/lerobot",
+                    origin=WBC_TOPIC,
                     name="End-effector",
-                    contents=["+ /lerobot/ee_state/**", "+ /lerobot/ee_action/**"],
-                    overrides=_ee_labels(),  # type: ignore[arg-type]
+                    overrides={WBC_TOPIC: ee_series()},  # type: ignore[dict-item]
                 ),
                 rrb.Tabs(
                     # What the gripper actually did: the dex1 jaw, measured against commanded.
                     rrb.TimeSeriesView(
-                        origin="/",
+                        origin="/stamped/dex1",
                         name="Gripper(Dex1)",
-                        # Jaw velocity reaches ±10 and would flatten the angle beside it, so the
-                        # angles are listed rather than taking the whole subtree. `/**` is the only
-                        # wildcard the grammar has, so each path is spelled out.
-                        contents=[
-                            "+ /state/gripper/left/q",
-                            "+ /state/gripper/right/q",
-                            "+ /cmd/gripper/left/q",
-                            "+ /cmd/gripper/right/q",
-                        ],
+                        overrides=dex1_series(),  # type: ignore[arg-type]
                     ),
                     # The teleop inputs behind it, whose 0-10 range would flatten the jaw angle.
-                    rrb.TimeSeriesView(origin="/lerobot/gripper", name="Gripper(LeRobot)"),
+                    rrb.TimeSeriesView(
+                        origin=WBC_TOPIC,
+                        name="Gripper(LeRobot)",
+                        overrides={WBC_TOPIC: gripper_control_series()},  # type: ignore[dict-item]
+                    ),
                     name="Gripper",
                 ),
                 name="Signals",
