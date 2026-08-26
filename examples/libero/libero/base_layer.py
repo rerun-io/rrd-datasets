@@ -1,9 +1,9 @@
 """
 Convert LIBERO demos into per-demo Rerun RRDs: the base layer.
 
-Each demo group is written as `Hdf5Reader` emits it, one RRD per demo with a stable
-`recording_id` (`<suite>/<task>/<demo>`). Nothing is dropped; only the camera frames are reshaped,
-into upright `Image`s.
+Each demo group is written as `Hdf5Reader` emits it, with the task file's attributes alongside,
+one RRD per demo with a stable `recording_id` (`<suite>/<task>/<demo>`). Nothing is dropped; only
+the camera frames are reshaped, into upright `Image`s.
 
 Run:  pixi run -e libero convert-base              # every downloaded task file
       pixi run -e libero convert-base <task.hdf5>  # a single task file
@@ -39,6 +39,10 @@ APPLICATION_ID = "libero"
 # statically on `/demo/__hdf5_properties`.
 DEMO_ENTITY = "/demo"
 OBS_ENTITY = f"{DEMO_ENTITY}/obs"
+
+# The task file's own attributes land where the reader puts root attributes when nothing prefixes them.
+TASK_ATTRS_ENTITY = "/__hdf5_properties"
+INSTRUCTION_ENTITY = "/task/instruction"
 
 # The verified sim timebase: the first sample at 0.25 s, then exactly 20 Hz, in every surveyed demo.
 SIM_T0_NS = 250_000_000
@@ -163,18 +167,39 @@ def image_format_chunks(cameras: list[Camera]) -> list[Chunk]:
     ]
 
 
-def instruction_chunk(reader: Hdf5Reader) -> Chunk:
-    """The task's language instruction as a static `TextDocument`, so a text view can show it."""
-    return Chunk.from_columns(
-        "/task/instruction", indexes=[], columns=rr.TextDocument.columns(text=[task_language(reader)])
-    )
+def parse_json(arr: pa.Array) -> pa.Array:
+    """JSON text per row as an Arrow struct per row; `null` values become null-typed fields."""
+    return pa.array([json.loads(text) for text in arr.to_pylist()])
+
+
+def task_stream(reader: Hdf5Reader) -> LazyChunkStream:
+    """
+    The task file's attributes as static columns on `/__hdf5_properties`, in every demo's recording.
+
+    Streaming `/data` with every demo group ignored leaves the reader nothing but the group's own
+    attributes, so the file-level ones arrive the same way the demo's do. The two JSON attributes
+    are parsed beside their raw text as `<name>:parsed`, and the language instruction becomes a
+    `TextDocument` at `/task/instruction`.
+    """
+    lenses = [
+        DeriveLens("problem_info").to_component(
+            rr.ComponentDescriptor("problem_info:parsed"), Selector(".").pipe(parse_json)
+        ),
+        DeriveLens("env_args").to_component(rr.ComponentDescriptor("env_args:parsed"), Selector(".").pipe(parse_json)),
+        DeriveLens("problem_info", output_entity=INSTRUCTION_ENTITY).to_component(
+            rr.TextDocument.descriptor_text(), Selector(".").pipe(parse_json).pipe(Selector(".language_instruction"))
+        ),
+    ]
+    stream = reader.stream(root_group="/data", ignore_datasets=demo_keys(reader), use_structs=False)
+    return stream.lenses(lenses, content=TASK_ATTRS_ENTITY, output_mode="forward_all")
 
 
 def convert_demo(reader: Hdf5Reader, task: str, demo: str, rrd_root: Path) -> Path:
     """Write one demo's base layer; returns the written path."""
     cameras = discover_cameras(reader, demo)
-    statics = [*image_format_chunks(cameras), instruction_chunk(reader)]
-    merged = LazyChunkStream.merge(demo_stream(reader, demo, cameras), LazyChunkStream.from_iter(statics))
+    merged = LazyChunkStream.merge(
+        demo_stream(reader, demo, cameras), task_stream(reader), LazyChunkStream.from_iter(image_format_chunks(cameras))
+    )
 
     rec_id = recording_id(task, demo)
     out_path = rrd_root / layer_relpath("base", rec_id)

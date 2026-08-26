@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import h5py
 import numpy as np
 import pyarrow as pa
-from conftest import HEIGHT, MODEL_FILE, NUM_STEPS, WIDTH, write_fixture
+from conftest import ENV_ARGS, HEIGHT, MODEL_FILE, NUM_STEPS, WIDTH, write_fixture
 from rerun.experimental import Hdf5Reader, RrdReader
 
 from libero import properties_layer
@@ -75,6 +76,7 @@ def test_base_layer_round_trip(tmp_path: Path) -> None:
 
     batches = _chunks_by_entity(out)
     assert sorted(batches) == [
+        "/__hdf5_properties",
         "/camera/agentview",
         "/camera/eye_in_hand",
         "/demo",
@@ -115,6 +117,24 @@ def test_base_layer_round_trip(tmp_path: Path) -> None:
     assert _rows(attrs, "num_samples") == [NUM_STEPS]
     np.testing.assert_allclose(np.asarray(_rows(attrs, "init_state")[0]), source_init)
 
+    task_attrs = batches["/__hdf5_properties"]
+    task_columns = {name for batch in task_attrs for name in batch.schema.names}
+    assert task_columns >= {
+        "bddl_file_name",
+        "env_args",
+        "env_name",
+        "macros_image_convention",
+        "num_demos",
+        "problem_info",
+        "tag",
+        "total",
+    }
+    assert _rows(task_attrs, "total") == [4 * NUM_STEPS]
+    assert _rows(task_attrs, "env_args") == [json.dumps(ENV_ARGS)], "the raw JSON stays beside its parsed form"
+    assert _rows(task_attrs, "env_args:parsed") == [ENV_ARGS]
+    assert _rows(task_attrs, "problem_info:parsed") == [
+        {"problem_name": "libero_test", "language_instruction": "turn on the stove"}
+    ]
     assert _rows(batches["/task/instruction"], "TextDocument:text") == ["turn on the stove"]
 
 

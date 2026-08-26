@@ -18,6 +18,13 @@ MODEL_FILE = '<mujoco model="fixture"><worldbody><body name="robot0_base" pos="-
 # A plausible Panda pose, inside every `fer` joint limit so forward kinematics stays meaningful.
 ARM_POSE = np.array([0.0, -0.2, 0.0, -2.3, 0.0, 2.1, 0.8])
 
+# Shaped like the real `env_args`: nested objects, a list, and a JSON `null` (a null-typed struct field).
+ENV_ARGS = {
+    "type": 1,
+    "env_name": "Libero_Test_Env",
+    "env_kwargs": {"robots": ["Panda"], "controller_configs": {"type": "OSC_POSE", "kp": 150, "position_limits": None}},
+}
+
 
 def _write_demo(data: h5py.Group, demo: str, rng: np.random.Generator) -> None:
     group = data.create_group(demo)
@@ -46,9 +53,16 @@ def write_fixture(path: Path) -> None:
     rng = np.random.default_rng(0)
     with h5py.File(path, "w") as file:
         data = file.create_group("data")
+        data.attrs["bddl_file_name"] = "bddl_files/kitchen/turn_on_the_stove.bddl"
+        data.attrs["env_args"] = json.dumps(ENV_ARGS)
         data.attrs["env_name"] = "Libero_Test_Env"
-        data.attrs["problem_info"] = json.dumps({"language_instruction": "turn on the stove"})
         data.attrs["macros_image_convention"] = "opengl"
         data.attrs["num_demos"] = 4
+        data.attrs["problem_info"] = json.dumps({
+            "problem_name": "libero_test",
+            "language_instruction": "turn on the stove",
+        })
+        data.attrs["tag"] = "libero-v1"
+        data.attrs["total"] = 4 * NUM_STEPS
         for demo in ("demo_0", "demo_1", "demo_2", "demo_10"):
             _write_demo(data, demo, rng)
