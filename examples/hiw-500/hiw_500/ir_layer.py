@@ -25,7 +25,7 @@ from rerun.experimental import LazyChunkStream, McapReader, OptimizationProfile
 from hiw_500.base_layer import (
     APPLICATION_ID,
     DATASET_ROOT,
-    DROP_COMPONENTS,
+    IR_TOPICS,
     RRD_ROOT,
     Episode,
     discover_episodes,
@@ -34,17 +34,16 @@ from hiw_500.base_layer import (
 )
 from rrd_datasets_common.paths import layer_relpath
 
-IR_TOPICS = ["^/camera/(left|right)_wrist/ir[12]/compressed$"]
 # Reader bookkeeping entities, emitted for every mcap even when no topic matches.
 MCAP_BOOKKEEPING = ["/__mcap_metadata", "/__mcap_properties"]
 
 
 def ir_stream(path: Path) -> LazyChunkStream:
-    """The wrist IR streams as EncodedImage entities at their topic paths, tagged as JPEG."""
+    """The wrist IR streams as EncodedImage entities at their topic paths, tagged as JPEG, with their schema and channel rows."""
     stream = McapReader(str(path), include_topic_regex=IR_TOPICS).stream()
     # forward_all so the blob (the lens's input, hence "consumed") survives alongside the new tag.
     stream = stream.lenses(media_type_lens(), content="/camera/**", output_mode="forward_all")
-    return stream.drop(content=MCAP_BOOKKEEPING).drop(components=DROP_COMPONENTS)
+    return stream.drop(content=MCAP_BOOKKEEPING)
 
 
 def convert_episode(ep: Episode, rrd_root: Path) -> Path | None:

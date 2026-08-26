@@ -1,17 +1,12 @@
 """
 Convert HIW-500 (Unitree G1 bimanual) MCAP episodes into per-episode Rerun RRDs.
 
-This writes the *base* layer: the raw ROS2 streams as Rerun entities, one optimized RRD per
-episode with a stable `recording_id`, so every episode is its own catalog segment. Nothing
-kinematic is computed here — URDF FK is a separate layer.
+The *base* layer: the whole MCAP as Rerun entities, one optimized RRD per episode under a stable
+`recording_id`. Decoded messages stay whole, the file's own records come along, and only the wrist
+IR streams are left to their own layer. The stereo head image is split into its two eyes.
 
-One `McapReader` stream, shaped by lenses. The reader decodes the well-known ROS2 types on its
-own (CompressedImage -> `EncodedImage`, std_msgs/String -> `TextDocument`); the custom
-`homies/*` / `unitree_go/*` messages arrive as `<name>:message` structs that `DeriveLens` +
-`Selector` turn into scalars and transforms. Hand-built chunks are the sidecars — `info.json`
-(episode metadata + subtask labels) and the calibration files, one `CalibrationFile` component
-per value — plus the static joint-name mapping and controller gains beside the joint arrays. A channel census compares decoded rows against the
-MCAP's own per-channel counts and flags episodes with undecodable messages as recording properties.
+Sidecars logged beside it: `info.json`, the calibration files and the series labels. A channel
+census flags episodes with undecodable messages.
 
 Run:  pixi run -e hiw convert-base            # all episodes under data/HIW-500/
       pixi run -e hiw convert-base <ep.mcap>  # a single episode mcap
@@ -22,7 +17,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
-from collections import Counter, defaultdict
+from collections import Counter
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -30,18 +25,10 @@ from typing import Any
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.compute as pc
 import rerun as rr
 import yaml
 from PIL import Image
-from rerun.experimental import (
-    Chunk,
-    DeriveLens,
-    LazyChunkStream,
-    McapReader,
-    OptimizationProfile,
-    Selector,
-)
+from rerun.experimental import Chunk, DeriveLens, LazyChunkStream, McapReader, OptimizationProfile, Selector
 from turbojpeg import TurboJPEG
 
 from rrd_datasets_common.paths import dataset_data_dir, dataset_rrd_dir, layer_relpath, resolve_input_path
@@ -57,46 +44,23 @@ APPLICATION_ID = "hiw_500"
 PROPERTY = "episode"
 PROPERTY_PATH = f"/__properties/{PROPERTY}"
 
-# Component identifiers produced by McapReader's decoders.
-# Note that the package name "homies/* = Header + a unitree_hg payload"
-# See https://github.com/unitreerobotics/unitree_ros2/blob/master/cyclonedds_ws/src/unitree/unitree_hg/msg for the message definitions.
+# Component identifiers of the decoded messages, one struct column per topic. `homies/*` wraps a
+# std_msgs Header around a unitree_hg payload; the definitions are at
+# https://github.com/unitreerobotics/unitree_ros2/blob/master/cyclonedds_ws/src/unitree/unitree_hg/msg.
 MSG_LOWSTATE = "homies.msg.LowStateStamped:message"
 MSG_LOWCMD = "homies.msg.LowCmdStamped:message"
 MSG_MOTOR_STATE = "homies.msg.MotorStateStamped:message"
 MSG_MOTOR_CMD = "homies.msg.MotorCmdStamped:message"
 MSG_IMU = "homies.msg.IMUStateStamped:message"
 MSG_ODOM = "unitree_go.msg.SportModeState:message"
+# The /wbc_lerobot JSON parsed into a struct, named the way the reader names decoded messages.
+MSG_WBC = "wbc_lerobot:message"
 TEXT = "TextDocument:text"
 BLOB = "EncodedImage:blob"
 
-# Only decode the topics we use (excludes e.g. the wrist ir1/ir2 streams some episodes carry).
-KEEP_TOPICS = [
-    "^/stamped/lowstate$",
-    "^/stamped/lowcmd$",
-    "^/stamped/secondary_imu$",
-    "^/stamped/dex1/(left|right)/(state|cmd)$",
-    "^/lf/odommodestate$",
-    "^/wbc_lerobot$",
-    "^/annotation$",
-    "^/camera/(head|left_wrist|right_wrist)/image/compressed$",
-]
-# Raw sources consumed by lenses (and reader bookkeeping) — by census time only their channel and
-# schema statics remain (`forward_unmatched` drops a consumed column and its rows); removed before
-# writing.
-DROP_RAWS = [
-    "/stamped/**",
-    "/lf/odommodestate",
-    "/wbc_lerobot",
-    "/camera/head/image/compressed",
-    "/__mcap_metadata",
-    "/__mcap_properties",
-]
-# The wrist cameras and /annotation are kept, so their leftover Mcap* metadata columns are removed
-# at the component level instead (drop needs exact ids — a `McapChannel:*` wildcard silently
-# matches nothing).
-DROP_COMPONENTS = [f"McapChannel:{c}" for c in ("id", "message_encoding", "metadata", "topic")] + [
-    f"McapSchema:{c}" for c in ("data", "encoding", "id", "name")
-]
+# The wrist IR streams have their own layer (`ir_layer`); every other topic comes through.
+IR_TOPICS = ["^/camera/(left|right)_wrist/ir[12]/compressed$"]
+HEAD_TOPIC = "/camera/head/image/compressed"
 
 # Unitree G1 29-DoF motor order (G1JointIndex).
 # LowState.motor_state and LowCmd.motor_cmd are fixed 35-element arrays in Unitree SDK2.
@@ -136,29 +100,13 @@ G1_JOINT_NAMES = [
 ]
 N_JOINTS = len(G1_JOINT_NAMES)
 
-# LowState carries two temperature sensors per motor. The source does not document which is which,
-# so each lands on its own width-29 entity, named by index.
-N_MOTOR_TEMPS = 2
-
-# Series order of the width-12 ee_state/ee_action arrays: the /wbc_lerobot JSON lays out the left
+# Series order of the width-12 `ee_state` / `ee_action` arrays in the /wbc_lerobot JSON: the left
 # arm then the right, six pose fields each.
-EE_FIELDS = ("px", "py", "pz", "rx", "ry", "rz")
-EE_NAMES = [f"{arm}/{field}" for arm in ("left", "right") for field in EE_FIELDS]
-
-# Series order of the width-3 IMU arrays, per source field.
-IMU_NAMES = {"rpy": ["r", "p", "y"], "gyroscope": ["x", "y", "z"], "accelerometer": ["x", "y", "z"]}
-
-# The robot carries two IMUs: one embedded in LowState (pelvis) and one standalone. They are
-# separate sensors reading different orientations, so both are kept, each under its own name.
-# The value is the message id and the struct path its 3-axis fields hang off.
-IMU_SOURCES = {"pelvis": (MSG_LOWSTATE, ".data.imu_state"), "secondary": (MSG_IMU, ".data")}
+EE_NAMES = [f"{arm}/{pose}" for arm in ("left", "right") for pose in ("px", "py", "pz", "rx", "ry", "rz")]
 
 # Arrow types expected by Transform3D translation/quaternion components.
 VEC3 = pa.list_(pa.float32(), 3)
 QUAT = pa.list_(pa.float32(), 4)
-
-# pyarrow.compute ships incomplete stubs; alias once (used in the joint-array selector).
-list_slice = pc.list_slice  # type: ignore[attr-defined]
 
 _TJ = TurboJPEG()  # libjpeg-turbo handle for lossless compressed-domain cropping
 
@@ -210,185 +158,38 @@ def crop_jpegs(left: bool) -> Callable[[pa.Array], pa.Array]:
     return run
 
 
-def _records(textcol: pa.Array) -> list[dict[str, Any]]:
-    return [json.loads(t) for t in textcol.to_pylist()]
-
-
-def json_index(key: str, i: int) -> Callable[[pa.Array], pa.Array]:
-    """One element of a JSON array field -> a single Scalar per row (the pivot channels stay per-element)."""
-    return lambda c: pa.array([r[key][i] for r in _records(c)], type=pa.float64())
-
-
-def json_array(key: str, width: int) -> Callable[[pa.Array], pa.Array]:
-    """
-    A JSON array field -> one list row per message, truncated to `width`.
-
-    A list row is not a valid `Scalars` value on its own; a following `Selector("[]")` fans it
-    into a width-`width` array `Scalars`. The truncation pins the width the series labels assume.
-    """
-    return lambda c: pa.array([r[key][:width] for r in _records(c)], type=pa.list_(pa.float64()))
+def json_struct(textcol: pa.Array) -> pa.Array:
+    """Each JSON message -> one struct row; pyarrow infers the struct type from the parsed dicts."""
+    return pa.array([json.loads(text) for text in textcol.to_pylist()])
 
 
 def json_pos(key: str, lo: int) -> Callable[[pa.Array], pa.Array]:
     """A 3-slice of a JSON array field -> Transform3D translation (EE position)."""
-    return lambda c: pa.array([r[key][lo : lo + 3] for r in _records(c)], type=VEC3)
-
-
-def gripper_field(name: str) -> Callable[[pa.Array], pa.Array]:
-    """One `gripper_controls` field -> a single Scalar per row."""
-    return lambda c: pa.array([r["gripper_controls"][name] for r in _records(c)], type=pa.float64())
+    return lambda textcol: pa.array([json.loads(text)[key][lo : lo + 3] for text in textcol.to_pylist()], type=VEC3)
 
 
 # --------------------------------------------------------------------------------------
-# lens builders (one set per source topic)
+# lens builders
 # --------------------------------------------------------------------------------------
 
 
-def _scalar_lens(msg: str, entity: str, selector: Selector | str) -> DeriveLens:
-    """One numeric field of a `:message` struct -> a Scalars entity."""
-    sel = selector if isinstance(selector, Selector) else Selector(selector)
-    return DeriveLens(msg, output_entity=entity).to_component(rr.Scalars.descriptor_scalars(), sel)
-
-
-def _motors(field: str, element: str) -> Selector:
+def wbc_lenses() -> list[DeriveLens]:
     """
-    One element field of a motor array -> a width-29 array `Scalars` row, in G1 motor order.
+    The `/wbc_lerobot` JSON as one struct per message, plus the four end-effector position markers.
 
-    The motor arrays are fixed 35-wide (indices 29-34 unused) and the selector can't slice, so
-    `list_slice` truncates to the 29 body joints before `[]` iterates the elements. The f32
-    source values are cast to f64 — the `Scalars` datatype — because the viewer plots only the
-    first instance of a float32 array.
+    The struct keeps every key (`pivot`, `ee_state`, `ee_action`, `gripper_controls`) for the
+    blueprint to plot. The markers are the part the 3D view needs typed: a `Transform3D`
+    translation per arm, for measured and commanded pose alike.
     """
-    return (
-        Selector(f".data.{field}")
-        .pipe(lambda arr: list_slice(arr, 0, N_JOINTS))
-        .pipe(Selector(f"[].{element}"))
-        .pipe(lambda arr: arr.cast(pa.float64()))
-    )
-
-
-def joint_lenses() -> list[DeriveLens]:
-    """Per-joint lowstate signals: one width-29 `Scalars` entity per signal, in G1 motor order."""
-    lenses = [
-        _scalar_lens(MSG_LOWSTATE, f"/state/joint/{short}", _motors("motor_state", element))
-        for short, element in (
-            ("q", "q"),
-            ("dq", "dq"),
-            ("tau", "tau_est"),
-            ("voltage", "vol"),
-            # Per-motor status bitfield. Zero on healthy hardware; a set bit marks a motor fault.
-            ("status", "motorstate"),
-            # Reported per-motor mode. Constant for most episodes, but it does switch mid-episode,
-            # so it rides the timeline rather than a static row.
-            ("mode", "mode"),
-        )
-    ]
-    lenses += [
-        _scalar_lens(MSG_LOWSTATE, f"/state/joint/temperature/{i}", _motors("motor_state", f"temperature[{i}]"))
-        for i in range(N_MOTOR_TEMPS)
-    ]
-    return lenses
-
-
-def cmd_lenses() -> list[DeriveLens]:
-    """Commanded joint arrays from lowcmd, aligned to the same motor order."""
-    return [
-        _scalar_lens(MSG_LOWCMD, f"/cmd/joint/{short}", _motors("motor_cmd", element))
-        for short, element in (("q", "q"), ("tau", "tau"))
-    ]
-
-
-def imu_lenses(imu: str) -> list[DeriveLens]:
-    """
-    One IMU's signals: a width-3 `Scalars` entity per 3-axis field, plus its die temperature.
-
-    `imu` keys `IMU_SOURCES`, which picks the message and the struct path. f32 values are cast to
-    f64 for the same reason as `_motors`.
-    """
-    msg, root = IMU_SOURCES[imu]
-    lenses = [
-        _scalar_lens(
-            msg,
-            f"/state/imu/{imu}/{name}",
-            Selector(f"{root}.{name}").pipe(Selector("[]")).pipe(lambda arr: arr.cast(pa.float64())),
-        )
-        for name in IMU_NAMES
-    ]
-    lenses.append(
-        _scalar_lens(
-            msg,
-            f"/state/imu/{imu}/temperature",
-            Selector(f"{root}.temperature").pipe(lambda arr: arr.cast(pa.float64())),
-        )
-    )
-    return lenses
-
-
-def odom_lenses() -> list[DeriveLens]:
-    """Base odometry: per-axis position/velocity + height/yaw scalars, plus a 3D Transform3D pose."""
-    lenses: list[DeriveLens] = []
-    for name in ("position", "velocity"):
-        for i, ax in enumerate("xyz"):
-            lenses.append(_scalar_lens(MSG_ODOM, f"/state/base/{name}/{ax}", f".{name}[{i}]"))
-    lenses += [
-        _scalar_lens(MSG_ODOM, "/state/base/body_height", ".body_height"),
-        _scalar_lens(MSG_ODOM, "/state/base/yaw_speed", ".yaw_speed"),
-        DeriveLens(MSG_ODOM, output_entity="/state/base")
-        .to_component(rr.Transform3D.descriptor_translation(), Selector(".position").pipe(to_vec3))
-        .to_component(
-            rr.Transform3D.descriptor_quaternion(), Selector(".imu_state.quaternion").pipe(quat_wxyz_to_xyzw)
-        ),
-    ]
-    return lenses
-
-
-def _wbc_scalar_lens(entity: str, pipe: Callable[[pa.Array], pa.Array]) -> DeriveLens:
-    return DeriveLens(TEXT, output_entity=entity).to_component(
-        rr.Scalars.descriptor_scalars(), Selector(".").pipe(pipe)
-    )
-
-
-def lerobot_lenses() -> list[DeriveLens]:
-    """Parse /wbc_lerobot JSON into EE state/action arrays + 3D EE poses, gripper, pivot."""
-    lenses: list[DeriveLens] = []
+    lenses = [DeriveLens(TEXT, output_entity="/wbc_lerobot").to_component(MSG_WBC, Selector(".").pipe(json_struct))]
     for kind in ("ee_state", "ee_action"):
-        # The 12 pose values as one array Scalars on the parent; series order in EE_NAMES.
-        lenses.append(
-            DeriveLens(TEXT, output_entity=f"/lerobot/{kind}").to_component(
-                rr.Scalars.descriptor_scalars(),
-                Selector(".").pipe(json_array(kind, len(EE_NAMES))).pipe(Selector("[]")),
-            )
-        )
         for arm, lo in (("left", 0), ("right", 6)):
-            # 3D end-effector position marker (translation only).
             lenses.append(
                 DeriveLens(TEXT, output_entity=f"/lerobot/{kind}/{arm}").to_component(
                     rr.Transform3D.descriptor_translation(), Selector(".").pipe(json_pos(kind, lo))
                 )
             )
-    for k in ("left_trigger", "left_squeeze", "right_trigger", "right_squeeze"):
-        lenses.append(_wbc_scalar_lens(f"/lerobot/gripper/{k}", gripper_field(k)))
-    for i in range(7):
-        lenses.append(_wbc_scalar_lens(f"/lerobot/pivot/{i}", json_index("pivot", i)))
     return lenses
-
-
-def gripper_lenses() -> list[tuple[str, list[DeriveLens]]]:
-    """(content, lenses) pairs for the four dex1 gripper topics (single joint each)."""
-    out: list[tuple[str, list[DeriveLens]]] = []
-    for side in ("left", "right"):
-        out.append((
-            f"/stamped/dex1/{side}/state",
-            [
-                _scalar_lens(MSG_MOTOR_STATE, f"/state/gripper/{side}/{short}", f".data.states[0].{element}")
-                for short, element in (("q", "q"), ("dq", "dq"), ("tau", "tau_est"))
-            ],
-        ))
-        out.append((
-            f"/stamped/dex1/{side}/cmd",
-            [_scalar_lens(MSG_MOTOR_CMD, f"/cmd/gripper/{side}/q", ".data.cmds[0].q")],
-        ))
-    return out
 
 
 def head_split_lenses() -> list[DeriveLens]:
@@ -427,45 +228,23 @@ def media_type_lens() -> DeriveLens:
 # --------------------------------------------------------------------------------------
 
 
-# Camera entities that stay in the output: the split head eyes and the wrist passthroughs. The
-# raw side-by-side head stream is shed once its split lens ran.
-KEPT_CAMERAS = [
-    "/camera/head/left",
-    "/camera/head/right",
-    "/camera/left_wrist/image/compressed",
-    "/camera/right_wrist/image/compressed",
-]
-
-
 def base_stream(path: Path) -> LazyChunkStream:
     """
-    One McapReader stream, shaped by content-scoped lenses.
+    One McapReader stream over every topic but the wrist IR; the decoded topics pass through whole.
 
-    The raw source entities leave here as skeletons: each lens consumes its input column, and
-    `forward_unmatched` drops what was consumed, leaving the static `McapChannel`/`McapSchema`
-    rows the channel census reads. `convert_episode` drops the skeletons and the reader
-    bookkeeping after the census.
+    No scalars are derived: the blueprint maps its series onto the struct fields. Both lenses run
+    with `forward_all`, so their inputs survive: the side-by-side head blob stays beside the two
+    eyes split from it, and every camera blob keeps its codec tag next to it.
     """
-    stream = McapReader(str(path), include_topic_regex=KEEP_TOPICS).stream()
-    # The joint arrays and the pelvis IMU both come out of lowstate, so they share one pass: a
-    # second `lenses` call would find the message column already consumed.
-    stream = stream.lenses(
-        joint_lenses() + imu_lenses("pelvis"), content="/stamped/lowstate", output_mode="forward_unmatched"
-    )
-    stream = stream.lenses(cmd_lenses(), content="/stamped/lowcmd", output_mode="forward_unmatched")
-    for content, lenses in gripper_lenses():
-        stream = stream.lenses(lenses, content=content, output_mode="forward_unmatched")
-    stream = stream.lenses(imu_lenses("secondary"), content="/stamped/secondary_imu", output_mode="forward_unmatched")
-    stream = stream.lenses(odom_lenses(), content="/lf/odommodestate", output_mode="forward_unmatched")
-    stream = stream.lenses(lerobot_lenses(), content="/wbc_lerobot", output_mode="forward_unmatched")
-    stream = stream.lenses(
-        head_split_lenses(), content="/camera/head/image/compressed", output_mode="forward_unmatched"
-    )
-    # The kept camera EncodedImages need a codec tag for the viewer. forward_all so the blob (the
-    # lens's input, hence "consumed") survives alongside the new tag.
-    stream = stream.lenses(media_type_lens(), content=KEPT_CAMERAS, output_mode="forward_all")
-    # Wrist cameras (/camera/{left,right}_wrist/image/compressed) and /annotation pass through.
+    stream = McapReader(str(path), exclude_topic_regex=IR_TOPICS).stream()
+    stream = stream.lenses(head_split_lenses(), content=HEAD_TOPIC, output_mode="forward_all")
+    stream = stream.lenses(media_type_lens(), content="/camera/**", output_mode="forward_all")
     return stream
+
+
+# --------------------------------------------------------------------------------------
+# sidecars
+# --------------------------------------------------------------------------------------
 
 
 @dataclass
@@ -501,125 +280,6 @@ class EpisodeInfo:
         )
 
 
-# --------------------------------------------------------------------------------------
-# static configuration
-# --------------------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class StaticConfig:
-    """One configuration field that holds for a whole episode, logged once beside its signals."""
-
-    topic: str
-    message: str
-    path: str  # dotted field path inside the `:message` struct
-    entity: str
-    name: str  # AnyValues component name
-    width: int  # leading values kept per message (motor arrays are 35-wide, only 29 are real)
-
-
-STATIC_CONFIGS = (
-    StaticConfig("/stamped/lowcmd", MSG_LOWCMD, "data.motor_cmd.kp", "/cmd/joint", "kp", N_JOINTS),
-    StaticConfig("/stamped/lowcmd", MSG_LOWCMD, "data.motor_cmd.kd", "/cmd/joint", "kd", N_JOINTS),
-    *(
-        StaticConfig(f"/stamped/dex1/{side}/cmd", MSG_MOTOR_CMD, f"data.cmds.{gain}", f"/cmd/gripper/{side}", gain, 1)
-        for side in ("left", "right")
-        for gain in ("kp", "kd")
-    ),
-)
-
-
-def _message_field(column: pa.Array, path: str) -> pa.Array:
-    """Follow a dotted path into a `:message` struct column, flattening every list level on the way."""
-    arr = column
-    while not pa.types.is_struct(arr.type):
-        arr = arr.flatten()
-    for part in path.split("."):
-        arr = arr.field(part)
-        while pa.types.is_list(arr.type) or pa.types.is_large_list(arr.type) or pa.types.is_fixed_size_list(arr.type):
-            arr = arr.flatten()
-    return arr
-
-
-def static_config_chunks(path: Path) -> list[Chunk]:
-    """
-    Controller gains and the motor enable mask, read once and logged as static rows.
-
-    These hold for a whole episode, so one static row carries what would otherwise repeat on every
-    message. Constancy is verified while reading, so a source that varies one of them raises here
-    instead of silently recording only the first value.
-    """
-    by_topic: dict[str, list[StaticConfig]] = defaultdict(list)
-    for config in STATIC_CONFIGS:
-        by_topic[config.topic].append(config)
-    values: dict[str, dict[str, list[float]]] = defaultdict(dict)
-    stream = McapReader(str(path), include_topic_regex=[f"^{topic}$" for topic in by_topic]).stream()
-    for chunk in stream.to_chunks():
-        configs = by_topic.get(chunk.entity_path)
-        if configs is None:
-            continue
-        batch = chunk.to_record_batch()
-        column = next((name for name in batch.schema.names if name.endswith(":message")), None)
-        if column is None or batch.num_rows == 0:
-            continue
-        for config in configs:
-            raw = _message_field(batch.column(column), config.path).to_numpy(zero_copy_only=False)
-            rows = np.asarray(raw, dtype=np.float64).reshape(batch.num_rows, -1)[:, : config.width]
-            if not bool(np.all(rows == rows[0])):
-                row, column = (int(index[0]) for index in np.nonzero(rows != rows[0])[:2])
-                raise ValueError(
-                    f"{path.name}: {config.topic} {config.path} varies within the episode "
-                    f"(row {row} index {column}: {rows[0][column]} -> {rows[row][column]}); "
-                    "a field that changes has to be logged on the timeline, not as a static row"
-                )
-            first: list[float] = rows[0].tolist()
-            seen = values[config.entity].get(config.name)
-            if seen is not None and seen != first:
-                raise ValueError(f"{path.name}: {config.topic} {config.path} disagrees between chunks")
-            values[config.entity][config.name] = first
-    return [
-        Chunk.from_columns(
-            entity,
-            indexes=[],
-            # The stub cannot express that these dynamic keys never collide with the leading
-            # `drop_untyped_nones` parameter, so it reads every value as that flag.
-            columns=rr.AnyValues.columns(**{name: [value] for name, value in fields.items()}),  # type: ignore[arg-type]
-        )
-        for entity, fields in values.items()
-    ]
-
-
-def joint_names_chunks() -> list[Chunk]:
-    """
-    Motor index -> joint name, static beside the joint arrays.
-
-    Series i of every width-29 joint array is the joint `joint_names[i]`. Logged on the array
-    parents, so one component per side covers q/dq/tau. The blueprint carries the display labels;
-    this component is the machine-readable mapping.
-    """
-    return [
-        Chunk.from_columns(entity, indexes=[], columns=rr.AnyValues.columns(joint_names=[G1_JOINT_NAMES]))
-        for entity in ("/state/joint", "/cmd/joint")
-    ]
-
-
-def ee_names_chunks() -> list[Chunk]:
-    """Series index -> pose field, static on the width-12 ee arrays (same order for state and action)."""
-    return [
-        Chunk.from_columns(entity, indexes=[], columns=rr.AnyValues.columns(ee_names=[EE_NAMES]))
-        for entity in ("/lerobot/ee_state", "/lerobot/ee_action")
-    ]
-
-
-def imu_names_chunks() -> list[Chunk]:
-    """Series index -> axis, static on each width-3 IMU array, for both IMUs."""
-    return [
-        Chunk.from_columns(f"/state/imu/{imu}/{name}", indexes=[], columns=rr.AnyValues.columns(imu_names=[axes]))
-        for imu in IMU_SOURCES
-        for name, axes in IMU_NAMES.items()
-    ]
-
-
 def sidecar_stream(info: EpisodeInfo) -> LazyChunkStream:
     """Episode metadata + subtask labels from info.json — the genuine hand-built sidecar."""
     chunks: list[Chunk] = [
@@ -646,6 +306,22 @@ def sidecar_stream(info: EpisodeInfo) -> LazyChunkStream:
             )
         )
     return LazyChunkStream.from_iter(chunks)
+
+
+def names_chunks() -> list[Chunk]:
+    """
+    Series labels for the unlabeled arrays, static beside their structs.
+
+    Element i of `motor_state` / `motor_cmd` is the joint `joint_names[i]`; element i of
+    `ee_state` / `ee_action` is the pose field `ee_names[i]`. The blueprint carries the display
+    labels; these are the machine-readable mapping.
+    """
+    joints = [
+        Chunk.from_columns(entity, indexes=[], columns=rr.AnyValues.columns(joint_names=[G1_JOINT_NAMES]))
+        for entity in ("/stamped/lowstate", "/stamped/lowcmd")
+    ]
+    ee = Chunk.from_columns("/wbc_lerobot", indexes=[], columns=rr.AnyValues.columns(ee_names=[EE_NAMES]))
+    return [*joints, ee]
 
 
 CALIBRATION_ARCHETYPE = "CalibrationFile"
@@ -768,21 +444,6 @@ def has_ir(ep: Episode) -> bool:
 STAT_CHANNEL_COUNTS = "McapStatistics:channel_message_counts"
 CHANNEL_ID = "McapChannel:id"
 
-# Where each raw topic's decoded rows survive to be counted: one lens output per topic, row-aligned
-# with its input (`forward_unmatched` drops the consumed raw column and with it the raw rows).
-# Topics not listed keep rows on their own entity (the camera and /annotation passthroughs).
-CENSUS_PROXIES = {
-    "/stamped/lowstate": "/state/joint/q",
-    "/stamped/lowcmd": "/cmd/joint/q",
-    "/stamped/secondary_imu": "/state/imu/secondary/rpy",
-    "/stamped/dex1/left/state": "/state/gripper/left/q",
-    "/stamped/dex1/left/cmd": "/cmd/gripper/left/q",
-    "/stamped/dex1/right/state": "/state/gripper/right/q",
-    "/stamped/dex1/right/cmd": "/cmd/gripper/right/q",
-    "/lf/odommodestate": "/state/base/position/x",
-    "/wbc_lerobot": "/lerobot/gripper/left_trigger",
-}
-
 
 def undecodable_topics(chunks: Iterable[Chunk]) -> list[str]:
     """
@@ -792,8 +453,9 @@ def undecodable_topics(chunks: Iterable[Chunk]) -> list[str]:
     2026 Clothes-Washing sessions declare `MotorStateStamped` on the left dex1 state channel but
     carry smaller `MotorCmd` payloads), so the RRD silently under-reports the channel. The MCAP's
     authoritative counts arrive in the stream itself (statistics on `/__mcap_properties`), keyed
-    to each topic entity by its static `McapChannel:id` row; decoded rows are counted on the
-    topic's `CENSUS_PROXIES` entity — no second read of the file.
+    to each topic entity by its static `McapChannel:id` row. Decoded rows are counted on the topic
+    entity itself, which every topic keeps whole: the structs, the text rows and the head blobs
+    beside the halves split from them.
     """
     expected: dict[int, int] = {}
     channel_ids: dict[str, list[int]] = {}
@@ -814,7 +476,7 @@ def undecodable_topics(chunks: Iterable[Chunk]) -> list[str]:
     return sorted(
         topic
         for topic, ids in channel_ids.items()
-        if decoded[CENSUS_PROXIES.get(topic, topic)] < sum(expected.get(channel_id, 0) for channel_id in ids)
+        if decoded[topic] < sum(expected.get(channel_id, 0) for channel_id in ids)
     )
 
 
@@ -893,31 +555,21 @@ def convert_episode(ep: Episode, rrd_root: Path) -> Path:
     """
     Convert one episode into an optimized base-layer `.rrd` and return its path.
 
-    Merges the base entity stream with the sidecars (`info.json` metadata, the parsed
-    calibration files, and the static joint-name mapping), runs the channel census on the
-    collected store, then writes a single
-    object-store-optimized recording — census verdict as a recording property, raw skeletons and reader
-    bookkeeping dropped — stamped with `application_id` / `recording_id`.
+    Merges the base entity stream with the sidecars (`info.json` metadata, the parsed calibration
+    files, the series labels), runs the channel census on the collected store, then writes a single
+    object-store-optimized recording with the census verdict as a recording property, stamped with
+    `application_id` / `recording_id`.
     """
     out_path = rrd_root / layer_relpath("base", ep.recording_id)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     merged = LazyChunkStream.merge(
         base_stream(ep.mcap),
         sidecar_stream(ep.info),
-        LazyChunkStream.from_iter(
-            calibration_chunks(ep)
-            + joint_names_chunks()
-            + ee_names_chunks()
-            + imu_names_chunks()
-            + static_config_chunks(ep.mcap)
-        ),
+        LazyChunkStream.from_iter(calibration_chunks(ep) + names_chunks()),
     )
     store = merged.collect(optimize=OptimizationProfile.OBJECT_STORE)
-    census = census_chunk(undecodable_topics(store.stream().to_chunks()))
-    final = LazyChunkStream.merge(
-        store.stream().drop(content=DROP_RAWS).drop(components=DROP_COMPONENTS),
-        LazyChunkStream.from_iter([census]),
-    )
+    census = census_chunk(undecodable_topics(store.stream()))
+    final = LazyChunkStream.merge(store.stream(), LazyChunkStream.from_iter([census]))
     final.write_rrd(str(out_path), application_id=APPLICATION_ID, recording_id=ep.recording_id)
     return out_path
 

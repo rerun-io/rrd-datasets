@@ -1,11 +1,11 @@
 """
-Tests for the base layer's calibration passthrough, joint arrays, and channel census — no MCAP, no network.
+Tests for the base layer's calibration passthrough, series labels, and channel census — no MCAP, no network.
 
 Calibration files are archived verbatim, so both halves of that promise are guarded here: the file
 text survives byte for byte, and the per-serial wrist files keep one entity path across rigs. The
 census is what makes silently dropped messages visible, so it runs against synthetic chunks shaped
 exactly as `McapReader` emits them — a statistics table on `/__mcap_properties`, a static channel
-id per raw topic, and decoded rows on the counting entity.
+id per raw topic, and decoded rows on the topic entity.
 """
 
 from __future__ import annotations
@@ -23,29 +23,19 @@ from rerun.experimental import Chunk
 
 from hiw_500.base_layer import (
     CALIBRATION_ARCHETYPE,
-    CENSUS_PROXIES,
     CHANNEL_ID,
     EE_NAMES,
     G1_JOINT_NAMES,
-    IMU_NAMES,
-    IMU_SOURCES,
-    N_JOINTS,
     PROPERTY_PATH,
     STAT_CHANNEL_COUNTS,
-    STATIC_CONFIGS,
     Episode,
     EpisodeInfo,
     _calibration_leaves,
-    _message_field,
-    _motors,
     calibration_chunks,
     calibration_components,
     census_chunk,
-    ee_names_chunks,
     has_ir,
-    imu_names_chunks,
-    joint_names_chunks,
-    json_array,
+    names_chunks,
     undecodable_topics,
 )
 
@@ -157,99 +147,15 @@ def test_ir_is_inferred_from_the_wrist_calibrations(tmp_path: Path) -> None:
     assert not has_ir(_episode(tmp_path / "bare", {"info.json": "{}"}))
 
 
-def _motor_messages(rows: int) -> pa.Array:
-    """Lowstate-shaped rows as the reader emits them (a length-1 message list per row); q of motor i is 100r + i."""
-    return pa.array([
-        [{"data": {"motor_state": [{"q": 100.0 * r + i, "tau_est": 2000.0 + i} for i in range(35)]}}]
-        for r in range(rows)
-    ])
-
-
-def test_the_motor_selector_yields_29_joints_in_motor_order() -> None:
-    """The motor arrays are 35-wide with indices 29-34 unused; the joint arrays must stop at 29."""
-    values = _motors("motor_state", "q").execute_per_row(_motor_messages(2))
-    assert values is not None
-    assert values.to_pylist() == [[100.0 * r + i for i in range(29)] for r in range(2)]
-    taus = _motors("motor_state", "tau_est").execute_per_row(_motor_messages(1))
-    assert taus is not None
-    assert taus.to_pylist() == [[2000.0 + i for i in range(29)]]
-
-
-def _motor_health_messages(rows: int) -> pa.Array:
-    """Lowstate-shaped rows carrying the per-motor health fields; motor i reads 50+i volts, 40+i / 60+i degrees."""
-    return pa.array([
-        [{"data": {"motor_state": [{"vol": 50.0 + i, "temperature": [40 + i, 60 + i]} for i in range(35)]}}]
-        for _ in range(rows)
-    ])
-
-
-def test_voltage_reads_the_same_29_joints_as_the_other_signals() -> None:
-    values = _motors("motor_state", "vol").execute_per_row(_motor_health_messages(1))
-    assert values is not None
-    assert values.to_pylist() == [[50.0 + i for i in range(29)]]
-
-
-def test_the_two_motor_temperature_sensors_split_into_one_array_each() -> None:
-    """`temperature` is a two-element vendor list per motor, so each sensor needs its own width-29 array."""
-    messages = _motor_health_messages(1)
-    first = _motors("motor_state", "temperature[0]").execute_per_row(messages)
-    second = _motors("motor_state", "temperature[1]").execute_per_row(messages)
-    assert first is not None and second is not None
-    assert first.to_pylist() == [[40.0 + i for i in range(29)]]
-    assert second.to_pylist() == [[60.0 + i for i in range(29)]]
-
-
-def test_the_message_field_walk_flattens_every_list_level() -> None:
-    """Gains sit under a message list and a motor list; the walk has to flatten both to reach them."""
-    messages = pa.array([[{"data": {"motor_cmd": [{"kp": float(i)} for i in range(3)]}}]])
-    assert _message_field(messages, "data.motor_cmd.kp").to_pylist() == [0.0, 1.0, 2.0]
-
-
-def test_static_configs_are_as_wide_as_the_arrays_they_annotate() -> None:
-    """A gain array is read positionally beside its signal array, so the two widths have to agree."""
-    for config in STATIC_CONFIGS:
-        expected = N_JOINTS if config.entity.endswith("joint") else 1
-        assert config.width == expected, config
-
-
-def test_the_ee_array_keeps_source_order_and_truncates_to_its_labels() -> None:
-    """`json_array` pins the width the series labels assume; the source lays out left before right."""
-    texts = pa.array([json.dumps({"ee_state": [float(i) for i in range(14)]})])
-    (row,) = json_array("ee_state", len(EE_NAMES))(texts).to_pylist()
-    assert row == [float(i) for i in range(12)]
-    assert EE_NAMES[0] == "left/px"
-    assert EE_NAMES[6] == "right/px"
-
-
-def test_ee_names_ride_statically_beside_the_arrays() -> None:
-    chunks = _by_entity(ee_names_chunks())
-    assert set(chunks) == {"/lerobot/ee_state", "/lerobot/ee_action"}
-    for chunk in chunks.values():
-        assert chunk.is_static
-        (row,) = chunk.to_record_batch().column("ee_names").to_pylist()
-        assert row == EE_NAMES
-
-
-def test_imu_names_ride_statically_beside_the_arrays() -> None:
-    """Both IMUs carry the mapping: the pelvis one inside lowstate and the standalone secondary."""
-    chunks = _by_entity(imu_names_chunks())
-    assert set(chunks) == {f"/state/imu/{imu}/{name}" for imu in IMU_SOURCES for name in IMU_NAMES}
-    for imu in IMU_SOURCES:
-        for name, axes in IMU_NAMES.items():
-            chunk = chunks[f"/state/imu/{imu}/{name}"]
-            assert chunk.is_static
-            (row,) = chunk.to_record_batch().column("imu_names").to_pylist()
-            assert row == axes
-
-
-def test_joint_names_ride_statically_beside_the_arrays() -> None:
-    """Series i of every joint array is `joint_names[i]` — the mapping the arrays are read by."""
-    chunks = _by_entity(joint_names_chunks())
-    assert set(chunks) == {"/state/joint", "/cmd/joint"}
-    for chunk in chunks.values():
-        assert chunk.is_static
-        (row,) = chunk.to_record_batch().column("joint_names").to_pylist()
-        assert row == G1_JOINT_NAMES
+def test_names_ride_statically_beside_the_structs() -> None:
+    """Element i of the motor arrays is `joint_names[i]`; element i of the EE arrays is `ee_names[i]`."""
+    chunks = _by_entity(names_chunks())
+    assert set(chunks) == {"/stamped/lowstate", "/stamped/lowcmd", "/wbc_lerobot"}
+    for entity in ("/stamped/lowstate", "/stamped/lowcmd"):
+        assert chunks[entity].is_static
+        assert _list_cell(chunks[entity], "joint_names") == G1_JOINT_NAMES
+    assert chunks["/wbc_lerobot"].is_static
+    assert _list_cell(chunks["/wbc_lerobot"], "ee_names") == EE_NAMES
 
 
 # `McapStatistics:channel_message_counts` as the reader emits it: one instance per row holding the
@@ -297,8 +203,8 @@ def test_an_episode_that_decoded_everything_flags_nothing() -> None:
         _statistics_chunk({1: 5, 2: 2}),
         _channel_chunk(LOWSTATE, 1),
         _channel_chunk("/annotation", 2),
-        _decoded_chunk(CENSUS_PROXIES[LOWSTATE], 3),  # a topic's rows may arrive in several chunks
-        _decoded_chunk(CENSUS_PROXIES[LOWSTATE], 2),
+        _decoded_chunk(LOWSTATE, 3),  # a topic's rows may arrive in several chunks
+        _decoded_chunk(LOWSTATE, 2),
         _decoded_chunk("/annotation", 2),  # a passthrough topic counts rows on its own entity
     ]
     assert undecodable_topics(chunks) == []
@@ -310,7 +216,7 @@ def test_topics_short_of_their_channel_count_are_flagged() -> None:
         _channel_chunk(LOWSTATE, 1),
         _channel_chunk("/annotation", 2),
         _channel_chunk(DEX1_STATE, 3),
-        _decoded_chunk(CENSUS_PROXIES[LOWSTATE], 5),
+        _decoded_chunk(LOWSTATE, 5),
         _decoded_chunk("/annotation", 1),
     ]
     # dex1 decoded none of its 5126 messages (the Feb 2026 payload mismatch); /annotation lost one.
