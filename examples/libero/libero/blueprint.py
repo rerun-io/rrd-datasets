@@ -3,7 +3,7 @@ Build the default Rerun blueprint for LIBERO demos and save it as an `.rbl`.
 
 The blueprint decides how a demo is shown. Registered as the dataset's default, every segment
 opens with the same layout: the two camera panes with the task instruction above them, and the
-joint / gripper / action / end-effector plots.
+joint / gripper / action / end-effector plots. The plots read straight off the reflected columns.
 
 Run:  pixi run -e libero blueprint   # regenerates blueprints/libero/default.rbl
 """
@@ -13,7 +13,7 @@ from __future__ import annotations
 import rerun as rr
 import rerun.blueprint as rrb
 
-from libero.base_layer import APPLICATION_ID
+from libero.base_layer import APPLICATION_ID, DEMO_ENTITY, OBS_ENTITY
 from rrd_datasets_common.paths import default_blueprint_path
 
 BLUEPRINT_PATH = default_blueprint_path("libero")
@@ -22,6 +22,28 @@ BLUEPRINT_PATH = default_blueprint_path("libero")
 JOINT_NAMES = [f"joint{i}" for i in range(1, 8)]  # Panda arm joints, in motor order
 GRIPPER_NAMES = ["finger1", "finger2"]
 ACTION_NAMES = ["dx", "dy", "dz", "drx", "dry", "drz", "gripper"]  # OSC_POSE deltas + gripper
+EE_POS_NAMES = ["x", "y", "z"]
+EE_ORI_NAMES = ["rx", "ry", "rz"]
+
+
+def series(component: str, names: list[str]) -> rr.Visualizer:
+    """
+    A line-series visualizer fed by a reflected array column instead of a `Scalars` component.
+
+    The base layer derives no scalars, so each plot binds `Scalars:scalars` to the source column
+    through a component mapping; `[]` spreads the fixed-size array into one series per element,
+    labelled by `names`.
+    """
+    return rr.SeriesLines(names=names).visualizer(
+        mappings=[
+            rrb.datatypes.VisualizerComponentMapping(
+                target="Scalars:scalars",
+                source_kind=rrb.datatypes.ComponentSourceKind.SourceComponent,
+                source_component=component,
+                selector="[]",
+            )
+        ]
+    )
 
 
 def build_blueprint() -> rrb.Blueprint:
@@ -38,28 +60,32 @@ def build_blueprint() -> rrb.Blueprint:
                 row_shares=[1, 6],
             ),
             # Right: one plot per signal group — their value ranges differ too much to share axes.
+            # Each view lists exactly the entity it plots, so the other columns on that entity stay out.
             rrb.Vertical(
                 rrb.TimeSeriesView(
-                    origin="/robot/joint_states",
+                    origin=OBS_ENTITY,
+                    contents=f"+ {OBS_ENTITY}",
                     name="Joints",
-                    defaults=[rr.SeriesLines(names=JOINT_NAMES)],
+                    overrides={OBS_ENTITY: [series("joint_states", JOINT_NAMES)]},
                 ),
                 rrb.TimeSeriesView(
-                    origin="/robot/gripper_states",
+                    origin=OBS_ENTITY,
+                    contents=f"+ {OBS_ENTITY}",
                     name="Gripper",
-                    defaults=[rr.SeriesLines(names=GRIPPER_NAMES)],
+                    overrides={OBS_ENTITY: [series("gripper_states", GRIPPER_NAMES)]},
                 ),
                 rrb.TimeSeriesView(
-                    origin="/action",
+                    origin=DEMO_ENTITY,
+                    contents=f"+ {DEMO_ENTITY}",
                     name="Action",
-                    defaults=[rr.SeriesLines(names=ACTION_NAMES)],
+                    overrides={DEMO_ENTITY: [series("actions", ACTION_NAMES)]},
                 ),
-                # Position (m) and the rotation vector (rad) share one pane; their labels ride
-                # statically in the data.
+                # Position (m) and the rotation vector (rad) share one pane.
                 rrb.TimeSeriesView(
-                    origin="/",
+                    origin=OBS_ENTITY,
+                    contents=f"+ {OBS_ENTITY}",
                     name="End effector",
-                    contents=["+ /robot/ee_pos/**", "+ /robot/ee_ori/**"],
+                    overrides={OBS_ENTITY: [series("ee_pos", EE_POS_NAMES), series("ee_ori", EE_ORI_NAMES)]},
                 ),
                 name="Signals",
             ),
