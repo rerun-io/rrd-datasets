@@ -8,4 +8,4 @@ the two without renaming and `register` reads either side as is.
 
 from __future__ import annotations
 
-LAYERS = ("base", "urdf", "odom", "cameras", "ir", "properties")
+LAYERS = ("base", "derived_archetypes", "urdf", "odom", "cameras", "ir", "properties")

@@ -23,7 +23,6 @@ from rerun.experimental import Chunk
 
 from hiw_500.base_layer import (
     CALIBRATION_ARCHETYPE,
-    EE_NAMES,
     G1_JOINT_NAMES,
     MCAP_PROPERTY,
     PROPERTY_PATH,
@@ -147,15 +146,13 @@ def test_ir_is_inferred_from_the_wrist_calibrations(tmp_path: Path) -> None:
     assert not has_ir(_episode(tmp_path / "bare", {"info.json": "{}"}))
 
 
-def test_names_ride_statically_beside_the_structs() -> None:
-    """Element i of the motor arrays is `joint_names[i]`; element i of the EE arrays is `ee_names[i]`."""
+def test_joint_names_ride_statically_beside_the_structs() -> None:
+    """Element i of the motor arrays is `joint_names[i]`."""
     chunks = _by_entity(names_chunks())
-    assert set(chunks) == {"/stamped/lowstate", "/stamped/lowcmd", "/wbc_lerobot"}
-    for entity in ("/stamped/lowstate", "/stamped/lowcmd"):
-        assert chunks[entity].is_static
-        assert _list_cell(chunks[entity], "joint_names") == G1_JOINT_NAMES
-    assert chunks["/wbc_lerobot"].is_static
-    assert _list_cell(chunks["/wbc_lerobot"], "ee_names") == EE_NAMES
+    assert set(chunks) == {"/stamped/lowstate", "/stamped/lowcmd"}
+    for chunk in chunks.values():
+        assert chunk.is_static
+        assert _list_cell(chunk, "joint_names") == G1_JOINT_NAMES
 
 
 LOWSTATE = "/stamped/lowstate"

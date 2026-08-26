@@ -55,8 +55,6 @@ MSG_MOTOR_STATE = "homies.msg.MotorStateStamped:message"
 MSG_MOTOR_CMD = "homies.msg.MotorCmdStamped:message"
 MSG_IMU = "homies.msg.IMUStateStamped:message"
 MSG_ODOM = "unitree_go.msg.SportModeState:message"
-# The /wbc_lerobot JSON parsed into a struct, named the way the reader names decoded messages.
-MSG_WBC = "wbc_lerobot:message"
 TEXT = "TextDocument:text"
 BLOB = "EncodedImage:blob"
 # The camera message as `ros2_reflection` decodes it, and the two fields kept from it per row.
@@ -106,10 +104,6 @@ G1_JOINT_NAMES = [
     "right_wrist_yaw",
 ]
 N_JOINTS = len(G1_JOINT_NAMES)
-
-# Series order of the width-12 `ee_state` / `ee_action` arrays in the /wbc_lerobot JSON: the left
-# arm then the right, six pose fields each.
-EE_NAMES = [f"{arm}/{pose}" for arm in ("left", "right") for pose in ("px", "py", "pz", "rx", "ry", "rz")]
 
 # Arrow types expected by Transform3D translation/quaternion components.
 VEC3 = pa.list_(pa.float32(), 3)
@@ -165,38 +159,9 @@ def crop_jpegs(left: bool) -> Callable[[pa.Array], pa.Array]:
     return run
 
 
-def json_struct(textcol: pa.Array) -> pa.Array:
-    """Each JSON message -> one struct row; pyarrow infers the struct type from the parsed dicts."""
-    return pa.array([json.loads(text) for text in textcol.to_pylist()])
-
-
-def json_pos(key: str, lo: int) -> Callable[[pa.Array], pa.Array]:
-    """A 3-slice of a JSON array field -> Transform3D translation (EE position)."""
-    return lambda textcol: pa.array([json.loads(text)[key][lo : lo + 3] for text in textcol.to_pylist()], type=VEC3)
-
-
 # --------------------------------------------------------------------------------------
 # lens builders
 # --------------------------------------------------------------------------------------
-
-
-def wbc_lenses() -> list[DeriveLens]:
-    """
-    The `/wbc_lerobot` JSON as one struct per message, plus the four end-effector position markers.
-
-    The struct keeps every key (`pivot`, `ee_state`, `ee_action`, `gripper_controls`) for the
-    blueprint to plot. The markers are the part the 3D view needs typed: a `Transform3D`
-    translation per arm, for measured and commanded pose alike.
-    """
-    lenses = [DeriveLens(TEXT, output_entity="/wbc_lerobot").to_component(MSG_WBC, Selector(".").pipe(json_struct))]
-    for kind in ("ee_state", "ee_action"):
-        for arm, lo in (("left", 0), ("right", 6)):
-            lenses.append(
-                DeriveLens(TEXT, output_entity=f"/lerobot/{kind}/{arm}").to_component(
-                    rr.Transform3D.descriptor_translation(), Selector(".").pipe(json_pos(kind, lo))
-                )
-            )
-    return lenses
 
 
 def head_split_lenses() -> list[DeriveLens]:
@@ -334,18 +299,15 @@ def sidecar_stream(info: EpisodeInfo) -> LazyChunkStream:
 
 def names_chunks() -> list[Chunk]:
     """
-    Series labels for the unlabeled arrays, static beside their structs.
+    Joint labels for the motor arrays, static beside their structs.
 
-    Element i of `motor_state` / `motor_cmd` is the joint `joint_names[i]`; element i of
-    `ee_state` / `ee_action` is the pose field `ee_names[i]`. The blueprint carries the display
-    labels; these are the machine-readable mapping.
+    Element i of `motor_state` / `motor_cmd` is the joint `joint_names[i]`. The blueprint carries
+    the display labels; this is the machine-readable mapping.
     """
-    joints = [
+    return [
         Chunk.from_columns(entity, indexes=[], columns=rr.AnyValues.columns(joint_names=[G1_JOINT_NAMES]))
         for entity in ("/stamped/lowstate", "/stamped/lowcmd")
     ]
-    ee = Chunk.from_columns("/wbc_lerobot", indexes=[], columns=rr.AnyValues.columns(ee_names=[EE_NAMES]))
-    return [*joints, ee]
 
 
 CALIBRATION_ARCHETYPE = "CalibrationFile"

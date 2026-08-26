@@ -16,7 +16,8 @@ from __future__ import annotations
 import rerun as rr
 import rerun.blueprint as rrb
 
-from hiw_500.base_layer import APPLICATION_ID, EE_NAMES, G1_JOINT_NAMES
+from hiw_500.base_layer import APPLICATION_ID, G1_JOINT_NAMES
+from hiw_500.derived_archetypes_layer import EE_NAMES
 from rrd_datasets_common.paths import default_blueprint_path
 
 BLUEPRINT_PATH = default_blueprint_path("hiw-500")

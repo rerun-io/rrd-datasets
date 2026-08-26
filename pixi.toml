@@ -302,6 +302,11 @@ cmd = "python -m hiw_500.base_layer"
 cwd = "examples/hiw-500"
 description = "Convert the HIW-500 base layer"
 
+[feature.hiw-500-tasks.tasks.convert-derived-archetypes]
+cmd = "python -m hiw_500.derived_archetypes_layer"
+cwd = "examples/hiw-500"
+description = "Convert the HIW-500 derived archetypes layer"
+
 [feature.hiw-500-tasks.tasks.convert-urdf]
 cmd = "python -m hiw_500.urdf_layer"
 cwd = "examples/hiw-500"

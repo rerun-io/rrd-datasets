@@ -55,7 +55,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # layer reads every calibration file: it embeds them verbatim as the episode's archival record.
 # The properties layer needs the wrist calibrations only for their presence, which tells it
 # whether the episode records IR.
-NEEDS_MCAP = frozenset({"base", "urdf", "odom", "ir"})
+NEEDS_MCAP = frozenset({"base", "derived_archetypes", "urdf", "odom", "ir"})
 NEEDS_INFO = frozenset({"base", "properties"})
 NEEDS_HEAD_CALIB = frozenset({"base", "cameras"})
 NEEDS_WRIST_CALIBS = frozenset({"base", "properties"})
@@ -157,7 +157,15 @@ def convert_episode_remote(item: WorkItem, layers: list[str], overwrite: bool) -
     """
     from huggingface_hub import hf_hub_download
 
-    from hiw_500 import base_layer, camera_layer, ir_layer, odom_layer, properties_layer, urdf_layer
+    from hiw_500 import (
+        base_layer,
+        camera_layer,
+        derived_archetypes_layer,
+        ir_layer,
+        odom_layer,
+        properties_layer,
+        urdf_layer,
+    )
     from hiw_500.base_layer import Episode, EpisodeInfo
 
     print("creating storage client…")
@@ -222,6 +230,7 @@ def convert_episode_remote(item: WorkItem, layers: list[str], overwrite: bool) -
         out_dir = root / "rrds"
         builders = {
             "base": lambda: base_layer.convert_episode(episode, out_dir),
+            "derived_archetypes": lambda: derived_archetypes_layer.convert_episode(episode, out_dir),
             "urdf": lambda: urdf_layer.convert_episode(_urdf_tree(), episode, out_dir),
             "odom": lambda: odom_layer.convert_episode(episode, out_dir),
             "cameras": lambda: camera_layer.convert_episode(episode, out_dir),
