@@ -19,9 +19,9 @@ from hiw_500.blueprint import build_blueprint
 # One entry per view in `build_blueprint`: the 3D scene; head pair, wrist RGB pair, and four wrist
 # IR panes; the joint, end-effector, and two gripper plots; the subtask timeline.
 EXPECTED_VIEWS = {"3D": 1, "2D": 8, "TimeSeries": 4, "StateTimeline": 1}
-# One `SeriesLines` instruction per plotted series: 29 joints x 3 signals, 12 EE fields x 2 arrays,
-# 4 dex1 jaw angles, 4 gripper controls.
-EXPECTED_SERIES = 29 * 3 + 12 * 2 + 4 + 4
+# One `SeriesLines` instruction per plotted series: 29 joint angles, 12 EE fields x 2 arrays, 4 dex1
+# jaw angles, 4 gripper controls.
+EXPECTED_SERIES = 29 + 12 * 2 + 4 + 4
 
 
 def _tally(rbl: Path) -> tuple[Counter[str], int]:

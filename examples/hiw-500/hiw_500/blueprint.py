@@ -17,6 +17,7 @@ from rerun.blueprint.visualizers import Visualizer
 
 from hiw_500.base_layer import APPLICATION_ID, G1_JOINT_NAMES, MSG_LOWSTATE, MSG_MOTOR_CMD, MSG_MOTOR_STATE
 from hiw_500.derived_archetypes_layer import EE_NAMES, MSG_WBC, WBC_TOPIC
+from hiw_500.odom_layer import START_FRAME
 from rrd_datasets_common.paths import default_blueprint_path
 
 BLUEPRINT_PATH = default_blueprint_path("hiw-500")
@@ -57,12 +58,13 @@ def _series(component: str, selector: str, name: str) -> Visualizer:
 
 
 def joint_series() -> list[Visualizer]:
-    """`<joint>/<signal>` for the 29 real motors of the 35-slot `motor_state` array, three signals each."""
-    return [
-        _series(MSG_LOWSTATE, f".data.motor_state[{index}].{signal}", f"{joint}/{signal}")
-        for signal in ("q", "dq", "tau_est")
-        for index, joint in enumerate(G1_JOINT_NAMES)
-    ]
+    """
+    The angle of each of the 29 real motors in the 35-slot `motor_state` array, named by joint.
+
+    Only the angle: every series costs render time, and `dq` and `tau_est` sit in the same struct
+    for a mapping or a drag onto the view when wanted.
+    """
+    return [_series(MSG_LOWSTATE, f".data.motor_state[{index}].q", joint) for index, joint in enumerate(G1_JOINT_NAMES)]
 
 
 def ee_series() -> list[Visualizer]:
@@ -114,9 +116,11 @@ def build_blueprint() -> rrb.Blueprint:
             rrb.Horizontal(
                 # Left: 3D scene with the subtask state timeline beneath it.
                 rrb.Vertical(
-                    # 3D scene in the odom frame: robot mesh + FK, base, EE positions, left head cam.
-                    # The pose lives in the named frame graph (`odom -> pelvis -> …`), so the view has to
-                    # target `odom`; left at the root frame it renders empty ("No transform path").
+                    # 3D scene in the episode's `start` frame: robot mesh + FK, EE positions, left head cam.
+                    # `start` is fixed in `odom` at the robot's initial pose (odom layer), so one eye frames
+                    # every episode alike while the robot moves through a still world. The frame graph
+                    # (`odom -> pelvis -> …`) has to connect: left at the root frame the view renders empty
+                    # ("No transform path").
                     rrb.Spatial3DView(
                         origin="/",
                         name="Scene",
@@ -130,9 +134,10 @@ def build_blueprint() -> rrb.Blueprint:
                             "+ /lerobot/ee_state/**",
                             "+ /lerobot/ee_action/**",
                         ],
-                        spatial_information=rrb.SpatialInformation(target_frame="odom"),
+                        spatial_information=rrb.SpatialInformation(target_frame=START_FRAME),
+                        # 1.9 m off the robot's rear-left quarter, looking at its hip (0.7 m up).
                         eye_controls=rrb.archetypes.EyeControls3D(
-                            position=[-2.2, -3.2, 0.7], look_target=[-1.8, -1.9, 0.6]
+                            position=[-1.2, -1.38, 1.12], look_target=[0.0, 0.0, 0.6]
                         ),
                         # Pull the head image plane close (25 cm) and make it semi-transparent so it
                         # doesn't occlude the robot/scene behind it. Scoped to the 3D view only.
@@ -144,7 +149,7 @@ def build_blueprint() -> rrb.Blueprint:
                         },
                     ),
                     rrb.StateTimelineView(origin="/task/subtask", name="Subtasks"),
-                    row_shares=[6, 1],
+                    row_shares=[4, 1],
                 ),
                 # Right: the head pair above the wrists, whose colour and infrared views
                 # share one slot as tabs — the same cameras, two modalities.
@@ -176,7 +181,7 @@ def build_blueprint() -> rrb.Blueprint:
             rrb.Horizontal(
                 rrb.TimeSeriesView(
                     origin=LOWSTATE_TOPIC,
-                    name="Joints",
+                    name="Joints (q)",
                     overrides={LOWSTATE_TOPIC: joint_series()},  # type: ignore[dict-item]
                 ),
                 # End-effector poses and gripper controls plot on unrelated scales, so they get

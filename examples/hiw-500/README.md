@@ -6,7 +6,7 @@ Below is the viewer showing a converted episode with the default blueprint.
 
 ![HIW-500 in the Rerun viewer](screenshot.png)
 
-The [default blueprint](#3-view) puts a 3D scene in the `odom` frame on the left with the subtask timeline beneath it, the cameras on the right, and joint, end-effector and gripper plots along the bottom.
+The [default blueprint](#3-view) puts a 3D scene centred on the robot on the left with the subtask timeline beneath it, the cameras on the right, and joint, end-effector and gripper plots along the bottom.
 The camera pane shows the head pair above the wrists, where an `RGB` and an `IR` tab switch between the two modalities of the same cameras.
 
 There are two ways to run it.
@@ -222,7 +222,7 @@ Every message stays whole: a custom `homies/*` or `unitree_go/*` message is one 
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------- | ------------------------------------- |
 | `/camera/head/image/compressed`           | `EncodedImage`, `CompressedImage:{header,format}`; the eyes split to `/camera/head/{left,right}`                                 | ✅                   | Scene, Head L, Head R                 |
 | `/camera/<side>_wrist/image/compressed`   | `EncodedImage`, `CompressedImage:{header,format}`                                                                                | ✅                   | Wrist L, Wrist R                      |
-| `/stamped/lowstate`                       | `homies.msg.LowStateStamped:message`                                                                                             | ✅                   | Joints                                |
+| `/stamped/lowstate`                       | `homies.msg.LowStateStamped:message`                                                                                             | ✅                   | Joints (q)                            |
 | `/stamped/lowcmd`                         | `homies.msg.LowCmdStamped:message`                                                                                               | ✅                   | —                                     |
 | `/stamped/secondary_imu`                  | `homies.msg.IMUStateStamped:message`                                                                                             | ✅                   | —                                     |
 | `/stamped/dex1/<side>/{cmd,state}`        | `homies.msg.Motor{Cmd,State}Stamped:message`                                                                                     | ✅                   | Gripper(Dex1)                         |
@@ -236,14 +236,15 @@ Every message stays whole: a custom `homies/*` or `unitree_go/*` message is one 
 | `/camera/<side>_wrist/ir{1,2}/compressed` | `EncodedImage`, `CompressedImage:{header,format}`                                                                                | `ir`                 | IR tab                                |
 | `/wbc_lerobot`                            | `wbc_lerobot:message`; `Transform3D` at `/lerobot/{ee_state,ee_action}/<side>`                                                   | `derived_archetypes` | End-effector, Gripper(LeRobot), Scene |
 | `/stamped/lowstate`, URDF                 | `Asset3D`, `Transform3D` at `/robot/**`                                                                                          | `urdf`               | Scene                                 |
-| `/lf/odommodestate`                       | `Transform3D` at `/odom/pelvis`                                                                                                  | `odom`               | Scene                                 |
+| `/lf/odommodestate`                       | `Transform3D` at `/odom/pelvis` and `/odom/start`                                                                                | `odom`               | Scene                                 |
 | head calibration                          | `Pinhole`, `Transform3D` on `/camera/head/{left,right}`                                                                          | `cameras`            | Scene                                 |
 
 ### Also in the recording
 
-The blueprint plots the joint `q`/`dq`/`tau_est`, the end-effector arrays, the dex1 jaw angles and the teleop gripper inputs.
+The blueprint plots the joint angles `q`, the end-effector arrays, the dex1 jaw angles and the teleop gripper inputs.
 Every other field sits in the same structs, ready to plot: add the entity to a time series view, or map a series onto a field the way `blueprint.py` does.
 
+- **Joint rates and torques** — `dq` and `tau_est` in `data.motor_state[i]` of `/stamped/lowstate`.
 - **Motor health** — `data.motor_state[i]` in `/stamped/lowstate`.
 - **Commands and gains** — `data.motor_cmd[i]` in `/stamped/lowcmd`; `data.cmds[0]` in the dex1 command topics.
 - **Gripper rates** — `data.states[0]` in the dex1 state topics.
@@ -285,7 +286,7 @@ Unitree distributes it under the [BSD-3-Clause license](https://github.com/unitr
 ### Odometry layer
 
 `hiw_500/odom_layer.py` — This layer connects the robot to the world by adding the `odom → pelvis`
-transform so the whole robot moves through the scene.
+transform so the whole robot moves through the scene, and a static `start` frame at the robot's initial pose, which the default 3D view targets so every episode opens framed alike.
 
 ### Camera layer
 
