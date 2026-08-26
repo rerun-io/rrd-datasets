@@ -264,7 +264,7 @@ Each layer is a separate module that writes its own .rrd.
 
 `hiw_500/base_layer.py` — Everything in the MCAP, as recorded.
 Each decoded message stays one struct, the file's own records (schemas, channel QoS, metadata, statistics) come along, and only the wrist IR streams go to their own layer.
-The stereo head image is split into its two eyes; the original stays too.
+The stereo head image is split into its two eyes; the recorded frame stays too, since the crop is not byte-exact at the seam.
 Beside the MCAP it logs the sidecars: `info.json`, the calibration files as `CalibrationFile` components, and the joint labels.
 A census compares the decoded rows with the MCAP summary; a channel that lost messages is flagged (`has_undecodable`, `undecodable_topics`) and its raw bytes are kept.
 

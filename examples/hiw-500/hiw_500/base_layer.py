@@ -123,11 +123,12 @@ def const_str(value: str) -> Callable[[pa.Array], pa.Array]:
 
 def crop_jpegs(left: bool) -> Callable[[pa.Array], pa.Array]:
     """
-    Split each side-by-side stereo JPEG into its left/right half, losslessly.
+    Split each side-by-side stereo JPEG into its left/right half in the compressed domain.
 
-    `_TJ.crop` crops in the JPEG compressed domain (no pixel decode/encode); the head halves are
-    640 wide (MCU-aligned), so the crop is exact and lossless. Bytes move through numpy buffers
-    rather than Python int lists, which keeps the Arrow `list<uint8>` round-trip cheap.
+    `_TJ.crop` keeps the DCT coefficients (no pixel decode/encode), so every block decodes as before
+    except the two columns at the cut, where 4:2:0 chroma is interpolated against a new image edge.
+    Bytes move through numpy buffers rather than Python int lists, which keeps the Arrow
+    `list<uint8>` round-trip cheap.
     """
 
     def run(blob: pa.Array) -> pa.Array:
@@ -210,9 +211,9 @@ def base_stream(path: Path) -> LazyChunkStream:
     """
     One McapReader stream over every topic but the wrist IR; the decoded topics pass through whole.
 
-    No scalars are derived: the blueprint maps its series onto the struct fields. Both lenses run
-    with `forward_all`, so their inputs survive: the side-by-side head blob stays beside the two
-    eyes split from it, and every camera blob keeps its codec tag next to it.
+    No scalars are derived: the blueprint maps its series onto the struct fields. Both lenses forward
+    their input: the side-by-side head blob stays beside the two eyes split from it, because the
+    crop is not byte-exact at the seam, and every camera blob keeps its codec tag next to it.
     """
     stream = McapReader(str(path), exclude_topic_regex=IR_TOPICS).stream()
     stream = stream.lenses(head_split_lenses(), content=HEAD_TOPIC, output_mode="forward_all")
