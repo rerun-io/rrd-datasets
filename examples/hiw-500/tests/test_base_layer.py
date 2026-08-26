@@ -3,9 +3,9 @@ Tests for the base layer's calibration passthrough, series labels, and channel c
 
 Calibration files are archived verbatim, so both halves of that promise are guarded here: the file
 text survives byte for byte, and the per-serial wrist files keep one entity path across rigs. The
-census is what makes silently dropped messages visible, so it runs against synthetic chunks shaped
-exactly as `McapReader` emits them — a statistics table on `/__mcap_properties`, a static channel
-id per raw topic, and decoded rows on the topic entity.
+census is what makes silently dropped messages visible, so it runs against the summary's counts and
+synthetic chunks shaped as `McapReader` emits them: decoded rows on the topic entity, one chunk
+family per component.
 """
 
 from __future__ import annotations
@@ -23,11 +23,10 @@ from rerun.experimental import Chunk
 
 from hiw_500.base_layer import (
     CALIBRATION_ARCHETYPE,
-    CHANNEL_ID,
     EE_NAMES,
     G1_JOINT_NAMES,
+    MCAP_PROPERTY,
     PROPERTY_PATH,
-    STAT_CHANNEL_COUNTS,
     Episode,
     EpisodeInfo,
     _calibration_leaves,
@@ -35,6 +34,7 @@ from hiw_500.base_layer import (
     calibration_components,
     census_chunk,
     has_ir,
+    mcap_chunk,
     names_chunks,
     undecodable_topics,
 )
@@ -158,39 +158,12 @@ def test_names_ride_statically_beside_the_structs() -> None:
     assert _list_cell(chunks["/wbc_lerobot"], "ee_names") == EE_NAMES
 
 
-# `McapStatistics:channel_message_counts` as the reader emits it: one instance per row holding the
-# whole channel_id -> message_count table.
-COUNTS_TYPE = pa.list_(pa.struct([("channel_id", pa.uint16()), ("message_count", pa.uint64())]))
-
 LOWSTATE = "/stamped/lowstate"
 DEX1_STATE = "/stamped/dex1/left/state"
 
 
-def _column(descriptor: str, values: pa.Array) -> rr.ComponentColumn:
-    return rr.ComponentColumn(descriptor, rr.AnyBatchValue(descriptor, values))
-
-
-def _statistics_chunk(counts: dict[int, int]) -> Chunk:
-    """The MCAP summary's own per-channel message counts."""
-    table = [{"channel_id": channel_id, "message_count": count} for channel_id, count in counts.items()]
-    return Chunk.from_columns(
-        "/__mcap_properties",
-        indexes=[],
-        columns=[_column(STAT_CHANNEL_COUNTS, pa.array([table], type=COUNTS_TYPE))],
-    )
-
-
-def _channel_chunk(topic: str, channel_id: int) -> Chunk:
-    """A raw topic entity's static channel id — the join key into the statistics table."""
-    return Chunk.from_columns(
-        topic,
-        indexes=[],
-        columns=[_column(CHANNEL_ID, pa.array([channel_id], type=pa.uint16()))],
-    )
-
-
 def _decoded_chunk(entity: str, rows: int) -> Chunk:
-    """`rows` decoded messages on the entity the census counts a topic by."""
+    """`rows` decoded messages on a topic entity."""
     return Chunk.from_columns(
         entity,
         indexes=[rr.TimeColumn("message_publish_time", timestamp=np.arange(rows).astype("datetime64[ns]"))],
@@ -198,29 +171,36 @@ def _decoded_chunk(entity: str, rows: int) -> Chunk:
     )
 
 
+def _derived_chunk(entity: str, rows: int) -> Chunk:
+    """A second chunk family on the entity, as a lens or a second reader adds: one row per message again."""
+    return Chunk.from_columns(
+        entity,
+        indexes=[rr.TimeColumn("message_publish_time", timestamp=np.arange(rows).astype("datetime64[ns]"))],
+        columns=rr.TextDocument.columns(text=["x"] * rows),
+    )
+
+
 def test_an_episode_that_decoded_everything_flags_nothing() -> None:
+    expected = {LOWSTATE: 5, "/annotation": 2}
     chunks = [
-        _statistics_chunk({1: 5, 2: 2}),
-        _channel_chunk(LOWSTATE, 1),
-        _channel_chunk("/annotation", 2),
         _decoded_chunk(LOWSTATE, 3),  # a topic's rows may arrive in several chunks
         _decoded_chunk(LOWSTATE, 2),
-        _decoded_chunk("/annotation", 2),  # a passthrough topic counts rows on its own entity
+        _decoded_chunk("/annotation", 2),
     ]
-    assert undecodable_topics(chunks) == []
+    assert undecodable_topics(expected, chunks) == []
 
 
 def test_topics_short_of_their_channel_count_are_flagged() -> None:
-    chunks = [
-        _statistics_chunk({1: 5, 2: 2, 3: 5126}),
-        _channel_chunk(LOWSTATE, 1),
-        _channel_chunk("/annotation", 2),
-        _channel_chunk(DEX1_STATE, 3),
-        _decoded_chunk(LOWSTATE, 5),
-        _decoded_chunk("/annotation", 1),
-    ]
+    expected = {LOWSTATE: 5, "/annotation": 2, DEX1_STATE: 5126}
+    chunks = [_decoded_chunk(LOWSTATE, 5), _decoded_chunk("/annotation", 1)]
     # dex1 decoded none of its 5126 messages (the Feb 2026 payload mismatch); /annotation lost one.
-    assert undecodable_topics(chunks) == ["/annotation", DEX1_STATE]
+    assert undecodable_topics(expected, chunks) == ["/annotation", DEX1_STATE]
+
+
+def test_a_second_component_on_the_entity_is_not_more_messages() -> None:
+    expected = {LOWSTATE: 4}
+    chunks = [_decoded_chunk(LOWSTATE, 2), _derived_chunk(LOWSTATE, 2)]
+    assert undecodable_topics(expected, chunks) == [LOWSTATE]
 
 
 def test_the_census_verdict_is_an_episode_property() -> None:
@@ -233,6 +213,15 @@ def test_the_census_verdict_is_an_episode_property() -> None:
     clean = census_chunk([])
     assert _cell(clean, "has_undecodable") is False
     assert _list_cell(clean, "undecodable_topics") == []
+
+
+def test_the_mcap_header_is_an_episode_property() -> None:
+    chunk = mcap_chunk("ros2", "libmcap 0.8.0", [""])
+    assert chunk.entity_path == f"/__properties/{MCAP_PROPERTY}"
+    assert chunk.is_static
+    assert _cell(chunk, "profile") == "ros2"
+    assert _cell(chunk, "library") == "libmcap 0.8.0"
+    assert _list_cell(chunk, "compression") == ["none"]
 
 
 # A sidecar covering every leaf kind the vendors use: nested dicts, a matrix, flat lists of floats

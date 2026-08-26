@@ -17,8 +17,8 @@ from __future__ import annotations
 import argparse
 import io
 import json
-from collections import Counter
-from collections.abc import Callable, Iterable
+import re
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -28,7 +28,7 @@ import pyarrow as pa
 import rerun as rr
 import yaml
 from PIL import Image
-from rerun.experimental import Chunk, DeriveLens, LazyChunkStream, McapReader, OptimizationProfile, Selector
+from rerun.experimental import Chunk, DeriveLens, LazyChunkStream, McapInfo, McapReader, OptimizationProfile, Selector
 from turbojpeg import TurboJPEG
 
 from rrd_datasets_common.paths import dataset_data_dir, dataset_rrd_dir, layer_relpath, resolve_input_path
@@ -43,6 +43,8 @@ APPLICATION_ID = "hiw_500"
 # `property:episode:<name>`. `rr.RecordingStream.send_property(PROPERTY, …)` writes this path.
 PROPERTY = "episode"
 PROPERTY_PATH = f"/__properties/{PROPERTY}"
+# The MCAP header as a recording property: `property:mcap:<name>` columns in the catalog.
+MCAP_PROPERTY = "mcap"
 
 # Component identifiers of the decoded messages, one struct column per topic. `homies/*` wraps a
 # std_msgs Header around a unitree_hg payload; the definitions are at
@@ -461,59 +463,65 @@ def has_ir(ep: Episode) -> bool:
 # channel census
 # --------------------------------------------------------------------------------------
 
-# Emitted by McapReader: the file's per-channel message counts (on `/__mcap_properties`) and each
-# topic entity's channel id — the join key between the two.
-STAT_CHANNEL_COUNTS = "McapStatistics:channel_message_counts"
-CHANNEL_ID = "McapChannel:id"
 
-
-def undecodable_topics(chunks: Iterable[Chunk]) -> list[str]:
+def expected_message_counts(info: McapInfo, exclude: Iterable[str] = ()) -> dict[str, int]:
     """
-    Topics whose decoded rows fall short of the MCAP's own per-channel message counts.
+    Per-topic message counts from the MCAP summary, without the topics matching an `exclude` pattern.
 
-    A message that fails CDR decoding is discarded without a row or an exception (e.g. the Feb
-    2026 Clothes-Washing sessions declare `MotorStateStamped` on the left dex1 state channel but
-    carry smaller `MotorCmd` payloads), so the RRD silently under-reports the channel. The MCAP's
-    authoritative counts arrive in the stream itself (statistics on `/__mcap_properties`), keyed
-    to each topic entity by its static `McapChannel:id` row. Decoded rows are counted on the topic
-    entity itself, which every topic keeps whole: the structs, the text rows and the head blobs
-    beside the halves split from them.
+    A channel the summary gives no count for cannot be checked and is left out.
     """
-    expected: dict[int, int] = {}
-    channel_ids: dict[str, list[int]] = {}
-    decoded: Counter[str] = Counter()
+    skipped = [re.compile(pattern) for pattern in exclude]
+    return {
+        channel.topic: channel.message_count
+        for channel in info.channels
+        if channel.message_count is not None and not any(pattern.match(channel.topic) for pattern in skipped)
+    }
+
+
+def undecodable_topics(expected: Mapping[str, int], chunks: Iterable[Chunk]) -> list[str]:
+    """
+    Topics whose decoded rows fall short of the MCAP's own message counts.
+
+    A message that fails CDR decoding is skipped without a row (e.g. the Feb 2026 Clothes-Washing
+    sessions declare `MotorStateStamped` on the left dex1 state channel but carry smaller `MotorCmd`
+    payloads), so the recording silently under-reports the channel. Rows are counted per component:
+    a topic entity carries several chunk families (the decoded message, a lens output, a second
+    reader's columns), each with one row per decoded message, so summing chunks would count a
+    message several times.
+    """
+    decoded: dict[str, dict[str, int]] = {}
     for chunk in chunks:
-        if not chunk.is_static:
-            decoded[chunk.entity_path] += chunk.num_rows
+        if chunk.is_static:
             continue
-        batch = chunk.to_record_batch()
-        for index, column_field in enumerate(batch.schema):
-            if column_field.name == STAT_CHANNEL_COUNTS:
-                for row in batch.column(index).to_pylist():
-                    for entry in row[0] if row and isinstance(row[0], list) else row:
-                        expected[int(entry["channel_id"])] = int(entry["message_count"])
-            elif column_field.name == CHANNEL_ID:
-                for row in batch.column(index).to_pylist():
-                    channel_ids.setdefault(chunk.entity_path, []).extend(int(value) for value in row)
-    return sorted(
-        topic
-        for topic, ids in channel_ids.items()
-        if decoded[topic] < sum(expected.get(channel_id, 0) for channel_id in ids)
-    )
+        per_component = decoded.setdefault(chunk.entity_path, {})
+        for name in chunk.to_record_batch().schema.names:
+            if name != "rerun.controls.RowId" and name not in chunk.timeline_names:
+                per_component[name] = per_component.get(name, 0) + chunk.num_rows
+    return sorted(topic for topic, count in expected.items() if max(decoded.get(topic, {}).values(), default=0) < count)
+
+
+def raw_stream(path: Path, topics: list[str]) -> LazyChunkStream:
+    """The messages of `topics` as their CDR bytes (`McapMessage:data`), for channels the decoders drop rows from."""
+    patterns = [f"^{re.escape(topic)}$" for topic in topics]
+    return McapReader(str(path), decoders=["raw"], include_topic_regex=patterns).stream()
 
 
 def census_chunk(topics: list[str]) -> Chunk:
     """The census verdict as a recording property, so the catalog can filter on it."""
-    return Chunk.from_columns(
-        PROPERTY_PATH,
-        indexes=[],
-        columns=rr.AnyValues.columns(
-            has_undecodable=[bool(topics)],
-            # Typed explicitly: an inferred empty list arrives as `list<null>` and then drops
-            # the topics of every episode that does have failures.
-            undecodable_topics=pa.array([topics], type=pa.list_(pa.string())),
+    return Chunk.from_property(
+        PROPERTY,
+        rr.AnyValues(
+            has_undecodable=bool(topics),
+            # Typed explicitly: an inferred empty list arrives as `list<null>`.
+            undecodable_topics=pa.array(topics, type=pa.string()),
         ),
     )
+
+
+def mcap_chunk(profile: str, library: str, codecs: list[str]) -> Chunk:
+    """The MCAP header as a recording property; the empty codec name MCAP uses for uncompressed chunks reads `none`."""
+    compression = pa.array([codec or "none" for codec in codecs], type=pa.string())
+    return Chunk.from_property(MCAP_PROPERTY, rr.AnyValues(profile=profile, library=library, compression=compression))
 
 
 # --------------------------------------------------------------------------------------
@@ -577,10 +585,10 @@ def convert_episode(ep: Episode, rrd_root: Path) -> Path:
     """
     Convert one episode into an optimized base-layer `.rrd` and return its path.
 
-    Merges the base entity stream with the sidecars (`info.json` metadata, the parsed calibration
-    files, the series labels), runs the channel census on the collected store, then writes a single
-    object-store-optimized recording with the census verdict as a recording property, stamped with
-    `application_id` / `recording_id`.
+    Merges the base entity stream with the camera fields and the sidecars (`info.json` metadata, the
+    parsed calibration files, the series labels), then checks the collected store against the MCAP
+    summary: a channel that came up short keeps its raw bytes. The census verdict and the MCAP
+    header ride along as recording properties.
     """
     out_path = rrd_root / layer_relpath("base", ep.recording_id)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -591,9 +599,15 @@ def convert_episode(ep: Episode, rrd_root: Path) -> Path:
         LazyChunkStream.from_iter(calibration_chunks(ep) + names_chunks()),
     )
     store = merged.collect(optimize=OptimizationProfile.OBJECT_STORE)
-    census = census_chunk(undecodable_topics(store.stream()))
-    final = LazyChunkStream.merge(store.stream(), LazyChunkStream.from_iter([census]))
-    final.write_rrd(str(out_path), application_id=APPLICATION_ID, recording_id=ep.recording_id)
+    info = McapReader(str(ep.mcap)).info()
+    short = undecodable_topics(expected_message_counts(info, exclude=IR_TOPICS), store.stream())
+    properties = [census_chunk(short), mcap_chunk(info.profile, info.library, [c.codec for c in info.compression])]
+    streams = [store.stream(), LazyChunkStream.from_iter(properties)]
+    if short:
+        streams.append(raw_stream(ep.mcap, short))
+    LazyChunkStream.merge(*streams).write_rrd(
+        str(out_path), application_id=APPLICATION_ID, recording_id=ep.recording_id
+    )
     return out_path
 
 
