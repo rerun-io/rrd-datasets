@@ -18,6 +18,7 @@ Run:  pixi run -e hiw convert-ir            # all episodes under data/HIW-500/
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 
 from rerun.experimental import LazyChunkStream, McapReader, OptimizationProfile
@@ -25,36 +26,41 @@ from rerun.experimental import LazyChunkStream, McapReader, OptimizationProfile
 from hiw_500.base_layer import (
     APPLICATION_ID,
     DATASET_ROOT,
-    DROP_COMPONENTS,
+    IR_TOPICS,
     RRD_ROOT,
     Episode,
+    camera_fields_stream,
     discover_episodes,
     episode_from_mcap,
     media_type_lens,
 )
 from rrd_datasets_common.paths import layer_relpath
 
-IR_TOPICS = ["^/camera/(left|right)_wrist/ir[12]/compressed$"]
 # Reader bookkeeping entities, emitted for every mcap even when no topic matches.
 MCAP_BOOKKEEPING = ["/__mcap_metadata", "/__mcap_properties"]
 
 
 def ir_stream(path: Path) -> LazyChunkStream:
-    """The wrist IR streams as EncodedImage entities at their topic paths, tagged as JPEG."""
+    """The wrist IR streams as EncodedImage entities at their topic paths, tagged as JPEG, with every message field kept."""
     stream = McapReader(str(path), include_topic_regex=IR_TOPICS).stream()
     # forward_all so the blob (the lens's input, hence "consumed") survives alongside the new tag.
     stream = stream.lenses(media_type_lens(), content="/camera/**", output_mode="forward_all")
-    return stream.drop(content=MCAP_BOOKKEEPING).drop(components=DROP_COMPONENTS)
+    return LazyChunkStream.merge(stream.drop(content=MCAP_BOOKKEEPING), camera_fields_stream(path, IR_TOPICS))
+
+
+def records_ir(path: Path) -> bool:
+    """Whether the MCAP carries a wrist IR channel, read from its summary."""
+    is_ir = re.compile(IR_TOPICS[0]).match
+    return any(is_ir(channel.topic) for channel in McapReader(str(path)).info().channels)
 
 
 def convert_episode(ep: Episode, rrd_root: Path) -> Path | None:
     """Write the episode's ir layer, or return `None` when it records no IR streams."""
-    chunks = ir_stream(ep.mcap).to_chunks()
-    if not chunks:
+    if not records_ir(ep.mcap):
         return None
     out_path = rrd_root / layer_relpath("ir", ep.recording_id)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    LazyChunkStream.from_iter(chunks).collect(optimize=OptimizationProfile.OBJECT_STORE).write_rrd(
+    ir_stream(ep.mcap).collect(optimize=OptimizationProfile.OBJECT_STORE).write_rrd(
         str(out_path), application_id=APPLICATION_ID, recording_id=ep.recording_id
     )
     return out_path

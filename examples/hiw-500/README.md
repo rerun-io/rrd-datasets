@@ -6,7 +6,7 @@ Below is the viewer showing a converted episode with the default blueprint.
 
 ![HIW-500 in the Rerun viewer](screenshot.png)
 
-The [default blueprint](#3-view) puts a 3D scene in the `odom` frame on the left with the subtask timeline beneath it, the cameras on the right, and joint, end-effector and gripper plots along the bottom.
+The [default blueprint](#3-view) puts a 3D scene centred on the robot on the left with the subtask timeline beneath it, the cameras on the right, and joint, end-effector and gripper plots along the bottom.
 The camera pane shows the head pair above the wrists, where an `RGB` and an `IR` tab switch between the two modalities of the same cameras.
 
 There are two ways to run it.
@@ -32,7 +32,7 @@ Data is downloaded at runtime from the original Hugging Face repo.
 ### Converted `.rrd` Dataset
 
 Converted recordings will be published to a Hugging Face bucket when ready.
-They are built from source revision [`2ca7ffcd`](https://huggingface.co/datasets/BitRobot/HIW-500/tree/2ca7ffcd85ec5212f81ae08491a4076bf48ea841), dated 2026-06-29, with rerun-sdk 0.34.1.
+They are built from source revision [`2ca7ffcd`](https://huggingface.co/datasets/BitRobot/HIW-500/tree/2ca7ffcd85ec5212f81ae08491a4076bf48ea841), dated 2026-06-29, with rerun-sdk 0.36.1.
 
 ## Local Runs
 
@@ -56,8 +56,8 @@ Building it takes a while on the first run, and it is rebuilt when the dataset r
 ### 2. Convert (MCAP → RRD)
 
 Convert downloaded episode MCAP files into multiple Rerun recordings (`.rrd`) that share a `recording_id`.
-The viewer/catalog stacks them as **layers** of one logical recording: a base layer that carries faithful raw streams
-plus other layers that augment the base recording (robot model, odometry, cameras, wrist IR, metadata properties).
+The viewer/catalog stacks them as **layers** of one logical recording: a base layer that carries the raw source
+plus other layers that augment it (typed archetypes derived from the messages, robot model, odometry, cameras, wrist IR, metadata properties).
 Each layer can be added, replaced, or re-run without touching the others.
 
 Build every layer, for the whole set or one episode:
@@ -67,8 +67,8 @@ pixi run -e hiw convert            # all episodes under data/HIW-500/
 pixi run -e hiw convert <ep.mcap>  # a single episode
 ```
 
-> **Note:** This example also includes its own task for each layer (`convert-base`, `convert-urdf`, `convert-odom`,
-> `convert-cameras`, `convert-ir`, `convert-properties`) writing the corresponding `.rrd`.
+> **Note:** This example also includes its own task for each layer (`convert-base`, `convert-derived-archetypes`,
+> `convert-urdf`, `convert-odom`, `convert-cameras`, `convert-ir`, `convert-properties`) writing the corresponding `.rrd`.
 
 See [More about Layers](#more-about-layers) for what each layer carries.
 
@@ -191,7 +191,7 @@ pixi run -e hiw convert-on-modal --dry-run --limit 10
 # Only the base layer:
 pixi run -e hiw convert-on-modal --layers base --limit 0
 
-# Rebuild two derived layers after changing them:
+# Rebuild layers after changing them:
 pixi run -e hiw convert-on-modal --layers cameras,properties --limit 0 --overwrite
 ```
 
@@ -213,23 +213,50 @@ See [observations.md](observations.md) for the full survey.
 
 ## Mapping to Rerun
 
-The table below shows where each source topic lands in the recording.
+The table below shows what each source becomes in the recording, whether the base layer carries it or which layer adds it, and which view of the default blueprint shows it.
+Every topic lands at its own path unless a row says otherwise.
 `<side>` is `left` or `right`.
+Every message stays whole: a custom `homies/*` or `unitree_go/*` message is one struct column named after its schema, with every field, and the blueprint picks its series out of those structs.
 
-| Source                                    | Entity path                                                                                    | Archetype                  |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------- |
-| `/camera/head/image/compressed`           | `/camera/head/{left,right}`                                                                    | `EncodedImage`, `Pinhole`  |
-| `/camera/<side>_wrist/image/compressed`   | same path                                                                                      | `EncodedImage`             |
-| `/camera/<side>_wrist/ir{1,2}/compressed` | same path                                                                                      | `EncodedImage`             |
-| `/wbc_lerobot`                            | `/lerobot/{ee_state,ee_action}` (12-wide) `+ /<side>` 3D markers, `/lerobot/{gripper,pivot}/…` | `Scalars`, `Transform3D`   |
-| `/stamped/lowstate`                       | `/state/joint/{q,dq,tau}` (29-wide), and forward kinematics to `/robot/**`                     | `Scalars`, `Transform3D`   |
-| `/stamped/lowcmd`                         | `/cmd/joint/q` (29-wide)                                                                       | `Scalars`                  |
-| `/stamped/secondary_imu`                  | `/state/imu/{rpy,gyroscope,accelerometer}` (3-wide)                                            | `Scalars`                  |
-| `/stamped/dex1/<side>/{cmd,state}`        | `/{cmd,state}/gripper/<side>/q`                                                                | `Scalars`                  |
-| `/lf/odommodestate`                       | `/state/base/…`, and the `odom → pelvis` transform                                             | `Scalars`, `Transform3D`   |
-| `/annotation`                             | `/annotation`                                                                                  | `TextDocument`             |
-| `info.json` sidecar                       | `/episode`, `/task/subtask`                                                                    | `AnyValues`, `StateChange` |
-| `calibration/` sidecars                   | `/calibration/…`                                                                               | `CalibrationFile`          |
+| Source                                    | Archetype or component                                                                                                           | In base              | Shown in                              |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------- | ------------------------------------- |
+| `/camera/head/image/compressed`           | `EncodedImage`, `CompressedImage:{header,format}`; the eyes split to `/camera/head/{left,right}`                                 | ✅                   | Scene, Head L, Head R                 |
+| `/camera/<side>_wrist/image/compressed`   | `EncodedImage`, `CompressedImage:{header,format}`                                                                                | ✅                   | Wrist L, Wrist R                      |
+| `/stamped/lowstate`                       | `homies.msg.LowStateStamped:message`                                                                                             | ✅                   | Joints (q)                            |
+| `/stamped/lowcmd`                         | `homies.msg.LowCmdStamped:message`                                                                                               | ✅                   | —                                     |
+| `/stamped/secondary_imu`                  | `homies.msg.IMUStateStamped:message`                                                                                             | ✅                   | —                                     |
+| `/stamped/dex1/<side>/{cmd,state}`        | `homies.msg.Motor{Cmd,State}Stamped:message`                                                                                     | ✅                   | Gripper(Dex1)                         |
+| `/lf/odommodestate`                       | `unitree_go.msg.SportModeState:message`                                                                                          | ✅                   | —                                     |
+| `/wbc_lerobot`                            | `TextDocument`                                                                                                                   | ✅                   | —                                     |
+| `/annotation`                             | `TextDocument`                                                                                                                   | ✅                   | —                                     |
+| every topic                               | `McapSchema`, `McapChannel` (static)                                                                                             | ✅                   | —                                     |
+| MCAP metadata, statistics, header         | `rosbag2`, `McapStatistics`, `profile`/`library`/`compression` at `/__mcap_metadata`, `/__mcap_properties`, `/__properties/mcap` | ✅                   | —                                     |
+| `info.json` subtasks                      | `StateChange` at `/task/subtask`                                                                                                 | ✅                   | Subtasks                              |
+| `calibration/` sidecars                   | `CalibrationFile` at `/calibration/…`                                                                                            | ✅                   | —                                     |
+| `/camera/<side>_wrist/ir{1,2}/compressed` | `EncodedImage`, `CompressedImage:{header,format}`                                                                                | `ir`                 | IR tab                                |
+| `/wbc_lerobot`                            | `wbc_lerobot:message`; `Transform3D` at `/lerobot/{ee_state,ee_action}/<side>`                                                   | `derived_archetypes` | End-effector, Gripper(LeRobot), Scene |
+| `/stamped/lowstate`, URDF                 | `Asset3D`, `Transform3D` at `/robot/**`                                                                                          | `urdf`               | Scene                                 |
+| `/lf/odommodestate`                       | `Transform3D` at `/odom/pelvis` and `/odom/start`                                                                                | `odom`               | Scene                                 |
+| head calibration                          | `Pinhole`, `Transform3D` on `/camera/head/{left,right}`                                                                          | `cameras`            | Scene                                 |
+| `info.json` fields                        | `episode_name`, `task`, `scene`, `start_timestamp_ns`, `end_timestamp_ns`, `duration_sec` at `/__properties/episode`             | `properties`         | —                                     |
+
+### Also in the recording
+
+The blueprint plots the joint angles `q`, the end-effector arrays, the dex1 jaw angles and the teleop gripper inputs.
+Every other field sits in the same structs, ready to plot: add the entity to a time series view, or map a series onto a field the way `blueprint.py` does.
+
+- **Joint rates and torques** — `dq` and `tau_est` in `data.motor_state[i]` of `/stamped/lowstate`.
+- **Motor health** — `data.motor_state[i]` in `/stamped/lowstate`.
+- **Commands and gains** — `data.motor_cmd[i]` in `/stamped/lowcmd`; `data.cmds[0]` in the dex1 command topics.
+- **Gripper rates** — `data.states[0]` in the dex1 state topics.
+- **IMUs** — `data.imu_state` in `/stamped/lowstate`; `/stamped/secondary_imu`.
+- **Base motion** — `position`, `velocity`, `body_height`, `yaw_speed` and the `foot_*` arrays in `/lf/odommodestate`.
+- **Teleop pivot** — `pivot[0…6]` in the `/wbc_lerobot` struct.
+
+### Round trip test (MCAP → RRD → MCAP)
+
+A few basic tests check that the conversion keeps what it should.
+They run on a synthetic file and on a downloaded episode: [`test_camera_roundtrip.py`](tests/test_camera_roundtrip.py) re-encodes every camera message and compares the bytes with the recording, [`test_inventory.py`](tests/test_inventory.py) holds the layers against the MCAP summary, and [`test_census.py`](tests/test_census.py) checks that an undecodable channel keeps its raw bytes. The camera test is byte-level, and the other two only check structure.
 
 ## More about Layers
 
@@ -237,12 +264,16 @@ Each layer is a separate module that writes its own .rrd.
 
 ### Base layer
 
-`hiw_500/base_layer.py` — This layer is a faithful conversion of the raw streams.
-[Mapping to Rerun](#mapping-to-rerun) shows where each topic lands.
-The sidecar files under `calibration/` become a `CalibrationFile` archetype, one component per value, named by its path in the file — `ir1.intrinsics.fx`, `camera_matrix_left`.
-All parsed values are carried as components (with `path` reserved for the sidecar’s relative filename), so the base layer stays a self-contained record of the episode and a reader needs no YAML or JSON parser to reach the numbers.
-A channel census compares decoded rows against the MCAP's own message counts, since a message that fails to decode is dropped silently.
-Its verdict joins the episode properties as `has_undecodable` and `undecodable_topics`, so the catalog can filter on it.
+`hiw_500/base_layer.py` — Everything in the MCAP, as recorded.
+Each decoded message stays one struct, the file's own records (schemas, channel QoS, metadata, statistics) come along, and only the wrist IR streams go to their own layer.
+The stereo head image is split into its two eyes; the recorded frame stays too, since the crop is not byte-exact at the seam.
+Beside the MCAP it logs the sidecars: the subtask boundaries from `info.json`, the calibration files as `CalibrationFile` components, and the joint labels.
+A census compares the decoded rows with the MCAP summary; a channel that lost messages is flagged (`has_undecodable`, `undecodable_topics`) and its raw bytes are kept.
+
+### Derived archetypes layer
+
+`hiw_500/derived_archetypes_layer.py` — This layer holds what the viewer needs typed and the raw messages do not give it: the `/wbc_lerobot` JSON parsed into one struct per message, for the blueprint to plot, and the four end-effector positions as `Transform3D` markers for the 3D scene.
+Episodes without the topic skip this layer.
 
 ### URDF layer
 
@@ -256,7 +287,7 @@ Unitree distributes it under the [BSD-3-Clause license](https://github.com/unitr
 ### Odometry layer
 
 `hiw_500/odom_layer.py` — This layer connects the robot to the world by adding the `odom → pelvis`
-transform so the whole robot moves through the scene.
+transform so the whole robot moves through the scene, and a static `start` frame at the robot's initial pose, which the default 3D view targets so every episode opens framed alike.
 
 ### Camera layer
 
@@ -265,21 +296,20 @@ transform. Episodes without that calibration skip this layer.
 
 ### IR layer
 
-`hiw_500/ir_layer.py` — This layer includes the four wrist IR streams only for episodes that recorded IR.
+`hiw_500/ir_layer.py` — This layer includes the four wrist IR streams only for episodes that recorded IR, with the same `header` and `format` columns and schema rows as the colour cameras in the base layer.
 The default blueprint shows them under the `IR` tab of the wrist camera pane, beside the `RGB` tab carrying the colour streams.
 
 ### Properties layer
 
-`hiw_500/properties_layer.py` — This layer adds per-episode metadata logged as recording properties, which the
-catalog shows as columns to filter, sort, and search on: `task`,
-`duration_sec`, `num_subtasks`, `subtask_labels`, `scene`, `has_ir`, `robot`.
+`hiw_500/properties_layer.py` — This layer adds per-episode metadata logged as recording properties, which the catalog shows as columns to filter, sort, and search on.
 
 ## Rerun APIs demonstrated
 
-- [`McapReader`](https://ref.rerun.io/docs/python/stable/experimental/#rerun.experimental.McapReader) decodes the episode topics, including the custom `homies/*` messages, into chunk streams (`base_layer.py`).
-- [Lenses](https://rerun.io/docs/concepts/query-and-transform/lenses) turn the raw messages into typed components: `Scalars` for the joint signals, `Transform3D` for the base pose, `EncodedImage` for the split stereo head (`base_layer.py`).
+- [`McapReader`](https://ref.rerun.io/docs/python/stable/experimental/#rerun.experimental.McapReader) decodes the episode topics into chunk streams — the custom `homies/*` messages by reflection into structs, the cameras and text topics into archetypes — and its summary drives the channel census (`base_layer.py`).
+- [Lenses](https://rerun.io/docs/concepts/query-and-transform/lenses) turn the raw messages into what the viewer needs typed: `EncodedImage` halves for the split stereo head, `Transform3D` for the base pose and the end-effector markers, a struct from the `/wbc_lerobot` JSON (`base_layer.py`, `odom_layer.py`, `derived_archetypes_layer.py`).
+- [Component mappings](https://rerun.io/docs/howto/visualization/plot-any-scalar) plot the joint, gripper and end-effector series straight out of the message structs, one `VisualizerComponentMapping` per series, so no `Scalars` are materialised (`blueprint.py`).
 - `rerun.urdf.UrdfTree` loads the vendored G1 model and runs forward kinematics from the joint states (`urdf_layer.py`).
-- The [blueprint](https://rerun.io/docs/concepts/visualization/blueprints) API composes the default layout, including the frame-targeted 3D view and the per-series joint labels (`blueprint.py`).
+- The [blueprint](https://rerun.io/docs/concepts/visualization/blueprints) API composes the default layout, including the frame-targeted 3D view and the struct-mapped series (`blueprint.py`).
 - [`CatalogClient`](https://rerun.io/docs/concepts/query-and-transform/catalog-object-model) registers each episode as a dataset segment with named layers and installs the default blueprint (`catalog.py`).
 
 ## References

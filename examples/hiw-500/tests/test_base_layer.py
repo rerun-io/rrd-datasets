@@ -1,11 +1,11 @@
 """
-Tests for the base layer's calibration passthrough, joint arrays, and channel census — no MCAP, no network.
+Tests for the base layer's calibration passthrough, series labels, and channel census — no MCAP, no network.
 
 Calibration files are archived verbatim, so both halves of that promise are guarded here: the file
 text survives byte for byte, and the per-serial wrist files keep one entity path across rigs. The
-census is what makes silently dropped messages visible, so it runs against synthetic chunks shaped
-exactly as `McapReader` emits them — a statistics table on `/__mcap_properties`, a static channel
-id per raw topic, and decoded rows on the counting entity.
+census is what makes silently dropped messages visible, so it runs against the summary's counts and
+synthetic chunks shaped as `McapReader` emits them: decoded rows on the topic entity, one chunk
+family per component.
 """
 
 from __future__ import annotations
@@ -23,25 +23,18 @@ from rerun.experimental import Chunk
 
 from hiw_500.base_layer import (
     CALIBRATION_ARCHETYPE,
-    CENSUS_PROXIES,
-    CHANNEL_ID,
-    EE_NAMES,
     G1_JOINT_NAMES,
-    IMU_NAMES,
+    MCAP_PROPERTY,
     PROPERTY_PATH,
-    STAT_CHANNEL_COUNTS,
     Episode,
     EpisodeInfo,
     _calibration_leaves,
-    _motors,
     calibration_chunks,
     calibration_components,
     census_chunk,
-    ee_names_chunks,
     has_ir,
-    imu_names_chunks,
-    joint_names_chunks,
-    json_array,
+    mcap_chunk,
+    names_chunks,
     undecodable_topics,
 )
 
@@ -153,95 +146,21 @@ def test_ir_is_inferred_from_the_wrist_calibrations(tmp_path: Path) -> None:
     assert not has_ir(_episode(tmp_path / "bare", {"info.json": "{}"}))
 
 
-def _motor_messages(rows: int) -> pa.Array:
-    """Lowstate-shaped rows as the reader emits them (a length-1 message list per row); q of motor i is 100r + i."""
-    return pa.array([
-        [{"data": {"motor_state": [{"q": 100.0 * r + i, "tau_est": 2000.0 + i} for i in range(35)]}}]
-        for r in range(rows)
-    ])
-
-
-def test_the_motor_selector_yields_29_joints_in_motor_order() -> None:
-    """The motor arrays are 35-wide with indices 29-34 unused; the joint arrays must stop at 29."""
-    values = _motors("motor_state", "q").execute_per_row(_motor_messages(2))
-    assert values is not None
-    assert values.to_pylist() == [[100.0 * r + i for i in range(29)] for r in range(2)]
-    taus = _motors("motor_state", "tau_est").execute_per_row(_motor_messages(1))
-    assert taus is not None
-    assert taus.to_pylist() == [[2000.0 + i for i in range(29)]]
-
-
-def test_the_ee_array_keeps_source_order_and_truncates_to_its_labels() -> None:
-    """`json_array` pins the width the series labels assume; the source lays out left before right."""
-    texts = pa.array([json.dumps({"ee_state": [float(i) for i in range(14)]})])
-    (row,) = json_array("ee_state", len(EE_NAMES))(texts).to_pylist()
-    assert row == [float(i) for i in range(12)]
-    assert EE_NAMES[0] == "left/px"
-    assert EE_NAMES[6] == "right/px"
-
-
-def test_ee_names_ride_statically_beside_the_arrays() -> None:
-    chunks = _by_entity(ee_names_chunks())
-    assert set(chunks) == {"/lerobot/ee_state", "/lerobot/ee_action"}
+def test_joint_names_ride_statically_beside_the_structs() -> None:
+    """Element i of the motor arrays is `joint_names[i]`."""
+    chunks = _by_entity(names_chunks())
+    assert set(chunks) == {"/stamped/lowstate", "/stamped/lowcmd"}
     for chunk in chunks.values():
         assert chunk.is_static
-        (row,) = chunk.to_record_batch().column("ee_names").to_pylist()
-        assert row == EE_NAMES
+        assert _list_cell(chunk, "joint_names") == G1_JOINT_NAMES
 
-
-def test_imu_names_ride_statically_beside_the_arrays() -> None:
-    chunks = _by_entity(imu_names_chunks())
-    assert set(chunks) == {f"/state/imu/{name}" for name in IMU_NAMES}
-    for name, axes in IMU_NAMES.items():
-        chunk = chunks[f"/state/imu/{name}"]
-        assert chunk.is_static
-        (row,) = chunk.to_record_batch().column("imu_names").to_pylist()
-        assert row == axes
-
-
-def test_joint_names_ride_statically_beside_the_arrays() -> None:
-    """Series i of every joint array is `joint_names[i]` — the mapping the arrays are read by."""
-    chunks = _by_entity(joint_names_chunks())
-    assert set(chunks) == {"/state/joint", "/cmd/joint"}
-    for chunk in chunks.values():
-        assert chunk.is_static
-        (row,) = chunk.to_record_batch().column("joint_names").to_pylist()
-        assert row == G1_JOINT_NAMES
-
-
-# `McapStatistics:channel_message_counts` as the reader emits it: one instance per row holding the
-# whole channel_id -> message_count table.
-COUNTS_TYPE = pa.list_(pa.struct([("channel_id", pa.uint16()), ("message_count", pa.uint64())]))
 
 LOWSTATE = "/stamped/lowstate"
 DEX1_STATE = "/stamped/dex1/left/state"
 
 
-def _column(descriptor: str, values: pa.Array) -> rr.ComponentColumn:
-    return rr.ComponentColumn(descriptor, rr.AnyBatchValue(descriptor, values))
-
-
-def _statistics_chunk(counts: dict[int, int]) -> Chunk:
-    """The MCAP summary's own per-channel message counts."""
-    table = [{"channel_id": channel_id, "message_count": count} for channel_id, count in counts.items()]
-    return Chunk.from_columns(
-        "/__mcap_properties",
-        indexes=[],
-        columns=[_column(STAT_CHANNEL_COUNTS, pa.array([table], type=COUNTS_TYPE))],
-    )
-
-
-def _channel_chunk(topic: str, channel_id: int) -> Chunk:
-    """A raw topic entity's static channel id — the join key into the statistics table."""
-    return Chunk.from_columns(
-        topic,
-        indexes=[],
-        columns=[_column(CHANNEL_ID, pa.array([channel_id], type=pa.uint16()))],
-    )
-
-
 def _decoded_chunk(entity: str, rows: int) -> Chunk:
-    """`rows` decoded messages on the entity the census counts a topic by."""
+    """`rows` decoded messages on a topic entity."""
     return Chunk.from_columns(
         entity,
         indexes=[rr.TimeColumn("message_publish_time", timestamp=np.arange(rows).astype("datetime64[ns]"))],
@@ -249,29 +168,36 @@ def _decoded_chunk(entity: str, rows: int) -> Chunk:
     )
 
 
+def _derived_chunk(entity: str, rows: int) -> Chunk:
+    """A second chunk family on the entity, as a lens or a second reader adds: one row per message again."""
+    return Chunk.from_columns(
+        entity,
+        indexes=[rr.TimeColumn("message_publish_time", timestamp=np.arange(rows).astype("datetime64[ns]"))],
+        columns=rr.TextDocument.columns(text=["x"] * rows),
+    )
+
+
 def test_an_episode_that_decoded_everything_flags_nothing() -> None:
+    expected = {LOWSTATE: 5, "/annotation": 2}
     chunks = [
-        _statistics_chunk({1: 5, 2: 2}),
-        _channel_chunk(LOWSTATE, 1),
-        _channel_chunk("/annotation", 2),
-        _decoded_chunk(CENSUS_PROXIES[LOWSTATE], 3),  # a topic's rows may arrive in several chunks
-        _decoded_chunk(CENSUS_PROXIES[LOWSTATE], 2),
-        _decoded_chunk("/annotation", 2),  # a passthrough topic counts rows on its own entity
+        _decoded_chunk(LOWSTATE, 3),  # a topic's rows may arrive in several chunks
+        _decoded_chunk(LOWSTATE, 2),
+        _decoded_chunk("/annotation", 2),
     ]
-    assert undecodable_topics(chunks) == []
+    assert undecodable_topics(expected, chunks) == []
 
 
 def test_topics_short_of_their_channel_count_are_flagged() -> None:
-    chunks = [
-        _statistics_chunk({1: 5, 2: 2, 3: 5126}),
-        _channel_chunk(LOWSTATE, 1),
-        _channel_chunk("/annotation", 2),
-        _channel_chunk(DEX1_STATE, 3),
-        _decoded_chunk(CENSUS_PROXIES[LOWSTATE], 5),
-        _decoded_chunk("/annotation", 1),
-    ]
+    expected = {LOWSTATE: 5, "/annotation": 2, DEX1_STATE: 5126}
+    chunks = [_decoded_chunk(LOWSTATE, 5), _decoded_chunk("/annotation", 1)]
     # dex1 decoded none of its 5126 messages (the Feb 2026 payload mismatch); /annotation lost one.
-    assert undecodable_topics(chunks) == ["/annotation", DEX1_STATE]
+    assert undecodable_topics(expected, chunks) == ["/annotation", DEX1_STATE]
+
+
+def test_a_second_component_on_the_entity_is_not_more_messages() -> None:
+    expected = {LOWSTATE: 4}
+    chunks = [_decoded_chunk(LOWSTATE, 2), _derived_chunk(LOWSTATE, 2)]
+    assert undecodable_topics(expected, chunks) == [LOWSTATE]
 
 
 def test_the_census_verdict_is_an_episode_property() -> None:
@@ -284,6 +210,15 @@ def test_the_census_verdict_is_an_episode_property() -> None:
     clean = census_chunk([])
     assert _cell(clean, "has_undecodable") is False
     assert _list_cell(clean, "undecodable_topics") == []
+
+
+def test_the_mcap_header_is_an_episode_property() -> None:
+    chunk = mcap_chunk("ros2", "libmcap 0.8.0", [""])
+    assert chunk.entity_path == f"/__properties/{MCAP_PROPERTY}"
+    assert chunk.is_static
+    assert _cell(chunk, "profile") == "ros2"
+    assert _cell(chunk, "library") == "libmcap 0.8.0"
+    assert _list_cell(chunk, "compression") == ["none"]
 
 
 # A sidecar covering every leaf kind the vendors use: nested dicts, a matrix, flat lists of floats
