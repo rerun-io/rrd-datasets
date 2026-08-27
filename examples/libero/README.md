@@ -87,29 +87,35 @@ We share our survey on the source dataset in [observations.md](observations.md).
 
 ## Mapping to Rerun
 
-The table below shows where each source item lands in the recording, and in which layer.
-The rationale for the dropped items and the kept-but-redundant pair is in [observations.md](observations.md#redundancies).
+The base layer keeps the demo group as `Hdf5Reader` emits it: every dataset is a column named after itself, every attribute a static column, dtypes and array widths unchanged.
+Only the two camera datasets are reshaped, into upright `Image`s.
+The table shows where each source item lands, and in which layer.
+The datasets that repeat others are listed in [observations.md](observations.md#redundancies); they are kept, not plotted.
 
-| Source                                | Entity path                   | Archetype      | Layer      | Notes                                                 |
-| ------------------------------------- | ----------------------------- | -------------- | ---------- | ----------------------------------------------------- |
-| `obs/agentview_rgb`                   | `/camera/agentview`           | `Image`        | base       | flipped vertically; constant `Image:format` static    |
-| `obs/eye_in_hand_rgb`                 | `/camera/eye_in_hand`         | `Image`        | base       | same treatment                                        |
-| `obs/ee_pos`, `obs/ee_ori`            | `/robot/{ee_pos,ee_ori}`      | `Scalars`      | base       | raw rotation vector, magnitude may exceed π           |
-| `obs/joint_states`                    | `/robot/joint_states`         | `Scalars`      | base       | Panda arm joints, radians                             |
-| `obs/gripper_states`                  | `/robot/gripper_states`       | `Scalars`      | base       | finger positions, ±0.04 m, opposite signs             |
-| `actions`                             | `/action`                     | `Scalars`      | base       | `[Δpos ×3, Δrot ×3, gripper]`, all in −1…1            |
-| `rewards`, `dones`                    | `/reward`, `/done`            | `Scalars`      | base       | both kept                                             |
-| `states`, `robot_states`, `ee_states` | — dropped (`ignore_datasets`) | —              | —          | —                                                     |
-| `problem_info` language (file attr)   | `/task/instruction`           | `TextDocument` | base       | static; also a segment property, for filtering        |
-| `model_file` demo attr                | `/replay/model_file`          | `AnyValues`    | base       | static; MuJoCo scene XML, needed for replay           |
-| `init_state` demo attr                | `/replay/init_state`          | `AnyValues`    | base       | static; needed for replay                             |
-| file attrs, `num_samples`, filename   | segment properties            | —              | properties | suite, scene, task language, num_samples, source file |
+| Source                                                                                | Entity path                       | Component / archetype  | Layer      | Notes                                                                           |
+| ------------------------------------------------------------------------------------- | --------------------------------- | ---------------------- | ---------- | ------------------------------------------------------------------------------- |
+| `actions`, `rewards`, `dones`, `states`, `robot_states`                               | `/demo`                           | one column per dataset | base       | `actions[7]` in −1…1, `rewards`/`dones` u8, `states[47…110]`, `robot_states[9]` |
+| `obs/joint_states`, `obs/gripper_states`, `obs/ee_pos`, `obs/ee_ori`, `obs/ee_states` | `/demo/obs`                       | one column per dataset | base       | radians, metres and the raw rotation vector, as stored                          |
+| `obs/agentview_rgb`, `obs/eye_in_hand_rgb`                                            | `/camera/{agentview,eye_in_hand}` | `Image`                | base       | flipped upright; the static `Image:format` carries the frame shape              |
+| demo attrs `model_file`, `init_state`, `num_samples`                                  | `/demo/__hdf5_properties`         | static columns         | base       | MuJoCo scene XML and initial state, enough to replay the demo                   |
+| file attrs `problem_info`, `env_args`, `bddl_file_name`, `env_name`, …                | `/__hdf5_properties`              | static columns         | base       | the two JSON attrs also parsed, as `problem_info:parsed` and `env_args:parsed`  |
+| `problem_info.language_instruction`                                                   | `/task/instruction`               | `TextDocument`         | base       | static, for the instruction pane                                                |
+| file attrs, `num_samples`, filename                                                   | segment properties                | —                      | properties | suite, scene, task language, num_samples, source file                           |
+
+No `Scalars` are derived.
+The default blueprint plots the arrays straight from their columns through component mappings and names the series there ([`libero/blueprint.py`](libero/blueprint.py)); a hand-made view shows the same arrays with index labels.
+
+### Round trip test (HDF5 → RRD → HDF5)
+
+Everything the source file holds is in the base layer, so a demo can be written back to HDF5.
+A test ([`tests/test_base_layer.py`](tests/test_base_layer.py)) compares the result with the original, dataset by dataset and attribute by attribute, on the synthesized fixture and on a downloaded demo.
+This is a value-level identity test, not a byte-level one.
 
 ## Rerun APIs demonstrated
 
-- [`Hdf5Reader`](https://ref.rerun.io/docs/python/stable/experimental/#rerun.experimental.Hdf5Reader) reads each demo group into chunk streams, with the redundant items excluded at the reader (`base_layer.py`).
-- [Lenses](https://rerun.io/docs/concepts/query-and-transform/lenses) turn the raw items into typed components: flipped `Image` buffers, `Scalars` for the signal arrays (`base_layer.py`).
-- The [blueprint](https://rerun.io/docs/concepts/visualization/blueprints) API composes the default layout, including the per-series joint and action labels (`blueprint.py`).
+- [`Hdf5Reader`](https://ref.rerun.io/docs/python/stable/experimental/#rerun.experimental.Hdf5Reader) reads each demo group into chunk streams as-is, and the task file's attributes through a second stream over `/data` (`base_layer.py`).
+- [Lenses](https://rerun.io/docs/concepts/query-and-transform/lenses) turn the camera blobs into upright `Image` buffers and parse the JSON attributes into structs (`base_layer.py`).
+- The [blueprint](https://rerun.io/docs/concepts/visualization/blueprints) API composes the default layout; component mappings plot the array columns without derived `Scalars` and carry the series labels (`blueprint.py`).
 
 ## References
 
