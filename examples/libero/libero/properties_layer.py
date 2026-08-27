@@ -19,7 +19,7 @@ from pathlib import Path
 
 import numpy as np
 import rerun as rr
-from rerun.experimental import Hdf5Reader
+from rerun.experimental import Chunk, Hdf5Reader, LazyChunkStream, OptimizationProfile
 
 from libero.base_layer import APPLICATION_ID, RRD_ROOT, demo_keys, task_files, task_language
 from libero.episodes import recording_id
@@ -65,21 +65,22 @@ def convert_demo(reader: Hdf5Reader, facts: TaskFacts, demo: str, rrd_root: Path
     out_path = rrd_root / layer_relpath("properties", rec_id)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with rr.RecordingStream(APPLICATION_ID, recording_id=rec_id) as rec:
-        rec.save(str(out_path))
-        # One property holding every field, so the catalog columns read `property:episode:<name>`.
-        rec.send_property(
-            PROPERTY,
-            rr.AnyValues(
-                suite=[facts.suite],
-                task=[facts.task],
-                scene=[facts.scene],
-                language=[facts.language],
-                env_name=[facts.env_name],
-                num_samples=np.array([num_samples], dtype=np.int64),
-                source_file=[facts.source_file],
-            ),
-        )
+    # One property holding every field, so the catalog columns read `property:episode:<name>`.
+    chunk = Chunk.from_property(
+        PROPERTY,
+        rr.AnyValues(
+            suite=[facts.suite],
+            task=[facts.task],
+            scene=[facts.scene],
+            language=[facts.language],
+            env_name=[facts.env_name],
+            num_samples=np.array([num_samples], dtype=np.int64),
+            source_file=[facts.source_file],
+        ),
+    )
+    LazyChunkStream.from_iter([chunk]).collect(optimize=OptimizationProfile.OBJECT_STORE).write_rrd(
+        str(out_path), application_id=APPLICATION_ID, recording_id=rec_id
+    )
     return out_path
 
 
