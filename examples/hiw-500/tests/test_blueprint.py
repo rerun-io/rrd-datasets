@@ -19,13 +19,13 @@ from hiw_500.blueprint import build_blueprint
 # One entry per view in `build_blueprint`: the 3D scene; head pair, wrist RGB pair, and four wrist
 # IR panes; the joint, end-effector, and two gripper plots; the subtask timeline.
 EXPECTED_VIEWS = {"3D": 1, "2D": 8, "TimeSeries": 4, "StateTimeline": 1}
-# One `SeriesLines` instruction per plotted series: 29 joint angles, 12 EE fields x 2 arrays, 4 dex1
-# jaw angles, 4 gripper controls.
-EXPECTED_SERIES = 29 + 12 * 2 + 4 + 4
+# One `SeriesLines` instruction per selector: the joint array (all 29 angles from one `[]` mapping),
+# 12 EE fields x 2 arrays, 4 dex1 jaw angles, 4 gripper controls.
+EXPECTED_INSTRUCTIONS = 1 + 12 * 2 + 4 + 4
 
 
 def _tally(rbl: Path) -> tuple[Counter[str], int]:
-    """The view-class tally and the plotted-series count of a saved blueprint, read back through the SDK."""
+    """The view-class tally and the `SeriesLines` instruction count of a saved blueprint, read back through the SDK."""
     reader = RrdReader(str(rbl))
     (entry,) = reader.blueprints()
     assert entry.kind == "blueprint"
@@ -47,4 +47,4 @@ def _tally(rbl: Path) -> tuple[Counter[str], int]:
 def test_a_fresh_save_holds_every_declared_view(tmp_path: Path) -> None:
     path = tmp_path / "default.rbl"
     build_blueprint().save(APPLICATION_ID, str(path))
-    assert _tally(path) == (EXPECTED_VIEWS, EXPECTED_SERIES)
+    assert _tally(path) == (EXPECTED_VIEWS, EXPECTED_INSTRUCTIONS)
