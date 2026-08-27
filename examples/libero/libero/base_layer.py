@@ -137,9 +137,8 @@ def demo_stream(reader: Hdf5Reader, demo: str, cameras: list[Camera]) -> LazyChu
     The demo group as the reader emits it, with the cameras as `Image`s and `sim_time` attached.
 
     No dataset is ignored and no scalar is derived: the blueprint maps its series onto the reflected
-    columns, and the redundant `states`, `robot_states` and `ee_states` stay queryable. Each dataset
-    is its own component (`use_structs=False`) so the camera lenses can consume the two blobs and
-    leave the rest untouched.
+    columns. Each dataset is its own component (`use_structs=False`) so the camera lenses can consume the
+    two blobs and leave the rest untouched.
     """
     stream = reader.stream(root_group=f"/data/{demo}", entity_path_prefix=DEMO_ENTITY, use_structs=False)
     stream = stream.lenses(camera_lenses(cameras), content=OBS_ENTITY, output_mode="forward_unmatched")
