@@ -5,8 +5,9 @@ The *base* layer: the whole MCAP as Rerun entities, one optimized RRD per episod
 `recording_id`. Decoded messages stay whole, the file's own records come along, and only the wrist
 IR streams are left to their own layer. The stereo head image is split into its two eyes.
 
-Sidecars logged beside it: `info.json`, the calibration files and the series labels. A channel
-census flags episodes with undecodable messages.
+Sidecars logged beside it: the subtask boundaries from `info.json`, the calibration files and the
+series labels; the other `info.json` fields are the properties layer's. A channel census flags
+episodes with undecodable messages.
 
 Run:  pixi run -e hiw convert-base            # all episodes under data/HIW-500/
       pixi run -e hiw convert-base <ep.mcap>  # a single episode mcap
@@ -236,12 +237,18 @@ class Subtask:
 
 @dataclass
 class EpisodeInfo:
-    """The `info.json` fields the conversion uses. Keys the episode omits stay empty/zero."""
+    """
+    The `info.json` fields, less `duration_ns`, which `duration_sec` recovers exactly.
+
+    Keys the episode omits stay empty/zero.
+    """
 
     task: str = ""
     scene: int = -1
     duration_sec: float = 0.0
     episode_name: str = ""
+    start_timestamp_ns: int = 0
+    end_timestamp_ns: int = 0
     subtasks: list[Subtask] = field(default_factory=list)
 
     @classmethod
@@ -255,36 +262,30 @@ class EpisodeInfo:
             scene=raw.get("scene", -1),
             duration_sec=float(raw.get("duration_sec", 0.0)),
             episode_name=raw.get("episode_name", ""),
+            start_timestamp_ns=int(raw.get("start_timestamp_ns", 0)),
+            end_timestamp_ns=int(raw.get("end_timestamp_ns", 0)),
             subtasks=[Subtask(task=s["task"], timestamp_ns=s["timestamp_ns"]) for s in raw.get("subtasks", [])],
         )
 
 
-def sidecar_stream(info: EpisodeInfo) -> LazyChunkStream:
-    """Episode metadata + subtask labels from info.json — the genuine hand-built sidecar."""
-    chunks: list[Chunk] = [
+def subtask_chunks(info: EpisodeInfo) -> list[Chunk]:
+    """
+    The subtask boundaries from `info.json` on `/task/subtask`; nothing for an episode without them.
+
+    Each boundary is a discrete state that holds until the next, so a `StateChange` renders as colored
+    lanes in a StateTimelineView (vs. append-only TextLog events). The other `info.json` fields are
+    recording properties, written by the properties layer.
+    """
+    if not info.subtasks:
+        return []
+    ts = np.array([s.timestamp_ns for s in info.subtasks], dtype="datetime64[ns]")
+    return [
         Chunk.from_columns(
-            "/episode",
-            indexes=[],
-            columns=rr.AnyValues.columns(
-                task=[info.task],
-                scene=[info.scene],
-                duration_sec=[info.duration_sec],
-                episode_name=[info.episode_name],
-            ),
+            "/task/subtask",
+            indexes=[rr.TimeColumn("message_publish_time", timestamp=ts)],
+            columns=rr.StateChange.columns(state=[s.task for s in info.subtasks]),
         )
     ]
-    if info.subtasks:
-        # Subtasks are discrete states: each boundary is a StateChange that holds until the next,
-        # rendered as colored lanes by a StateTimelineView (vs. append-only TextLog events).
-        ts = np.array([s.timestamp_ns for s in info.subtasks], dtype="datetime64[ns]")
-        chunks.append(
-            Chunk.from_columns(
-                "/task/subtask",
-                indexes=[rr.TimeColumn("message_publish_time", timestamp=ts)],
-                columns=rr.StateChange.columns(state=[s.task for s in info.subtasks]),
-            )
-        )
-    return LazyChunkStream.from_iter(chunks)
 
 
 def names_chunks() -> list[Chunk]:
@@ -537,8 +538,8 @@ def convert_episode(ep: Episode, rrd_root: Path) -> Path:
     """
     Convert one episode into an optimized base-layer `.rrd` and return its path.
 
-    Merges the base entity stream with the camera fields and the sidecars (`info.json` metadata, the
-    parsed calibration files, the series labels), then checks the collected store against the MCAP
+    Merges the base entity stream with the camera fields and the sidecars (the subtask boundaries from
+    `info.json`, the parsed calibration files, the series labels), then checks the collected store against the MCAP
     summary: a channel that came up short keeps its raw bytes. The census verdict and the MCAP
     header ride along as recording properties.
     """
@@ -547,8 +548,7 @@ def convert_episode(ep: Episode, rrd_root: Path) -> Path:
     merged = LazyChunkStream.merge(
         base_stream(ep.mcap),
         camera_fields_stream(ep.mcap, RGB_CAMERA_TOPICS),
-        sidecar_stream(ep.info),
-        LazyChunkStream.from_iter(calibration_chunks(ep) + names_chunks()),
+        LazyChunkStream.from_iter(subtask_chunks(ep.info) + calibration_chunks(ep) + names_chunks()),
     )
     store = merged.collect(optimize=OptimizationProfile.OBJECT_STORE)
     info = McapReader(str(ep.mcap)).info()

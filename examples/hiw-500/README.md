@@ -231,13 +231,14 @@ Every message stays whole: a custom `homies/*` or `unitree_go/*` message is one 
 | `/annotation`                             | `TextDocument`                                                                                                                   | ✅                   | —                                     |
 | every topic                               | `McapSchema`, `McapChannel` (static)                                                                                             | ✅                   | —                                     |
 | MCAP metadata, statistics, header         | `rosbag2`, `McapStatistics`, `profile`/`library`/`compression` at `/__mcap_metadata`, `/__mcap_properties`, `/__properties/mcap` | ✅                   | —                                     |
-| `info.json` sidecar                       | `AnyValues` at `/episode`, `StateChange` at `/task/subtask`                                                                      | ✅                   | Subtasks                              |
+| `info.json` subtasks                      | `StateChange` at `/task/subtask`                                                                                                 | ✅                   | Subtasks                              |
 | `calibration/` sidecars                   | `CalibrationFile` at `/calibration/…`                                                                                            | ✅                   | —                                     |
 | `/camera/<side>_wrist/ir{1,2}/compressed` | `EncodedImage`, `CompressedImage:{header,format}`                                                                                | `ir`                 | IR tab                                |
 | `/wbc_lerobot`                            | `wbc_lerobot:message`; `Transform3D` at `/lerobot/{ee_state,ee_action}/<side>`                                                   | `derived_archetypes` | End-effector, Gripper(LeRobot), Scene |
 | `/stamped/lowstate`, URDF                 | `Asset3D`, `Transform3D` at `/robot/**`                                                                                          | `urdf`               | Scene                                 |
 | `/lf/odommodestate`                       | `Transform3D` at `/odom/pelvis` and `/odom/start`                                                                                | `odom`               | Scene                                 |
 | head calibration                          | `Pinhole`, `Transform3D` on `/camera/head/{left,right}`                                                                          | `cameras`            | Scene                                 |
+| `info.json` fields                        | `episode_name`, `task`, `scene`, `start_timestamp_ns`, `end_timestamp_ns`, `duration_sec` at `/__properties/episode`             | `properties`         | —                                     |
 
 ### Also in the recording
 
@@ -266,7 +267,7 @@ Each layer is a separate module that writes its own .rrd.
 `hiw_500/base_layer.py` — Everything in the MCAP, as recorded.
 Each decoded message stays one struct, the file's own records (schemas, channel QoS, metadata, statistics) come along, and only the wrist IR streams go to their own layer.
 The stereo head image is split into its two eyes; the recorded frame stays too, since the crop is not byte-exact at the seam.
-Beside the MCAP it logs the sidecars: `info.json`, the calibration files as `CalibrationFile` components, and the joint labels.
+Beside the MCAP it logs the sidecars: the subtask boundaries from `info.json`, the calibration files as `CalibrationFile` components, and the joint labels.
 A census compares the decoded rows with the MCAP summary; a channel that lost messages is flagged (`has_undecodable`, `undecodable_topics`) and its raw bytes are kept.
 
 ### Derived archetypes layer
@@ -300,9 +301,7 @@ The default blueprint shows them under the `IR` tab of the wrist camera pane, be
 
 ### Properties layer
 
-`hiw_500/properties_layer.py` — This layer adds per-episode metadata logged as recording properties, which the
-catalog shows as columns to filter, sort, and search on: `task`,
-`duration_sec`, `num_subtasks`, `subtask_labels`, `scene`, `has_ir`, `robot`.
+`hiw_500/properties_layer.py` — This layer adds per-episode metadata logged as recording properties, which the catalog shows as columns to filter, sort, and search on.
 
 ## Rerun APIs demonstrated
 
