@@ -58,10 +58,13 @@ MSG_IMU = "homies.msg.IMUStateStamped:message"
 MSG_ODOM = "unitree_go.msg.SportModeState:message"
 TEXT = "TextDocument:text"
 BLOB = "EncodedImage:blob"
-# The camera message as `ros2_reflection` decodes it, and the two fields kept from it per row.
-CAMERA_MSG = "sensor_msgs.msg.CompressedImage:message"
-CAMERA_FORMAT = "sensor_msgs.msg.CompressedImage:format"
-CAMERA_HEADER = "sensor_msgs.msg.CompressedImage:header"
+# The camera message as `ros2_reflection` decodes it, and the two fields kept from it per row. The
+# fields carry the message type as their archetype, as the reader tags its structs, so the viewer
+# groups them with their source message rather than as loose components.
+CAMERA_ARCHETYPE = "sensor_msgs.msg.CompressedImage"
+CAMERA_MSG = f"{CAMERA_ARCHETYPE}:message"
+CAMERA_FORMAT = f"{CAMERA_ARCHETYPE}:format"
+CAMERA_HEADER = f"{CAMERA_ARCHETYPE}:header"
 
 # The wrist IR streams have their own layer (`ir_layer`); every other topic comes through.
 IR_TOPICS = ["^/camera/(left|right)_wrist/ir[12]/compressed$"]
@@ -201,8 +204,8 @@ def camera_fields_stream(path: Path, topics: list[str]) -> LazyChunkStream:
     """
     fields = (
         DeriveLens(CAMERA_MSG)
-        .to_component(CAMERA_FORMAT, Selector(".format"))
-        .to_component(CAMERA_HEADER, Selector(".header"))
+        .to_component(rr.ComponentDescriptor(CAMERA_FORMAT, archetype=CAMERA_ARCHETYPE), Selector(".format"))
+        .to_component(rr.ComponentDescriptor(CAMERA_HEADER, archetype=CAMERA_ARCHETYPE), Selector(".header"))
     )
     stream = McapReader(str(path), decoders=["ros2_reflection"], include_topic_regex=topics).stream()
     return stream.lenses(fields, content="/camera/**", output_mode="drop_unmatched").filter(content="/camera/**")

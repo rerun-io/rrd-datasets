@@ -35,8 +35,9 @@ from hiw_500.base_layer import (
 from rrd_datasets_common.paths import layer_relpath
 
 WBC_TOPIC = "/wbc_lerobot"
-# The JSON parsed into a struct, named the way the reader names decoded messages.
-MSG_WBC = "wbc_lerobot:message"
+# The JSON parsed into a struct, named and archetype-tagged the way the reader emits decoded messages.
+WBC_ARCHETYPE = "wbc_lerobot"
+MSG_WBC = f"{WBC_ARCHETYPE}:message"
 MARKER_ROOT = "/lerobot"
 
 # Series order of the width-12 `ee_state` / `ee_action` arrays: the left arm then the right, six
@@ -61,7 +62,9 @@ def wbc_struct_lens() -> DeriveLens:
     The struct keeps every key (`pivot`, `ee_state`, `ee_action`, `gripper_controls`) for the
     blueprint to plot; the text is parsed once, here.
     """
-    return DeriveLens(TEXT, output_entity=WBC_TOPIC).to_component(MSG_WBC, Selector(".").pipe(json_struct))
+    return DeriveLens(TEXT, output_entity=WBC_TOPIC).to_component(
+        rr.ComponentDescriptor(MSG_WBC, archetype=WBC_ARCHETYPE), Selector(".").pipe(json_struct)
+    )
 
 
 def marker_lenses() -> list[DeriveLens]:
