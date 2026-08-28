@@ -2,10 +2,10 @@
 Turn the LIBERO repo's file list into the task files to convert, each with its task id.
 
 A LIBERO task is one HDF5 file — `<suite>/<task>_demo.hdf5` — holding ~50 teleoperated demos.
-One demo becomes one recording, so ids nest: `task_id = <suite>/<task>` names the file and
-`recording_id = <task_id>/<demo_key>` names one demo, with the demo keys (`demo_0`, …) read
-from inside the file. Task ids derive from the file path alone, so the HF listing (Modal
-fan-out) and a local `data/LIBERO` scan (local conversion) key the same recordings.
+One demo becomes one recording: `task_id = <suite>/<task>` names the file and
+`recording_id = <task_id>__<demo_key>` names one demo, one directory per suite and flat below it.
+The demo keys (`demo_0`, …) come from inside the file. Task ids derive from the file path alone,
+so the HF listing (Modal fan-out) and a local `data/LIBERO` scan key the same recordings.
 """
 
 from __future__ import annotations
@@ -44,8 +44,8 @@ def task_id(path: str) -> str:
 
 
 def recording_id(task: str, demo: str) -> str:
-    """The id of one demo's recordings: `<suite>/<task>/<demo_key>`."""
-    return f"{task}/{demo}"
+    """The id of one demo's recordings: `<suite>/<task>__<demo_key>`."""
+    return f"{task}__{demo}"
 
 
 def task_files_from_files(files: set[str], path_filter: str = "") -> list[WorkItem]:

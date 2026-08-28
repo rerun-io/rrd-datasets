@@ -70,10 +70,10 @@ def test_base_layer_round_trip(tmp_path: Path) -> None:
     write_fixture(fixture)
     reader = Hdf5Reader(fixture)
     out = convert_demo(reader, "suite/kitchen", "demo_0", tmp_path / "rrds")
-    assert out == tmp_path / "rrds" / "base" / "suite" / "kitchen" / "demo_0.rrd"
+    assert out == tmp_path / "rrds" / "base" / "suite" / "kitchen__demo_0.rrd"
 
     entries = RrdReader(str(out)).recordings()
-    assert entries[0].recording_id == "suite/kitchen/demo_0"
+    assert entries[0].recording_id == "suite/kitchen__demo_0"
     assert entries[0].application_id == "libero"
 
     batches = _chunks_by_entity(out)
@@ -285,7 +285,7 @@ def test_properties_layer_round_trip(tmp_path: Path) -> None:
 
     out = properties_layer.convert_demo(reader, facts, "demo_0", tmp_path / "rrds")
     entries = RrdReader(str(out)).recordings()
-    assert entries[0].recording_id == "suite/KITCHEN_SCENE3_kitchen/demo_0"
+    assert entries[0].recording_id == "suite/KITCHEN_SCENE3_kitchen__demo_0"
 
     batches = _chunks_by_entity(out)
     properties = next(batch for entity, batch in batches.items() if "episode" in entity)
