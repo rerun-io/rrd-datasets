@@ -90,7 +90,7 @@ We share our survey on the source dataset in [observations.md](observations.md).
 ## Mapping to Rerun
 
 The base layer keeps the demo group as `Hdf5Reader` emits it: every dataset is a column named after itself, every attribute a static column, dtypes and array widths unchanged.
-Only the two camera datasets are reshaped, into upright `Image`s.
+Two exceptions: the camera datasets are reshaped into upright `Image`s, and `states` and `init_state` become variable-length lists — their width is the scene's MuJoCo state size (47…110), and a catalog dataset needs one schema across every demo.
 The table shows where each source item lands, and in which layer.
 The datasets that repeat others are listed in [observations.md](observations.md#redundancies); they are kept, not plotted.
 

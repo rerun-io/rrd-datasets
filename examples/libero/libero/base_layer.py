@@ -25,6 +25,7 @@ from rerun.experimental import (
     DeriveLens,
     Hdf5Reader,
     LazyChunkStream,
+    MutateLens,
     OptimizationProfile,
     Selector,
 )
@@ -39,6 +40,12 @@ APPLICATION_ID = "libero"
 # statically on `/demo/__hdf5_properties`.
 DEMO_ENTITY = "/demo"
 OBS_ENTITY = f"{DEMO_ENTITY}/obs"
+DEMO_ATTRS_ENTITY = f"{DEMO_ENTITY}/__hdf5_properties"
+
+# The MuJoCo state vector is as wide as the scene (47…110 floats), so these two are fixed-size lists
+# only within one task file. A catalog dataset needs one schema across every demo, so they become
+# variable-length lists; every other width is the same in every scene and stays fixed.
+SCENE_SIZED = ("states", "init_state")
 
 # The task file's own attributes land where the reader puts root attributes when nothing prefixes them.
 TASK_ATTRS_ENTITY = "/__hdf5_properties"
@@ -115,6 +122,24 @@ def camera_lenses(cameras: list[Camera]) -> list[DeriveLens]:
     ]
 
 
+def _variable_type(dtype: pa.DataType) -> pa.DataType:
+    """Every fixed-size list in `dtype` as a variable-length list, nullability kept."""
+    if pa.types.is_fixed_size_list(dtype) or pa.types.is_list(dtype):
+        item = dtype.value_field
+        return pa.list_(pa.field(item.name, _variable_type(item.type), nullable=item.nullable))
+    return dtype
+
+
+def variable_length(arr: pa.Array) -> pa.Array:
+    """Fixed-size lists as variable-length lists at every nesting level, values untouched."""
+    return arr.cast(_variable_type(arr.type))
+
+
+def scene_sized_lenses() -> list[MutateLens]:
+    """The scene-sized items recast in place; apply with `output_mode="forward_unmatched"`."""
+    return [MutateLens(name, Selector(".").pipe(variable_length)) for name in SCENE_SIZED]
+
+
 def with_sim_time(chunk: Chunk) -> list[Chunk]:
     """
     Attach the `sim_time` timeline to a temporal chunk.
@@ -142,6 +167,9 @@ def demo_stream(reader: Hdf5Reader, demo: str, cameras: list[Camera]) -> LazyChu
     """
     stream = reader.stream(root_group=f"/data/{demo}", entity_path_prefix=DEMO_ENTITY, use_structs=False)
     stream = stream.lenses(camera_lenses(cameras), content=OBS_ENTITY, output_mode="forward_unmatched")
+    stream = stream.lenses(
+        scene_sized_lenses(), content=[DEMO_ENTITY, DEMO_ATTRS_ENTITY], output_mode="forward_unmatched"
+    )
     return stream.flat_map(with_sim_time)
 
 
