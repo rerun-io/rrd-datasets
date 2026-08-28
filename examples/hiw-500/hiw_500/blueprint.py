@@ -10,12 +10,22 @@ Run:  pixi run -e hiw blueprint   # regenerates blueprints/hiw-500/default.rbl
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import rerun as rr
 import rerun.blueprint as rrb
 from rerun.blueprint.datatypes import ComponentSourceKind, VisualizerComponentMapping
 from rerun.blueprint.visualizers import Visualizer
 
-from hiw_500.base_layer import APPLICATION_ID, G1_JOINT_NAMES, MSG_LOWSTATE, MSG_MOTOR_CMD, MSG_MOTOR_STATE
+from hiw_500.base_layer import (
+    APPLICATION_ID,
+    G1_JOINT_NAMES,
+    MOTOR_SLOTS,
+    MSG_LOWSTATE,
+    MSG_MOTOR_CMD,
+    MSG_MOTOR_STATE,
+    N_JOINTS,
+)
 from hiw_500.derived_archetypes_layer import EE_NAMES, MSG_WBC, WBC_TOPIC
 from hiw_500.odom_layer import START_FRAME
 from rrd_datasets_common.paths import default_blueprint_path
@@ -38,14 +48,16 @@ WRIST_IR = [
 LOWSTATE_TOPIC = "/stamped/lowstate"
 
 
-def _series(component: str, selector: str, name: str) -> Visualizer:
+def _series(
+    component: str, selector: str, names: str | Sequence[str], visible: Sequence[bool] | None = None
+) -> Visualizer:
     """
-    One plotted series, read straight out of a message struct.
+    The series a selector reads out of a message struct on the view's entity.
 
-    A `SeriesLines` visualizer takes its `Scalars` input from `selector` applied to `component`
-    on the view's entity. `Selector` has no slice, so a series per array index is one instruction each.
+    A `SeriesLines` visualizer takes its `Scalars` input from `selector` applied to `component`: a
+    scalar path is one series, a `[]` path one series per array element, named and shown in order.
     """
-    return rr.SeriesLines(names=name).visualizer(
+    return rr.SeriesLines(names=names, visible_series=visible).visualizer(
         mappings=[
             VisualizerComponentMapping(
                 target="Scalars:scalars",
@@ -59,12 +71,17 @@ def _series(component: str, selector: str, name: str) -> Visualizer:
 
 def joint_series() -> list[Visualizer]:
     """
-    The angle of each of the 29 real motors in the 35-slot `motor_state` array, named by joint.
+    The angles of the 29 real motors in the 35-slot `motor_state` array, named by joint.
 
-    Only the angle: every series costs render time, and `dq` and `tau_est` sit in the same struct
-    for a mapping or a drag onto the view when wanted.
+    One `[].q` mapping serves every series. A mapping per index copies every `MotorState` field of every
+    row for each series on each frame, which halves the viewer's frame rate.
+    The mapping cannot trim the array, so the six unused slots become series too: they stay deselected
+    and carry an explicit `unused [slot]` label, or the legend would list them under a neighbouring joint's name.
+    Only the angle: `dq` and `tau_est` sit in the same struct for a mapping or a drag onto the view when wanted.
     """
-    return [_series(MSG_LOWSTATE, f".data.motor_state[{index}].q", joint) for index, joint in enumerate(G1_JOINT_NAMES)]
+    names = [*G1_JOINT_NAMES, *(f"unused [{slot}]" for slot in range(N_JOINTS, MOTOR_SLOTS))]
+    visible = [True] * N_JOINTS + [False] * (MOTOR_SLOTS - N_JOINTS)
+    return [_series(MSG_LOWSTATE, ".data.motor_state[].q", names, visible)]
 
 
 def ee_series() -> list[Visualizer]:

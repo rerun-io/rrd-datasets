@@ -108,6 +108,7 @@ G1_JOINT_NAMES = [
     "right_wrist_yaw",
 ]
 N_JOINTS = len(G1_JOINT_NAMES)
+MOTOR_SLOTS = 35
 
 # Arrow type of a Transform3D translation.
 VEC3 = pa.list_(pa.float32(), 3)
