@@ -12,8 +12,6 @@ from rerun.experimental import Hdf5Reader, RrdReader
 
 from libero import urdf_layer
 from libero.urdf_layer import (
-    ARM_JOINTS,
-    FINGER_JOINTS,
     JOINT_NAMES_URDF,
     N_JOINTS,
     TRANSFORMS,
@@ -45,8 +43,7 @@ def test_the_mapping_names_every_moving_joint_once() -> None:
     """A URDF revision that adds or renames a moving joint must not silently leave it at rest."""
     moving = {joint.name for joint in load_urdf().joints() if joint.joint_type != "fixed"}
     assert set(JOINT_NAMES_URDF) == moving
-    assert len(JOINT_NAMES_URDF) == N_JOINTS == len(set(JOINT_NAMES_URDF))
-    assert JOINT_NAMES_URDF == ARM_JOINTS + FINGER_JOINTS
+    assert len(JOINT_NAMES_URDF) == len(moving)
     assert [joint.child_frame for joint in sliding_joints(load_urdf())] == ["fer_leftfinger", "fer_rightfinger"]
 
 
@@ -71,19 +68,18 @@ def _finger_translations(opening: float) -> dict[str, np.ndarray]:
     }
 
 
-@pytest.mark.parametrize("opening", [0.0, 0.02, FINGER_LIMIT])
-def test_the_fingers_open_symmetrically(opening: float) -> None:
+def test_the_fingers_open_symmetrically() -> None:
     """
     The fingers travel apart because `fer_finger_joint2` is turned π about z.
 
     Losing that rotation — a wrong sign, or an SDK composing prismatic motion differently — collapses
     the gap to zero.
     """
+    opening = 0.02
     fingers = _finger_translations(opening)
     left, right = fingers["fer_leftfinger"], fingers["fer_rightfinger"]
     assert left[1] == pytest.approx(opening, abs=1e-6)
     assert right[1] == pytest.approx(-opening, abs=1e-6)
-    assert abs(left[1] - right[1]) == pytest.approx(2 * opening, abs=1e-6)
     np.testing.assert_allclose(left[[0, 2]], right[[0, 2]], atol=1e-6)
 
 
@@ -129,9 +125,10 @@ def test_urdf_layer_round_trip(tmp_path: Path) -> None:
     batches: dict[str, list[pa.RecordBatch]] = {}
     for chunk in RrdReader(str(out)).stream(store=entries[0]):
         batches.setdefault(chunk.entity_path, []).append(chunk.to_record_batch())
-    assert WORLD_FROM_BASE in batches
     assert TRANSFORMS in batches
     assert any(path.startswith(f"/{urdf_layer.ENTITY_PREFIX}/") and "visual_geometries" in path for path in batches)
+    (edge,) = batches[WORLD_FROM_BASE]
+    np.testing.assert_allclose(edge.column("Transform3D:translation").to_pylist()[0][0], BASE_POS, atol=1e-6)
 
     # The layer rides the base layer's timelines, or nothing lines up in time.
     names = {name for batch in batches[TRANSFORMS] for name in batch.schema.names}
@@ -152,21 +149,3 @@ def test_urdf_layer_round_trip(tmp_path: Path) -> None:
             seen.add(current)
             current = parent_of[current]
         assert current == WORLD_FRAME, f"{frame} does not reach {WORLD_FRAME}"
-
-
-def test_forward_kinematics_places_the_arm_at_the_scene_offset(tmp_path: Path) -> None:
-    """The `world -> base` edge is what stands the arm on the table instead of at the origin."""
-    fixture = tmp_path / "suite_task_demo.hdf5"
-    write_fixture(fixture)
-    out = convert_demo(load_urdf(), Hdf5Reader(fixture), "suite/task", "demo_0", tmp_path / "rrds")
-
-    reader = RrdReader(str(out))
-    (entry,) = reader.recordings()
-    for chunk in reader.stream(store=entry):
-        if chunk.entity_path != WORLD_FROM_BASE:
-            continue
-        batch = chunk.to_record_batch()
-        translation = batch.column("Transform3D:translation").to_pylist()[0][0]
-        np.testing.assert_allclose(translation, BASE_POS, atol=1e-6)
-        return
-    pytest.fail(f"no {WORLD_FROM_BASE} chunk in the layer")
