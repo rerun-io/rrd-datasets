@@ -99,8 +99,8 @@ def sliding_joints(urdf: UrdfTree) -> list[SlidingJoint]:
     The finger joints, with the slide direction resolved through the joint origin's rotation.
 
     `compute_joint_transform_batches` (rerun-sdk 0.36.1) adds a prismatic displacement to `origin_xyz`
-    without the origin's rotation. `fer_finger_joint2` is turned π about z so the fingers open apart;
-    without that rotation the gap stays at zero, so the finger transforms are built here.
+    without the origin's rotation — an upstream bug. `fer_finger_joint2` is turned π about z so the
+    fingers open apart; without that rotation the gap stays at zero, so the finger transforms are built here.
     """
     joints = {joint.name: joint for joint in urdf.joints()}
     resolved = []
