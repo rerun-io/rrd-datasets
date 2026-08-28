@@ -49,15 +49,15 @@ The five files `download` fetches, one per suite:
 
 ## Redundancies
 
-- `rewards` and `dones` are byte-identical in every surveyed demo. Both are still included in the `.rrd`.
-- `init_state` equals `states[0]`, so the demo attribute already carries the initial state. Included in the `.rrd`.
+Every dataset is in the `.rrd`; the ones below repeat others and are not plotted by default.
+
+- `rewards` and `dones` are byte-identical in every surveyed demo.
+- `init_state` equals `states[0]`, so the demo attribute already carries the initial state.
 - `states` (47–110 floats, scene-dependent width) is the raw MuJoCo state vector: `[sim_time, qpos, qvel, …]` with no per-file schema.
-  It only means something to a robosuite reconstruction, which is exactly the replay use the `model_file` + `init_state` passthrough serves better.
-  Not included in the `.rrd`.
+  It only means something to a robosuite reconstruction, which `model_file` + `init_state` serve better.
+  Its first column is the simulation clock, which the `sim_time` timeline reproduces.
 - `robot_states` is exactly `[gripper_states (2), ee_pos (3), ee_quat_xyzw (4)]`, verified numerically.
-  Not included in the `.rrd`.
 - `ee_states` is exactly `[ee_pos, ee_ori]` concatenated.
-  Not included in the `.rrd`.
 
 ## Other notes on source data
 
