@@ -64,4 +64,10 @@ Every dataset is in the `.rrd`; the ones below repeat others and are not plotted
 - `macros_image_convention` is `opengl` in all five files: raw frames render the scene upside-down ([robosuite stores OpenGL-convention buffers](https://robosuite.ai/)).
 - The axis-angle (`ee_ori`) magnitude can exceed π — the vector tracks the rotation continuously instead of wrapping.
 - Demo keys are contiguous from `demo_0` in every surveyed file, but HDF5 iterates them lexicographically (`demo_0, demo_1, demo_10, …`) — sort numerically when order matters.
+- `gripper_states` holds the two finger positions signed against each other: the first spans `[0, +0.04]` m and the second `[-0.04, 0]`.
+  They are not mirror images — a grasped object blocks one finger, so the pair goes asymmetric mid-grasp.
+- The arm's world pose is in the `model_file` XML, as the `robot0_base` body: `[-0.66, 0, 0.912]` on the table in four suites, `[-0.6, 0, 0]` on the floor in `libero_object`, identity rotation everywhere.
+- `joint_states` sits inside the franka `fer` URDF limits in every surveyed demo, so the seven values map straight onto `fer_joint1…7` with no clamping.
+  Running forward kinematics on them reproduces `ee_pos` to a constant −7 mm along the tool axis, with under 0.3 mm of scatter across all five suites — the offset between franka's `fer_hand_tcp` and robosuite's grip site.
+  The orientation agrees to within 0.04°, so the recorded end-effector pose and the URDF chain describe the same hand.
 - Each LIBERO task is specified by a .bddl file (Behavior Domain Definition Language) and the HDF5 records where that file lives twice: `env_args.env_kwargs.bddl_file_name` and `bddl_file_name` both as /data attribute.

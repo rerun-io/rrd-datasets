@@ -373,7 +373,7 @@ description = "Download the LIBERO sample task files"
 [feature.libero-tasks.tasks.convert]
 cmd = "python -m libero.convert"
 cwd = "examples/libero"
-description = "Convert LIBERO demos to rrd (both layers)"
+description = "Convert LIBERO demos to rrd (all layers)"
 
 [feature.libero-tasks.tasks.convert-base]
 cmd = "python -m libero.base_layer"
@@ -384,6 +384,11 @@ description = "Convert LIBERO demos (base layer)"
 cmd = "python -m libero.properties_layer"
 cwd = "examples/libero"
 description = "Convert LIBERO demos (properties layer)"
+
+[feature.libero-tasks.tasks.convert-urdf]
+cmd = "python -m libero.urdf_layer"
+cwd = "examples/libero"
+description = "Convert LIBERO demos (urdf layer)"
 
 [feature.libero-tasks.tasks.blueprint]
 cmd = "python -m libero.blueprint"
