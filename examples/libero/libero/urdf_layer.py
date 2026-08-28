@@ -55,6 +55,13 @@ FINGER_JOINTS = ["fer_finger_joint1", "fer_finger_joint2"]
 JOINT_NAMES_URDF = ARM_JOINTS + FINGER_JOINTS
 N_JOINTS = len(JOINT_NAMES_URDF)
 
+# --------------------------------------------------------------------------------------
+# prismatic finger workaround
+# rerun-sdk 0.36.1 `compute_joint_transform_batches` slides a prismatic joint along its axis
+# without the joint origin's rotation, so the finger transforms are built here. Delete this
+# section once the upstream fix lands.
+# --------------------------------------------------------------------------------------
+
 # The SDK's batch entries have non-nullable elements; ours must match to concatenate with them.
 _VEC3 = pa.list_(pa.field("item", pa.float32(), nullable=False), 3)
 _QUAT = pa.list_(pa.field("item", pa.float32(), nullable=False), 4)
@@ -98,9 +105,8 @@ def sliding_joints(urdf: UrdfTree) -> list[SlidingJoint]:
     """
     The finger joints, with the slide direction resolved through the joint origin's rotation.
 
-    `compute_joint_transform_batches` (rerun-sdk 0.36.1) adds a prismatic displacement to `origin_xyz`
-    without the origin's rotation — an upstream bug. `fer_finger_joint2` is turned π about z so the
-    fingers open apart; without that rotation the gap stays at zero, so the finger transforms are built here.
+    `fer_finger_joint2` is turned π about z so the fingers open apart; without that rotation the
+    gap stays at zero.
     """
     joints = {joint.name: joint for joint in urdf.joints()}
     resolved = []
@@ -117,20 +123,6 @@ def sliding_joints(urdf: UrdfTree) -> list[SlidingJoint]:
             )
         )
     return resolved
-
-
-def _obs_struct(msgs: pa.Array) -> pa.Array:
-    """The observations arrive as a length-1 list per row; flatten to one struct per row."""
-    return list_flatten(msgs) if pa.types.is_list(msgs.type) else msgs
-
-
-def read_joint_values(msgs: pa.Array) -> tuple[np.ndarray, np.ndarray]:
-    """The arm angles `(n, 7)` in radians and the finger openings `(n, 2)` in metres."""
-    obs = _obs_struct(msgs)
-    arm = np.asarray(obs.field("joint_states").to_numpy(zero_copy_only=False).tolist(), dtype=np.float64)
-    grip = np.asarray(obs.field("gripper_states").to_numpy(zero_copy_only=False).tolist(), dtype=np.float64)
-    # Both URDF finger joints are limited to [0, 0.04]; robosuite reports the second one negated.
-    return arm, np.column_stack([grip[:, 0], -grip[:, 1]])
 
 
 def _sliding_entries(joints: list[SlidingJoint], values: np.ndarray, template: pa.DataType) -> pa.Array:
@@ -152,6 +144,25 @@ def _sliding_entries(joints: list[SlidingJoint], values: np.ndarray, template: p
     )
 
 
+# --------------------------------------------------------------------------------------
+# forward kinematics
+# --------------------------------------------------------------------------------------
+
+
+def _obs_struct(msgs: pa.Array) -> pa.Array:
+    """The observations arrive as a length-1 list per row; flatten to one struct per row."""
+    return list_flatten(msgs) if pa.types.is_list(msgs.type) else msgs
+
+
+def read_joint_values(msgs: pa.Array) -> tuple[np.ndarray, np.ndarray]:
+    """The arm angles `(n, 7)` in radians and the finger openings `(n, 2)` in metres."""
+    obs = _obs_struct(msgs)
+    arm = np.asarray(obs.field("joint_states").to_numpy(zero_copy_only=False).tolist(), dtype=np.float64)
+    grip = np.asarray(obs.field("gripper_states").to_numpy(zero_copy_only=False).tolist(), dtype=np.float64)
+    # Both URDF finger joints are limited to [0, 0.04]; robosuite reports the second one negated.
+    return arm, np.column_stack([grip[:, 0], -grip[:, 1]])
+
+
 def transform_batches(urdf: UrdfTree, joints: list[SlidingJoint], msgs: pa.Array) -> pa.Array:
     """One `JointTransformBatch` per row: the arm solved by the SDK, the fingers built here."""
     arm_values, finger_values = read_joint_values(msgs)
@@ -161,7 +172,7 @@ def transform_batches(urdf: UrdfTree, joints: list[SlidingJoint], msgs: pa.Array
     values = pa.ListArray.from_arrays(arm_offsets, pa.array(arm_values.reshape(-1)))
 
     arm = urdf.compute_joint_transform_batches(names, values, clamp=False).flatten()
-    fingers = _sliding_entries(joints, finger_values, arm.type)
+    fingers = _sliding_entries(joints, finger_values, arm.type)  # prismatic finger workaround
 
     # Interleave so each row holds its arm entries followed by its finger entries.
     arm_index = np.arange(rows)[:, None] * len(ARM_JOINTS) + np.arange(len(ARM_JOINTS))[None, :]
@@ -169,6 +180,11 @@ def transform_batches(urdf: UrdfTree, joints: list[SlidingJoint], msgs: pa.Array
     order = np.concatenate([arm_index, finger_index], axis=1).reshape(-1)
     entries = pa.concat_arrays([arm, fingers]).take(pa.array(order))
     return pa.ListArray.from_arrays(pa.array(np.arange(rows + 1) * N_JOINTS, type=pa.int32()), entries)
+
+
+# --------------------------------------------------------------------------------------
+# scene placement
+# --------------------------------------------------------------------------------------
 
 
 def base_pose(model_file: str) -> tuple[list[float], list[float]]:
@@ -226,6 +242,11 @@ def fk_stream(urdf: UrdfTree, joints: list[SlidingJoint], reader: Hdf5Reader, de
         .filter(content=TRANSFORMS)
         .flat_map(with_sim_time)
     )
+
+
+# --------------------------------------------------------------------------------------
+# demo driver
+# --------------------------------------------------------------------------------------
 
 
 def convert_demo(urdf: UrdfTree, reader: Hdf5Reader, task: str, demo: str, rrd_root: Path) -> Path:
