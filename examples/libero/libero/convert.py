@@ -1,8 +1,9 @@
 """
-Build every layer (base, properties, urdf) for every demo in one command.
+Build every layer (base, properties, urdf, cameras) for every demo in one command.
 
-Each layer module owns its conversion and runs on its own (`convert-base` / `convert-properties` / `convert-urdf`);
-this module runs them in order, opening each task file once and loading the URDF once.
+Each layer module owns its conversion and runs on its own (`convert-base` / `convert-properties` /
+`convert-urdf` / `convert-cameras`); this module runs them in order, opening each task file once and
+loading the URDF once.
 
 Run:  pixi run -e libero convert              # every downloaded task file
       pixi run -e libero convert <task.hdf5>  # a single task file
@@ -14,7 +15,7 @@ import sys
 
 from rerun.experimental import Hdf5Reader
 
-from libero import base_layer, properties_layer, urdf_layer
+from libero import base_layer, camera_layer, properties_layer, urdf_layer
 from libero.base_layer import RRD_ROOT, demo_keys, task_files
 from libero.episodes import recording_id
 
@@ -22,7 +23,7 @@ from libero.episodes import recording_id
 def main(argv: list[str]) -> None:
     inputs = task_files(argv)
     urdf = urdf_layer.load_urdf()
-    print(f"Converting {len(inputs)} task file(s) -> {RRD_ROOT}/<layer>/ (base + properties + urdf)")
+    print(f"Converting {len(inputs)} task file(s) -> {RRD_ROOT}/<layer>/ (base + properties + urdf + cameras)")
     for path, task in inputs:
         reader = Hdf5Reader(path)
         facts = properties_layer.task_facts(reader, task)
@@ -30,7 +31,8 @@ def main(argv: list[str]) -> None:
             base_layer.convert_demo(reader, task, demo, RRD_ROOT)
             properties_layer.convert_demo(reader, facts, demo, RRD_ROOT)
             urdf_layer.convert_demo(urdf, reader, task, demo, RRD_ROOT)
-            print(f"  {recording_id(task, demo)}: 3 layers written")
+            camera_layer.convert_demo(reader, task, demo, RRD_ROOT)
+            print(f"  {recording_id(task, demo)}: 4 layers written")
 
 
 if __name__ == "__main__":

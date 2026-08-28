@@ -390,6 +390,11 @@ cmd = "python -m libero.urdf_layer"
 cwd = "examples/libero"
 description = "Convert LIBERO demos (urdf layer)"
 
+[feature.libero-tasks.tasks.convert-cameras]
+cmd = "python -m libero.camera_layer"
+cwd = "examples/libero"
+description = "Convert LIBERO demos (cameras layer)"
+
 [feature.libero-tasks.tasks.blueprint]
 cmd = "python -m libero.blueprint"
 cwd = "examples/libero"
