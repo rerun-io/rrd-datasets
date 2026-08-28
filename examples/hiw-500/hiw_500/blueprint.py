@@ -76,12 +76,11 @@ def joint_series() -> list[Visualizer]:
     One `[].q` mapping serves every series. A mapping per index copies every `MotorState` field of every
     row for each series on each frame, which halves the viewer's frame rate.
     The mapping cannot trim the array, so the six unused slots become series too: they stay deselected
-    and carry an explicit `(unused N)` label, or the legend would list them under a neighbouring joint's name.
+    and carry an explicit `unused [slot]` label, or the legend would list them under a neighbouring joint's name.
     Only the angle: `dq` and `tau_est` sit in the same struct for a mapping or a drag onto the view when wanted.
     """
-    unused = MOTOR_SLOTS - N_JOINTS
-    names = [*G1_JOINT_NAMES, *(f"(unused {index})" for index in range(unused))]
-    visible = [True] * N_JOINTS + [False] * unused
+    names = [*G1_JOINT_NAMES, *(f"unused [{slot}]" for slot in range(N_JOINTS, MOTOR_SLOTS))]
+    visible = [True] * N_JOINTS + [False] * (MOTOR_SLOTS - N_JOINTS)
     return [_series(MSG_LOWSTATE, ".data.motor_state[].q", names, visible)]
 
 
