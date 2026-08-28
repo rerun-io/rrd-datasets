@@ -14,7 +14,7 @@ from __future__ import annotations
 import rerun as rr
 import rerun.blueprint as rrb
 
-from libero import urdf_layer
+from libero import camera_layer, urdf_layer
 from libero.base_layer import APPLICATION_ID, DEMO_ENTITY, OBS_ENTITY
 from rrd_datasets_common.paths import default_blueprint_path
 
@@ -48,6 +48,7 @@ def series(component: str, names: list[str]) -> rr.Visualizer:
 
 
 URDF_ORIGIN = f"/{urdf_layer.ENTITY_PREFIX}"
+CAMERA_ORIGIN = camera_layer.CAMERA_ENTITY_PREFIX
 
 
 def build_blueprint() -> rrb.Blueprint:
@@ -58,11 +59,24 @@ def build_blueprint() -> rrb.Blueprint:
             rrb.Horizontal(
                 rrb.Vertical(
                     rrb.TextDocumentView(origin="/task/instruction", name="Instruction"),
-                    # The 3D pane auto-frames: the arm stands on a table in most suites and on the
-                    # floor in `libero_object`, so no fixed eye suits every scene. Only the meshes are
-                    # content — the transform-only entities sit at the world origin and would stretch
-                    # the fitted box.
-                    rrb.Spatial3DView(origin=URDF_ORIGIN, contents=f"+ {URDF_ORIGIN}/fer/**", name="Robot"),
+                    # The eye sits behind the agent camera and off to its side, so the pane shows that
+                    # camera's frustum and image plane next to the arm.
+                    rrb.Spatial3DView(
+                        origin="/",
+                        contents=[f"+ {URDF_ORIGIN}/fer/**", f"+ {CAMERA_ORIGIN}/**"],
+                        name="Robot",
+                        eye_controls=rrb.archetypes.EyeControls3D(position=[1.0, 0.5, 1.8]),
+                        overrides={
+                            f"{CAMERA_ORIGIN}/agentview": [
+                                rr.Pinhole.from_fields(image_plane_distance=0.4),
+                                rr.Image.from_fields(opacity=0.6),
+                            ],
+                            f"{CAMERA_ORIGIN}/eye_in_hand": [
+                                rr.Pinhole.from_fields(image_plane_distance=0.12),
+                                rr.Image.from_fields(opacity=0.6),
+                            ],
+                        },
+                    ),
                     row_shares=[1, 6],
                 ),
                 # The camera frames are square, so the column width sets their on-screen height.
