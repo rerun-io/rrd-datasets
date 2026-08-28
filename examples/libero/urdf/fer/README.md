@@ -12,3 +12,25 @@ LIBERO's `obs/joint_states[i]` maps to `fer_joint{i+1}`.
 2. Inline `$(find franka_description)` in every `*.xacro` with the checkout path — pip's standalone `xacro` has no ROS package index to resolve it.
 3. Expand with `xacro` 2.1.1: `xacro robots/fer/fer.urdf.xacro include_self_collision_geometry:=false > fer_raw.urdf`.
 4. Trim for vendoring: drop every `<collision>` element, drop the empty `*_accelerometer_*` mount links and the fixed joints holding them, rewrite `package://franka_description/` mesh paths to relative, and copy only the referenced visual `.dae` meshes.
+5. Weld the meshes and save them as `.glb`.
+   The `.dae` exports store every vertex once per face with a flat normal, three times the size of the shared-vertex mesh.
+   Merge the vertices, re-split them only at edges sharper than 15° so creases keep their shading, and put the material and normals back — trimesh's `smooth_shade` drops both (trimesh 4 with pycollada):
+
+   ```python
+   import numpy as np
+   import trimesh
+   from trimesh.graph import smooth_shade
+
+   scene = trimesh.load("link1.dae", force="scene")
+   for name, geom in list(scene.geometry.items()):
+       material = geom.visual.material
+       geom.merge_vertices(merge_norm=True, merge_tex=True)
+       welded = smooth_shade(geom, angle=np.radians(15))
+       normals = np.array(welded.vertex_normals)
+       welded.visual = trimesh.visual.TextureVisuals(material=material)
+       welded.vertex_normals = normals
+       scene.geometry[name] = welded
+   scene.export("link1.glb")
+   ```
+
+6. Point the `<mesh filename>` entries in `fer.urdf` at the `.glb` files.

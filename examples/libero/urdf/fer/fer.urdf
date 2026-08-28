@@ -17,7 +17,7 @@
   <link name="fer_link0">
     <visual name="fer_link0_visual">
       <geometry>
-        <mesh filename="meshes/robots/fer/visual/link0.dae" />
+        <mesh filename="meshes/robots/fer/visual/link0.glb" />
       </geometry>
     </visual>
     <inertial>
@@ -29,7 +29,7 @@
   <link name="fer_link1">
     <visual name="fer_link1_visual">
       <geometry>
-        <mesh filename="meshes/robots/fer/visual/link1.dae" />
+        <mesh filename="meshes/robots/fer/visual/link1.glb" />
       </geometry>
     </visual>
     <inertial>
@@ -51,7 +51,7 @@
   <link name="fer_link2">
     <visual name="fer_link2_visual">
       <geometry>
-        <mesh filename="meshes/robots/fer/visual/link2.dae" />
+        <mesh filename="meshes/robots/fer/visual/link2.glb" />
       </geometry>
     </visual>
     <inertial>
@@ -73,7 +73,7 @@
   <link name="fer_link3">
     <visual name="fer_link3_visual">
       <geometry>
-        <mesh filename="meshes/robots/fer/visual/link3.dae" />
+        <mesh filename="meshes/robots/fer/visual/link3.glb" />
       </geometry>
     </visual>
     <inertial>
@@ -95,7 +95,7 @@
   <link name="fer_link4">
     <visual name="fer_link4_visual">
       <geometry>
-        <mesh filename="meshes/robots/fer/visual/link4.dae" />
+        <mesh filename="meshes/robots/fer/visual/link4.glb" />
       </geometry>
     </visual>
     <inertial>
@@ -117,7 +117,7 @@
   <link name="fer_link5">
     <visual name="fer_link5_visual">
       <geometry>
-        <mesh filename="meshes/robots/fer/visual/link5.dae" />
+        <mesh filename="meshes/robots/fer/visual/link5.glb" />
       </geometry>
     </visual>
     <inertial>
@@ -139,7 +139,7 @@
   <link name="fer_link6">
     <visual name="fer_link6_visual">
       <geometry>
-        <mesh filename="meshes/robots/fer/visual/link6.dae" />
+        <mesh filename="meshes/robots/fer/visual/link6.glb" />
       </geometry>
     </visual>
     <inertial>
@@ -161,7 +161,7 @@
   <link name="fer_link7">
     <visual name="fer_link7_visual">
       <geometry>
-        <mesh filename="meshes/robots/fer/visual/link7.dae" />
+        <mesh filename="meshes/robots/fer/visual/link7.glb" />
       </geometry>
     </visual>
     <inertial>
@@ -194,7 +194,7 @@
   <link name="fer_hand">
     <visual name="fer_hand_visual">
       <geometry>
-        <mesh filename="meshes/robot_ee/franka_hand_white/visual/hand.dae" />
+        <mesh filename="meshes/robot_ee/franka_hand_white/visual/hand.glb" />
       </geometry>
     </visual>
     <inertial>
@@ -213,7 +213,7 @@
   <link name="fer_leftfinger">
     <visual name="fer_leftfinger_visual">
       <geometry>
-        <mesh filename="meshes/robot_ee/franka_hand_white/visual/finger.dae" />
+        <mesh filename="meshes/robot_ee/franka_hand_white/visual/finger.glb" />
       </geometry>
     </visual>
     
@@ -227,7 +227,7 @@
     <visual name="fer_rightfinger_visual">
       <origin rpy="0 0 0" xyz="0 0 0" />
       <geometry>
-        <mesh filename="meshes/robot_ee/franka_hand_white/visual/finger.dae" />
+        <mesh filename="meshes/robot_ee/franka_hand_white/visual/finger.glb" />
       </geometry>
     </visual>
     
