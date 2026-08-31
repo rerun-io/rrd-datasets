@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pyarrow as pa
 import rerun as rr
 from rerun.experimental import Chunk, LazyChunkStream, OptimizationProfile
 
@@ -53,7 +54,8 @@ def properties_chunk(ep: Episode) -> Chunk:
             end_timestamp_ns=np.array([info.end_timestamp_ns], dtype=np.int64),
             duration_sec=np.array([info.duration_sec], dtype=np.float64),
             num_subtasks=np.array([len(info.subtasks)], dtype=np.int64),
-            subtask_labels=[", ".join(s.task for s in info.subtasks)],
+            # The explicit utf8 type keeps the column a list of strings when an episode has no subtasks.
+            subtask_labels=pa.array([s.task for s in info.subtasks], type=pa.utf8()),
             has_ir=[has_ir(ep)],
             robot=[ROBOT],
         ),
