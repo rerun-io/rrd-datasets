@@ -23,6 +23,7 @@ from libero.episodes import recording_id
 def main(argv: list[str]) -> None:
     inputs = task_files(argv)
     urdf = urdf_layer.load_urdf()
+    urdf_layer.convert_model(urdf, RRD_ROOT)
     print(f"Converting {len(inputs)} task file(s) -> {RRD_ROOT}/<layer>/ (base + properties + urdf + cameras)")
     for path, task in inputs:
         reader = Hdf5Reader(path)

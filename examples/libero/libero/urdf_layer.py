@@ -39,6 +39,9 @@ list_flatten = pc.list_flatten  # type: ignore[attr-defined]
 
 URDF_PATH = Path(__file__).resolve().parents[1] / "urdf" / "fer" / "fer.urdf"
 ENTITY_PREFIX = "urdf"
+
+# Used in three places: the model rrd's file name, its recording id, and its asset id on the catalog.
+MODEL_RECORDING_ID = "urdf-model"
 TRANSFORMS = f"/{ENTITY_PREFIX}/transforms"
 WORLD_FROM_BASE = f"/{ENTITY_PREFIX}/world_from_base"
 WORLD_FRAME = "world"
@@ -151,6 +154,21 @@ def fk_stream(urdf: UrdfTree, reader: Hdf5Reader, demo: str) -> LazyChunkStream:
 # --------------------------------------------------------------------------------------
 
 
+def model_rrd_path(rrd_root: Path) -> Path:
+    """Where the shared model rrd lives under a dataset's rrd root."""
+    return rrd_root / "assets" / f"{MODEL_RECORDING_ID}.rrd"
+
+
+def convert_model(urdf: UrdfTree, rrd_root: Path) -> Path:
+    """Write the shared model rrd: the meshes and fixed transforms every demo's urdf layer poses."""
+    out_path = model_rrd_path(rrd_root)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    urdf.stream(include_joint_transforms=True).collect(optimize=OptimizationProfile.OBJECT_STORE).write_rrd(
+        str(out_path), application_id=APPLICATION_ID, recording_id=MODEL_RECORDING_ID
+    )
+    return out_path
+
+
 def convert_demo(urdf: UrdfTree, reader: Hdf5Reader, task: str, demo: str, rrd_root: Path) -> Path:
     """Write one demo's URDF layer; returns the written path."""
     model_file = str(reader.attributes(f"/data/{demo}")["model_file"])
@@ -179,6 +197,8 @@ def load_urdf() -> UrdfTree:
 def main(argv: list[str]) -> None:
     urdf = load_urdf()
     inputs = task_files(argv)
+    model = convert_model(urdf, RRD_ROOT)
+    print(f"Shared model rrd: {model} ({model.stat().st_size / 1e6:.1f} MB)")
     print(f"Building URDF layer for {len(inputs)} task file(s) -> {RRD_ROOT / 'urdf'}/")
     for path, task in inputs:
         reader = Hdf5Reader(path)

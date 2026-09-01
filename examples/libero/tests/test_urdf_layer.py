@@ -13,12 +13,14 @@ from rerun.experimental import Hdf5Reader, RrdReader
 from libero import urdf_layer
 from libero.urdf_layer import (
     JOINT_NAMES_URDF,
+    MODEL_RECORDING_ID,
     N_JOINTS,
     TRANSFORMS,
     WORLD_FRAME,
     WORLD_FROM_BASE,
     base_pose,
     convert_demo,
+    convert_model,
     load_urdf,
     read_joint_values,
     transform_batches,
@@ -111,6 +113,18 @@ def _transform_edges(rrd_path: Path) -> tuple[set[tuple[str, str]], int]:
         if chunk.entity_path == TRANSFORMS and not chunk.is_static:
             temporal_rows += batch.num_rows
     return edges, temporal_rows
+
+
+def test_the_model_rrd_is_a_valid_asset(tmp_path: Path) -> None:
+    """The catalog rejects temporal chunks in an asset, so the model rrd must stay static only."""
+    out = convert_model(load_urdf(), tmp_path)
+    reader = RrdReader(str(out))
+    (entry,) = reader.recordings()
+    assert entry.recording_id == MODEL_RECORDING_ID
+    chunks = list(reader.stream(store=entry))
+    assert chunks
+    assert all(chunk.is_static for chunk in chunks)
+    assert any("visual_geometries" in chunk.entity_path for chunk in chunks)
 
 
 def test_urdf_layer_round_trip(tmp_path: Path) -> None:
