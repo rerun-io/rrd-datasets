@@ -23,7 +23,7 @@ def test_task_id_strips_the_suffix() -> None:
 
 
 def test_recording_id_nests_demo_under_task() -> None:
-    assert recording_id("libero_goal/turn_on_the_stove", "demo_0") == "libero_goal/turn_on_the_stove/demo_0"
+    assert recording_id("libero_goal/turn_on_the_stove", "demo_0") == "libero_goal/turn_on_the_stove__demo_0"
 
 
 def test_task_files_from_files_keeps_only_task_files_sorted() -> None:

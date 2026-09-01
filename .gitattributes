@@ -1,7 +1,9 @@
 * text=auto eol=lf
 
-# URDF meshes and images are binary — git-lfs carries them.
+# URDF meshes and images — git-lfs carries them.
 *.stl filter=lfs diff=lfs merge=lfs -text
+*.dae filter=lfs diff=lfs merge=lfs -text
+*.glb filter=lfs diff=lfs merge=lfs -text
 *.STL filter=lfs diff=lfs merge=lfs -text
 *.png filter=lfs diff=lfs merge=lfs -text
 *.gif filter=lfs diff=lfs merge=lfs -text

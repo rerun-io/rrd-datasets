@@ -2,7 +2,7 @@
 Convert LIBERO demos into per-demo Rerun RRDs: the base layer.
 
 Each demo group is written as `Hdf5Reader` emits it, with the task file's attributes alongside,
-one RRD per demo with a stable `recording_id` (`<suite>/<task>/<demo>`). Nothing is dropped; only
+one RRD per demo with a stable `recording_id` (`<suite>/<task>__<demo>`). Nothing is dropped; only
 the camera frames are reshaped, into upright `Image`s.
 
 Run:  pixi run -e libero convert-base              # every downloaded task file

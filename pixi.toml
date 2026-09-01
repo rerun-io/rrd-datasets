@@ -38,7 +38,7 @@ python = "3.12.*"
 # wildcard: `.rrd` and `.rbl` output depends on the version, so a patch release
 # arrives as a deliberate commit. The example pyprojects pin the same version —
 # theirs is what the Modal images install.
-rerun-sdk = "==0.36.1"
+rerun-sdk = "==0.37.0"
 # The shared tools every example composes; not declared in example pyprojects —
 # the Modal images ship its source instead (no index carries a path dependency).
 rrd_datasets_common = { path = "packages/rrd_datasets_common", editable = true }
@@ -206,7 +206,7 @@ mypy-boto3-s3 = ">=1.34"
 [feature.abc-130k.pypi-dependencies]
 abc_130k = { path = "examples/abc-130k", editable = true, extras = ["cloud"] }
 # PyPI-only notebook integration; not required by the conversion package.
-rerun-notebook = "==0.36.1"
+rerun-notebook = "==0.37.0"
 
 [feature.abc-130k.activation.env]
 PACKAGE_DIR = "examples/abc-130k"
@@ -373,7 +373,7 @@ description = "Download the LIBERO sample task files"
 [feature.libero-tasks.tasks.convert]
 cmd = "python -m libero.convert"
 cwd = "examples/libero"
-description = "Convert LIBERO demos to rrd (both layers)"
+description = "Convert LIBERO demos to rrd (all layers)"
 
 [feature.libero-tasks.tasks.convert-base]
 cmd = "python -m libero.base_layer"
@@ -384,6 +384,16 @@ description = "Convert LIBERO demos (base layer)"
 cmd = "python -m libero.properties_layer"
 cwd = "examples/libero"
 description = "Convert LIBERO demos (properties layer)"
+
+[feature.libero-tasks.tasks.convert-urdf]
+cmd = "python -m libero.urdf_layer"
+cwd = "examples/libero"
+description = "Convert LIBERO demos (urdf layer)"
+
+[feature.libero-tasks.tasks.convert-cameras]
+cmd = "python -m libero.camera_layer"
+cwd = "examples/libero"
+description = "Convert LIBERO demos (cameras layer)"
 
 [feature.libero-tasks.tasks.blueprint]
 cmd = "python -m libero.blueprint"

@@ -12,9 +12,19 @@ NUM_STEPS = 3
 HEIGHT, WIDTH = 4, 2
 SIM_T0, SIM_DT = 0.25, 0.05  # seconds; the timebase every surveyed demo follows
 
-# LIBERO stands the arm on a table; the urdf layer reads this pose out of the MuJoCo XML.
+# The MuJoCo XML as the real files shape it: the arm on a table (urdf layer) and the two camera
+# mounts, `agentview` in the world and `robot0_eye_in_hand` on the hand body (camera layer).
 BASE_POS = [-0.66, 0.0, 0.912]
-MODEL_FILE = '<mujoco model="fixture"><worldbody><body name="robot0_base" pos="-0.66 0 0.912"/></worldbody></mujoco>'
+AGENTVIEW_POS = [0.66, 0.0, 1.61]
+EYE_IN_HAND_POS = [0.05, 0.0, 0.0]
+MODEL_FILE = (
+    '<mujoco model="fixture"><worldbody>'
+    '<camera name="agentview" pos="0.66 0 1.61" quat="0.638018 0.30485 0.30485 0.638018"/>'
+    '<body name="robot0_base" pos="-0.66 0 0.912">'
+    '<body name="robot0_right_hand" pos="0 0 0.1065" quat="0.923785 0 0 -0.382911">'
+    '<camera name="robot0_eye_in_hand" pos="0.05 0 0" quat="0 0.707107 0.707107 0" fovy="75"/>'
+    "</body></body></worldbody></mujoco>"
+)
 
 # A plausible Panda pose, inside every `fer` joint limit so forward kinematics stays meaningful.
 ARM_POSE = np.array([0.0, -0.2, 0.0, -2.3, 0.0, 2.1, 0.8])

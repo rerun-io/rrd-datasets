@@ -63,5 +63,5 @@ Every dataset is in the `.rrd`; the ones below repeat others and are not plotted
 
 - `macros_image_convention` is `opengl` in all five files: raw frames render the scene upside-down ([robosuite stores OpenGL-convention buffers](https://robosuite.ai/)).
 - The axis-angle (`ee_ori`) magnitude can exceed π — the vector tracks the rotation continuously instead of wrapping.
-- Demo keys are contiguous from `demo_0` in every surveyed file, but HDF5 iterates them lexicographically (`demo_0, demo_1, demo_10, …`) — sort numerically when order matters.
-- Each LIBERO task is specified by a .bddl file (Behavior Domain Definition Language) and the HDF5 records where that file lives twice: `env_args.env_kwargs.bddl_file_name` and `bddl_file_name` both as /data attribute.
+- HDF5 iterates the demo keys lexicographically (`demo_0, demo_1, demo_10, …`) — sort numerically when order matters.
+- The 3D view builds on the [robosuite](https://github.com/ARISE-Initiative/robosuite) Panda gripper model, each demo's `model_file` XML, and the [franka_description](https://github.com/frankaemika/franka_description) `fer` URDF.

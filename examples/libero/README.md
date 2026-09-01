@@ -1,16 +1,16 @@
 # LIBERO
 
 [LIBERO](https://libero-project.github.io/) is a lifelong-learning manipulation benchmark simulated in [robosuite](https://robosuite.ai/)-based environments: 130 tabletop tasks across five suites, each task shipping ~50 teleoperated demos as one HDF5 file.
-This example converts each demo into two Rerun recordings (`.rrd`).
-One recording corresponds to one layer: the demo itself, and its metadata properties.
+This example converts each demo into four Rerun recordings (`.rrd`).
+One recording corresponds to one layer: the demo itself, its metadata properties, the posed robot model, and the two cameras placed in the scene.
 
-**Status: incubating.** Download, conversion, and the default blueprint work; the urdf layer (URDFs are available from Franka homepage), catalog registration, and the remote conversion are still to come.
+**Status: incubating.** Download, conversion, the urdf and cameras layers, and the default blueprint work; catalog registration and the remote conversion are still to come.
 
 Below is the viewer showing a converted demo with the default blueprint.
 
 ![LIBERO in the Rerun viewer](init_blueprint.png)
 
-The [default blueprint](#3-view) puts the two camera panes on the left with the task instruction above them, and the joint, gripper, action, and end-effector plots on the right.
+The [default blueprint](#3-view) puts the task instruction and the posed arm on the left, with both camera frustums in the scene, the two camera panes on the right, and the joint, gripper, action, and end-effector plots along the bottom.
 
 > **Note:** this example uses Pixi. Get it [here](https://pixi.prefix.dev/latest/installation/).
 > Everything runs inside the pixi env: prefix task commands with `pixi run`, and direct tool commands (`hf`, `rerun`) with `pixi run -e libero`.
@@ -29,7 +29,7 @@ Data is downloaded at runtime from the original Hugging Face repo.
 ### Converted `.rrd` Dataset
 
 Converted recordings will be published to a Hugging Face bucket when ready.
-They are built from source revision [`f13aa24a`](https://huggingface.co/datasets/yifengzhu-hf/LIBERO-datasets/tree/f13aa24a3da8c43c7225569f28c562979fa0e35a), dated 2025-05-18, with rerun-sdk 0.36.1.
+They are built from source revision [`f13aa24a`](https://huggingface.co/datasets/yifengzhu-hf/LIBERO-datasets/tree/f13aa24a3da8c43c7225569f28c562979fa0e35a), dated 2025-05-18, with rerun-sdk 0.37.0.
 
 ## Local Runs
 
@@ -49,17 +49,19 @@ To download different files, edit `SAMPLES` in [`libero/download.py`](libero/dow
 ### 2. Convert (HDF5 → RRD)
 
 Convert downloaded task files into per-demo Rerun recordings (`.rrd`) that share a `recording_id`.
-The viewer/catalog stacks them as **layers** of one logical recording: a base layer that carries the full demo, plus a properties layer that carries the catalog metadata.
-Each layer can be added, replaced, or re-run without touching the other.
+The viewer/catalog stacks them as **layers** of one logical recording: a base layer that carries the full demo, a properties layer that carries the catalog metadata, a urdf layer that carries the posed robot model, and a cameras layer that places the two cameras in the scene.
+Each layer can be added, replaced, or re-run without touching the others.
 
-Build both layers, for every downloaded file or one task file:
+Build every layer, for every downloaded file or one task file:
 
 ```bash
 pixi run -e libero convert                    # every downloaded task file
 pixi run -e libero convert <task.hdf5>        # one task file (~50 demos)
 ```
 
-> **Note:** This example also includes its own task for each layer (`convert-base`, `convert-properties`) writing the corresponding `.rrd`.
+> **Note:** This example also includes its own task for each layer (`convert-base`, `convert-properties`, `convert-urdf`, `convert-cameras`) writing the corresponding `.rrd`.
+
+The urdf and cameras layers are derived, so they can be rebuilt on their own — after a URDF change, for instance — without rewriting the base.
 
 ### 3. View
 
@@ -67,7 +69,7 @@ Generate the default blueprint, then view a demo with it:
 
 ```bash
 pixi run -e libero blueprint
-pixi run -e libero rerun rrds/libero/*/libero_goal/turn_on_the_stove/demo_0.rrd blueprints/libero/default.rbl
+pixi run -e libero rerun rrds/libero/*/libero_goal/turn_on_the_stove__demo_0.rrd blueprints/libero/default.rbl
 ```
 
 > Keep the `*` to load all layers.
@@ -92,15 +94,19 @@ Only the two camera datasets are reshaped, into upright `Image`s.
 The table shows where each source item lands, and in which layer.
 The datasets that repeat others are listed in [observations.md](observations.md#redundancies); they are kept, not plotted.
 
-| Source                                                                                | Entity path                       | Component / archetype  | Layer      | Notes                                                                           |
-| ------------------------------------------------------------------------------------- | --------------------------------- | ---------------------- | ---------- | ------------------------------------------------------------------------------- |
-| `actions`, `rewards`, `dones`, `states`, `robot_states`                               | `/demo`                           | one column per dataset | base       | `actions[7]` in −1…1, `rewards`/`dones` u8, `states[47…110]`, `robot_states[9]` |
-| `obs/joint_states`, `obs/gripper_states`, `obs/ee_pos`, `obs/ee_ori`, `obs/ee_states` | `/demo/obs`                       | one column per dataset | base       | radians, metres and the raw rotation vector, as stored                          |
-| `obs/agentview_rgb`, `obs/eye_in_hand_rgb`                                            | `/camera/{agentview,eye_in_hand}` | `Image`                | base       | flipped upright; the static `Image:format` carries the frame shape              |
-| demo attrs                                                                            | `/demo/__hdf5_properties`         | static columns         | base       | MuJoCo scene XML and initial state, enough to replay the demo                   |
-| file attrs                                                                            | `/__hdf5_properties`              | static columns         | base       | the two JSON attrs also parsed, as `problem_info:parsed` and `env_args:parsed`  |
-| `problem_info.language_instruction`                                                   | `/task/instruction`               | `TextDocument`         | base       | static, for the instruction pane                                                |
-| file attrs, `num_samples`, filename                                                   | segment properties                | —                      | properties | suite, scene, task language, num_samples, source file                           |
+| Source                                                                                | Entity path                       | Component / archetype                       | Layer      | Notes                                                                           |
+| ------------------------------------------------------------------------------------- | --------------------------------- | ------------------------------------------- | ---------- | ------------------------------------------------------------------------------- |
+| `actions`, `rewards`, `dones`, `states`, `robot_states`                               | `/demo`                           | one column per dataset                      | base       | `actions[7]` in −1…1, `rewards`/`dones` u8, `states[47…110]`, `robot_states[9]` |
+| `obs/joint_states`, `obs/gripper_states`, `obs/ee_pos`, `obs/ee_ori`, `obs/ee_states` | `/demo/obs`                       | one column per dataset                      | base       | radians, metres and the raw rotation vector, as stored                          |
+| `obs/agentview_rgb`, `obs/eye_in_hand_rgb`                                            | `/camera/{agentview,eye_in_hand}` | `Image`                                     | base       | flipped upright; the static `Image:format` carries the frame shape              |
+| demo attrs                                                                            | `/demo/__hdf5_properties`         | static columns                              | base       | MuJoCo scene XML and initial state, enough to replay the demo                   |
+| file attrs                                                                            | `/__hdf5_properties`              | static columns                              | base       | the two JSON attrs also parsed, as `problem_info:parsed` and `env_args:parsed`  |
+| `problem_info.language_instruction`                                                   | `/task/instruction`               | `TextDocument`                              | base       | static, for the instruction pane                                                |
+| file attrs, `num_samples`, filename                                                   | segment properties                | —                                           | properties | suite, scene, task language, num_samples, source file                           |
+| `fer.urdf` meshes and fixed joints                                                    | `/urdf/fer/**`                    | `Asset3D`                                   | urdf       | static; the arm model, ~4 MB per recording                                      |
+| `obs/joint_states`, `obs/gripper_states` → FK                                         | `/urdf/transforms`                | `Transform3D`                               | urdf       | one row per joint per step, named frames                                        |
+| `model_file` `robot0_base` pose                                                       | `/urdf/world_from_base`           | `Transform3D`                               | urdf       | static; stands the arm where the scene puts it                                  |
+| `model_file` `<camera>` elements                                                      | `/camera/{agentview,eye_in_hand}` | `Transform3D`, `Pinhole`, `CoordinateFrame` | cameras    | static; places the two images in the scene, see [below](#the-cameras-layer)     |
 
 No `Scalars` are derived.
 The default blueprint plots the arrays straight from their columns through component mappings and names the series there ([`libero/blueprint.py`](libero/blueprint.py)); a hand-made view shows the same arrays with index labels.
@@ -111,10 +117,23 @@ Everything the source file holds is in the base layer, so a demo can be written 
 A test ([`tests/test_base_layer.py`](tests/test_base_layer.py)) compares the result with the original, dataset by dataset and attribute by attribute, on the synthesized fixture and on a downloaded demo.
 This is a value-level identity test, not a byte-level one.
 
+### The urdf layer
+
+The urdf layer poses the vendored franka `fer` model ([`urdf/fer/`](urdf/fer/), provenance and regeneration recipe in its README <!-- add link -->) with the base layer's joint columns: `obs/joint_states[i]` drives `fer_joint{i+1}` and `obs/gripper_states` the two finger joints, the second negated because robosuite signs the fingers against each other.
+A static `world -> base` edge from the `robot0_base` body of each demo's MuJoCo XML stands the arm where the scene puts it. FK to `fer_hand_tcp` reproduces the recorded `obs/ee_pos` up to the fixed offset between franka's TCP and robosuite's grip site.
+
+### The cameras layer
+
+Each demo's MuJoCo XML lists its cameras with a pose and a vertical field of view.
+`agentview` is fixed in the world; `robot0_eye_in_hand` rides the `robot0_right_hand` body, the URDF's `fer_hand` frame, so it moves with the arm.
+The intrinsics follow [robosuite's camera utilities](https://github.com/ARISE-Initiative/robosuite/blob/master/robosuite/utils/camera_utils.py), and the `Pinhole` declares MuJoCo's `RUB` camera axes.
+
 ## Rerun APIs demonstrated
 
 - [`Hdf5Reader`](https://ref.rerun.io/docs/python/stable/experimental/#rerun.experimental.Hdf5Reader) reads each demo group into chunk streams as-is, and the task file's attributes through a second stream over `/data` (`base_layer.py`).
 - [Lenses](https://rerun.io/docs/concepts/query-and-transform/lenses) turn the camera blobs into upright `Image` buffers and parse the JSON attributes into structs (`base_layer.py`).
+- `rerun.urdf.UrdfTree` streams the robot model and solves forward kinematics from the joint columns, scattered into per-joint `Transform3D` rows (`urdf_layer.py`).
+- `Pinhole`, `CoordinateFrame` and a static `Transform3D` on the image entities place the base layer's frames in 3D, `camera_xyz=RUB` matching MuJoCo's camera frame (`camera_layer.py`).
 - The [blueprint](https://rerun.io/docs/concepts/visualization/blueprints) API composes the default layout; component mappings plot the array columns without derived `Scalars` and carry the series labels (`blueprint.py`).
 
 ## References

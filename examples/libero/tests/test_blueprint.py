@@ -17,9 +17,9 @@ from rerun.experimental import RrdReader
 from libero.base_layer import APPLICATION_ID
 from libero.blueprint import build_blueprint
 
-# One entry per view in `build_blueprint`: the two camera panes, the instruction text, and the
-# joint / gripper / action / end-effector plots.
-EXPECTED_VIEWS = {"2D": 2, "TextDocument": 1, "TimeSeries": 4}
+# One entry per view in `build_blueprint`: the two camera panes, the instruction text, the posed
+# arm, and the joint / gripper / action / end-effector plots.
+EXPECTED_VIEWS = {"2D": 2, "3D": 1, "TextDocument": 1, "TimeSeries": 4}
 
 # The reflected columns each plot reads; the end-effector pane reads two.
 EXPECTED_SOURCES = {"joint_states", "gripper_states", "actions", "ee_pos", "ee_ori"}
