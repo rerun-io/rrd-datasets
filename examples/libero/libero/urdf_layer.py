@@ -67,7 +67,8 @@ def _obs_struct(msgs: pa.Array) -> pa.Array:
 def read_joint_values(msgs: pa.Array) -> tuple[np.ndarray, np.ndarray]:
     """The arm angles `(n, 7)` in radians and the finger openings `(n, 2)` in metres."""
     obs = _obs_struct(msgs)
-    arm = np.asarray(obs.field("joint_states").to_numpy(zero_copy_only=False).tolist(), dtype=np.float64)
+       arm = obs.field("joint_states").flatten().to_numpy().reshape(len(obs), -1)
+       grip = obs.field("gripper_states").flatten().to_numpy().reshape(len(obs), -1)
     grip = np.asarray(obs.field("gripper_states").to_numpy(zero_copy_only=False).tolist(), dtype=np.float64)
     # Both URDF finger joints are limited to [0, 0.04]; robosuite reports the second one negated.
     return arm, np.column_stack([grip[:, 0], -grip[:, 1]])
