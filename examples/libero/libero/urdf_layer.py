@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import sys
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -56,95 +55,6 @@ JOINT_NAMES_URDF = ARM_JOINTS + FINGER_JOINTS
 N_JOINTS = len(JOINT_NAMES_URDF)
 
 # --------------------------------------------------------------------------------------
-# prismatic finger workaround
-# rerun-sdk 0.36.1 `compute_joint_transform_batches` slides a prismatic joint along its axis
-# without the joint origin's rotation, so the finger transforms are built here. Delete this
-# section once the upstream fix lands.
-# --------------------------------------------------------------------------------------
-
-# The SDK's batch entries have non-nullable elements; ours must match to concatenate with them.
-_VEC3 = pa.list_(pa.field("item", pa.float32(), nullable=False), 3)
-_QUAT = pa.list_(pa.field("item", pa.float32(), nullable=False), 4)
-
-
-@dataclass(frozen=True)
-class SlidingJoint:
-    """A prismatic joint resolved to motion in its parent frame."""
-
-    parent_frame: str
-    child_frame: str
-    origin: np.ndarray  # parent-frame translation at joint value 0
-    slide: np.ndarray  # parent-frame displacement per unit of joint value
-    quaternion: np.ndarray  # xyzw; a slide does not rotate the child
-
-
-def _rpy_matrix(rpy: tuple[float, float, float]) -> np.ndarray:
-    """URDF fixed-axis roll-pitch-yaw as a rotation matrix."""
-    roll, pitch, yaw = rpy
-    cr, sr, cp, sp, cy, sy = np.cos(roll), np.sin(roll), np.cos(pitch), np.sin(pitch), np.cos(yaw), np.sin(yaw)
-    return np.array([
-        [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
-        [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
-        [-sp, cp * sr, cp * cr],
-    ])
-
-
-def _rpy_quaternion(rpy: tuple[float, float, float]) -> np.ndarray:
-    """URDF fixed-axis roll-pitch-yaw as an xyzw quaternion."""
-    roll, pitch, yaw = np.asarray(rpy, dtype=np.float64) / 2.0
-    cr, sr, cp, sp, cy, sy = np.cos(roll), np.sin(roll), np.cos(pitch), np.sin(pitch), np.cos(yaw), np.sin(yaw)
-    return np.array([
-        sr * cp * cy - cr * sp * sy,
-        cr * sp * cy + sr * cp * sy,
-        cr * cp * sy - sr * sp * cy,
-        cr * cp * cy + sr * sp * sy,
-    ])
-
-
-def sliding_joints(urdf: UrdfTree) -> list[SlidingJoint]:
-    """
-    The finger joints, with the slide direction resolved through the joint origin's rotation.
-
-    `fer_finger_joint2` is turned π about z so the fingers open apart; without that rotation the
-    gap stays at zero.
-    """
-    joints = {joint.name: joint for joint in urdf.joints()}
-    resolved = []
-    for name in FINGER_JOINTS:
-        joint = joints[name]
-        rotation = _rpy_matrix(joint.origin_rpy)
-        resolved.append(
-            SlidingJoint(
-                parent_frame=joint.parent_link,
-                child_frame=joint.child_link,
-                origin=np.asarray(joint.origin_xyz, dtype=np.float64),
-                slide=rotation @ np.asarray(joint.axis, dtype=np.float64),
-                quaternion=_rpy_quaternion(joint.origin_rpy),
-            )
-        )
-    return resolved
-
-
-def _sliding_entries(joints: list[SlidingJoint], values: np.ndarray, template: pa.DataType) -> pa.Array:
-    """One batch entry per sliding joint per row, ordered row by row to match the arm entries."""
-    rows = len(values)
-    translations = np.stack(
-        [joint.origin + np.outer(values[:, index], joint.slide) for index, joint in enumerate(joints)],
-        axis=1,
-    ).reshape(-1, 3)
-    quaternions = np.tile(np.stack([joint.quaternion for joint in joints]), (rows, 1))
-    return pa.StructArray.from_arrays(
-        [
-            pa.FixedSizeListArray.from_arrays(pa.array(translations.reshape(-1), type=pa.float32()), type=_VEC3),
-            pa.FixedSizeListArray.from_arrays(pa.array(quaternions.reshape(-1), type=pa.float32()), type=_QUAT),
-            pa.array([joint.parent_frame for joint in joints] * rows, type=pa.string()),
-            pa.array([joint.child_frame for joint in joints] * rows, type=pa.string()),
-        ],
-        fields=list(template),
-    )
-
-
-# --------------------------------------------------------------------------------------
 # forward kinematics
 # --------------------------------------------------------------------------------------
 
@@ -163,23 +73,15 @@ def read_joint_values(msgs: pa.Array) -> tuple[np.ndarray, np.ndarray]:
     return arm, np.column_stack([grip[:, 0], -grip[:, 1]])
 
 
-def transform_batches(urdf: UrdfTree, joints: list[SlidingJoint], msgs: pa.Array) -> pa.Array:
-    """One `JointTransformBatch` per row: the arm solved by the SDK, the fingers built here."""
+def transform_batches(urdf: UrdfTree, msgs: pa.Array) -> pa.Array:
+    """One `JointTransformBatch` per row, all nine joints solved by the SDK."""
     arm_values, finger_values = read_joint_values(msgs)
-    rows = len(arm_values)
-    arm_offsets = pa.array(np.arange(rows + 1) * len(ARM_JOINTS), type=pa.int32())
-    names = pa.ListArray.from_arrays(arm_offsets, pa.array(ARM_JOINTS * rows, type=pa.string()))
-    values = pa.ListArray.from_arrays(arm_offsets, pa.array(arm_values.reshape(-1)))
-
-    arm = urdf.compute_joint_transform_batches(names, values, clamp=False).flatten()
-    fingers = _sliding_entries(joints, finger_values, arm.type)  # prismatic finger workaround
-
-    # Interleave so each row holds its arm entries followed by its finger entries.
-    arm_index = np.arange(rows)[:, None] * len(ARM_JOINTS) + np.arange(len(ARM_JOINTS))[None, :]
-    finger_index = len(arm) + np.arange(rows)[:, None] * len(joints) + np.arange(len(joints))[None, :]
-    order = np.concatenate([arm_index, finger_index], axis=1).reshape(-1)
-    entries = pa.concat_arrays([arm, fingers]).take(pa.array(order))
-    return pa.ListArray.from_arrays(pa.array(np.arange(rows + 1) * N_JOINTS, type=pa.int32()), entries)
+    joint_values = np.column_stack([arm_values, finger_values])
+    rows = len(joint_values)
+    offsets = pa.array(np.arange(rows + 1) * N_JOINTS, type=pa.int32())
+    names = pa.ListArray.from_arrays(offsets, pa.array(JOINT_NAMES_URDF * rows, type=pa.string()))
+    values = pa.ListArray.from_arrays(offsets, pa.array(joint_values.reshape(-1)))
+    return urdf.compute_joint_transform_batches(names, values, clamp=False)
 
 
 # --------------------------------------------------------------------------------------
@@ -216,7 +118,7 @@ def world_from_base_chunk(model_file: str) -> Chunk:
     )
 
 
-def fk_stream(urdf: UrdfTree, joints: list[SlidingJoint], reader: Hdf5Reader, demo: str) -> LazyChunkStream:
+def fk_stream(urdf: UrdfTree, reader: Hdf5Reader, demo: str) -> LazyChunkStream:
     """Two-lens FK: observations -> JointTransformBatch -> scattered per-joint `Transform3D`."""
     # FK needs only the joint datasets; the camera frames are most of the file.
     cameras = [f"obs/{camera.source}" for camera in discover_cameras(reader, demo)]
@@ -225,7 +127,7 @@ def fk_stream(urdf: UrdfTree, joints: list[SlidingJoint], reader: Hdf5Reader, de
         obs.lenses(
             DeriveLens(OBS_STRUCT, output_entity="/tmp/batches").to_component(
                 BATCH,
-                Selector(".").pipe(lambda msgs: transform_batches(urdf, joints, msgs)),
+                Selector(".").pipe(lambda msgs: transform_batches(urdf, msgs)),
             ),
             content=OBS_ENTITY,
             output_mode="forward_all",
@@ -258,7 +160,7 @@ def convert_demo(urdf: UrdfTree, reader: Hdf5Reader, task: str, demo: str, rrd_r
 
     model = urdf.stream(include_joint_transforms=True)
     edge = LazyChunkStream.from_iter([world_from_base_chunk(model_file)])
-    fk = fk_stream(urdf, sliding_joints(urdf), reader, demo)
+    fk = fk_stream(urdf, reader, demo)
     LazyChunkStream.merge(model, edge, fk).collect(optimize=OptimizationProfile.OBJECT_STORE).write_rrd(
         str(out_path), application_id=APPLICATION_ID, recording_id=rec_id
     )

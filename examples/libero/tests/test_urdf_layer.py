@@ -21,7 +21,6 @@ from libero.urdf_layer import (
     convert_demo,
     load_urdf,
     read_joint_values,
-    sliding_joints,
     transform_batches,
 )
 
@@ -44,7 +43,8 @@ def test_the_mapping_names_every_moving_joint_once() -> None:
     moving = {joint.name for joint in load_urdf().joints() if joint.joint_type != "fixed"}
     assert set(JOINT_NAMES_URDF) == moving
     assert len(JOINT_NAMES_URDF) == len(moving)
-    assert [joint.child_frame for joint in sliding_joints(load_urdf())] == ["fer_leftfinger", "fer_rightfinger"]
+    prismatic = [joint.child_link for joint in load_urdf().joints() if joint.joint_type == "prismatic"]
+    assert prismatic == ["fer_leftfinger", "fer_rightfinger"]
 
 
 def test_the_second_finger_is_negated_into_the_urdf_range() -> None:
@@ -58,7 +58,7 @@ def test_the_second_finger_is_negated_into_the_urdf_range() -> None:
 def _finger_translations(opening: float) -> dict[str, np.ndarray]:
     """The two finger links' positions in the hand frame, at a given opening."""
     urdf = load_urdf()
-    batch = transform_batches(urdf, sliding_joints(urdf), _obs(list(ARM_POSE), [opening, -opening]))
+    batch = transform_batches(urdf, _obs(list(ARM_POSE), [opening, -opening]))
     assert len(batch) == 1
     assert len(batch[0]) == N_JOINTS
     return {
