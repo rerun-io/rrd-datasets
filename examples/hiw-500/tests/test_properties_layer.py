@@ -26,9 +26,10 @@ INFO = {
 
 
 def _values(chunk: Chunk) -> dict[str, object]:
-    """Component name to its one value, for a one-row static chunk."""
+    """Component name to its one value; `subtask_labels` keeps its whole row as the one list-valued property."""
     batch = chunk.to_record_batch()
-    return {name: batch.column(name).to_pylist()[0][0] for name in batch.schema.names if name != "rerun.controls.RowId"}
+    rows = {name: batch.column(name).to_pylist()[0] for name in batch.schema.names if name != "rerun.controls.RowId"}
+    return {name: row if name == "subtask_labels" else row[0] for name, row in rows.items()}
 
 
 def _episode(root: Path, info: dict[str, object]) -> Episode:
@@ -55,7 +56,7 @@ def test_every_info_field_is_a_property_except_the_boundaries_and_duration_ns(tm
         "end_timestamp_ns": 1771914696836000000,
         "duration_sec": 23.559000064,
         "num_subtasks": 2,
-        "subtask_labels": "move to bed, pick pillow",
+        "subtask_labels": ["move to bed", "pick pillow"],
         "has_ir": False,
         "robot": ROBOT,
     }
@@ -68,4 +69,4 @@ def test_a_missing_info_json_still_fills_every_column(tmp_path: Path) -> None:
     assert values["scene"] == -1
     assert values["start_timestamp_ns"] == values["end_timestamp_ns"] == 0
     assert values["num_subtasks"] == 0
-    assert values["subtask_labels"] == ""
+    assert values["subtask_labels"] == []
