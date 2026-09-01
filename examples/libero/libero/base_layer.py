@@ -160,9 +160,9 @@ def demo_stream(reader: Hdf5Reader, demo: str, cameras: list[Camera]) -> LazyChu
     """
     The demo group as the reader emits it, with the cameras as `Image`s and `sim_time` attached.
 
-    No dataset is ignored and no scalar is derived: the blueprint maps its series onto the reflected
-    columns. Each dataset is its own component (`use_structs=False`) so the camera lenses can consume the
-    two blobs and leave the rest untouched.
+    No archetype is derived other than the cameras: the blueprint maps its series onto the
+    reflected columns. Each dataset is its own component (`use_structs=False`) so the camera
+    lenses can consume the two blobs and leave the rest untouched.
     """
     stream = reader.stream(root_group=f"/data/{demo}", entity_path_prefix=DEMO_ENTITY, use_structs=False)
     stream = stream.lenses(camera_lenses(cameras), content=OBS_ENTITY, output_mode="forward_unmatched")
@@ -198,15 +198,10 @@ def parse_json(arr: pa.Array) -> pa.Array:
     return pa.array([json.loads(text) for text in arr.to_pylist()])
 
 
-def task_stream(reader: Hdf5Reader) -> LazyChunkStream:
-    """
-    The task file's attributes as static columns on `/__hdf5_properties`, in every demo's recording.
-
-    Streaming `/data` with every demo group ignored leaves the reader nothing but the group's own
-    attributes, so the file-level ones arrive the same way the demo's do. The two JSON attributes
-    are parsed beside their raw text as `<name>:parsed`, and the language instruction becomes a
-    `TextDocument` at `/task/instruction`.
-    """
+def task_attrs_stream(reader: Hdf5Reader) -> LazyChunkStream:
+    """The task file's attributes as static columns on `/__hdf5_properties`, in every demo's recording."""
+    # The two JSON attributes are parsed beside their raw text as `<name>:parsed`; the language
+    # instruction also becomes a `TextDocument` at `/task/instruction` for the instruction pane.
     lenses = [
         DeriveLens("problem_info").to_component(
             rr.ComponentDescriptor("problem_info:parsed"), Selector(".").pipe(parse_json)
@@ -216,6 +211,7 @@ def task_stream(reader: Hdf5Reader) -> LazyChunkStream:
             rr.TextDocument.descriptor_text(), Selector(".").pipe(parse_json).pipe(Selector(".language_instruction"))
         ),
     ]
+    # Ignoring every demo group isolates the task file's own attributes.
     stream = reader.stream(root_group="/data", ignore_datasets=demo_keys(reader), use_structs=False)
     return stream.lenses(lenses, content=TASK_ATTRS_ENTITY, output_mode="forward_all")
 
@@ -224,7 +220,9 @@ def convert_demo(reader: Hdf5Reader, task: str, demo: str, rrd_root: Path) -> Pa
     """Write one demo's base layer; returns the written path."""
     cameras = discover_cameras(reader, demo)
     merged = LazyChunkStream.merge(
-        demo_stream(reader, demo, cameras), task_stream(reader), LazyChunkStream.from_iter(image_format_chunks(cameras))
+        demo_stream(reader, demo, cameras),
+        task_attrs_stream(reader),
+        LazyChunkStream.from_iter(image_format_chunks(cameras)),
     )
 
     rec_id = recording_id(task, demo)
