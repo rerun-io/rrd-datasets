@@ -360,6 +360,10 @@ libero = { path = "examples/libero", editable = true }
 
 [feature.libero.activation.env]
 PACKAGE_DIR = "examples/libero"
+# The dataset converts into a HuggingFace bucket named after it.
+# The `${VAR:-default}` form lets a caller's own setting win.
+STORAGE_BACKEND = "${STORAGE_BACKEND:-hf}"
+HF_BUCKET = "${HF_BUCKET:-libero}"
 
 # Dataset tasks sit in their own feature, included only in the libero environment.
 # Every dataset names its stages the same way (download, convert, register, …),
