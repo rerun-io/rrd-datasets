@@ -14,7 +14,7 @@ from collections.abc import Sequence
 
 import rerun as rr
 import rerun.blueprint as rrb
-from rerun.blueprint.datatypes import ComponentSourceKind, VisualizerComponentMapping
+from rerun.blueprint.encodings import ComponentSourceKind, VisualizerComponentMapping
 from rerun.blueprint.visualizers import Visualizer
 
 from hiw_500.base_layer import (

@@ -37,9 +37,9 @@ def series(component: str, names: list[str]) -> rr.Visualizer:
     """
     return rr.SeriesLines(names=names).visualizer(
         mappings=[
-            rrb.datatypes.VisualizerComponentMapping(
+            rrb.encodings.VisualizerComponentMapping(
                 target="Scalars:scalars",
-                source_kind=rrb.datatypes.ComponentSourceKind.SourceComponent,
+                source_kind=rrb.encodings.ComponentSourceKind.SourceComponent,
                 source_component=component,
                 selector="[]",
             )

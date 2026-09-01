@@ -11,7 +11,7 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 dependencies = [
     # Package runtime deps for the conversion.
-    "rerun-sdk==0.36.1",
+    "rerun-sdk==0.37.0",
     "datafusion==54.0.0",
     "huggingface_hub>=1,<2",
     "numpy>=1.26",

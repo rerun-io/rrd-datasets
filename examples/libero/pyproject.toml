@@ -10,7 +10,7 @@ authors = [{ name = "Rerun.io", email = "opensource@rerun.io" }]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 dependencies = [
-    "rerun-sdk[datafusion]==0.36.1",
+    "rerun-sdk[catalog]==0.37.0",
     "datafusion==54.0.0",
     "pyarrow>=14",
     "numpy>=1.26",

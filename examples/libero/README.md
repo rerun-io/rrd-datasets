@@ -29,7 +29,7 @@ Data is downloaded at runtime from the original Hugging Face repo.
 ### Converted `.rrd` Dataset
 
 Converted recordings will be published to a Hugging Face bucket when ready.
-They are built from source revision [`f13aa24a`](https://huggingface.co/datasets/yifengzhu-hf/LIBERO-datasets/tree/f13aa24a3da8c43c7225569f28c562979fa0e35a), dated 2025-05-18, with rerun-sdk 0.36.1.
+They are built from source revision [`f13aa24a`](https://huggingface.co/datasets/yifengzhu-hf/LIBERO-datasets/tree/f13aa24a3da8c43c7225569f28c562979fa0e35a), dated 2025-05-18, with rerun-sdk 0.37.0.
 
 ## Local Runs
 
