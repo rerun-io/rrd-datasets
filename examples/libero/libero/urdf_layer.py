@@ -1,10 +1,9 @@
 """
 Build the URDF forward-kinematics layer for each LIBERO demo.
 
-The vendored Franka `fer` model, posed by the joint columns of the base layer, written as its own
-`.rrd` per demo under the base `recording_id`. Two lenses on one `Hdf5Reader` stream: the first
-builds a `JointTransformBatch` per row, the second scatters each batch into per-joint `Transform3D`
-rows. A static `world -> base` edge from the demo's MuJoCo XML stands the arm where the scene puts it.
+The vendored Franka `fer` model is written as a shared model rrd (`convert_model`); each
+demo's own `.rrd` carries only what varies. Two lenses on
+one `Hdf5Reader` stream build the FK.
 
 Run:  pixi run -e libero convert-urdf              # every downloaded task file
       pixi run -e libero convert-urdf <task.hdf5>  # a single task file
@@ -176,10 +175,9 @@ def convert_demo(urdf: UrdfTree, reader: Hdf5Reader, task: str, demo: str, rrd_r
     out_path = rrd_root / layer_relpath("urdf", rec_id)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    model = urdf.stream(include_joint_transforms=True)
     edge = LazyChunkStream.from_iter([world_from_base_chunk(model_file)])
     fk = fk_stream(urdf, reader, demo)
-    LazyChunkStream.merge(model, edge, fk).collect(optimize=OptimizationProfile.OBJECT_STORE).write_rrd(
+    LazyChunkStream.merge(edge, fk).collect(optimize=OptimizationProfile.OBJECT_STORE).write_rrd(
         str(out_path), application_id=APPLICATION_ID, recording_id=rec_id
     )
     return out_path
@@ -204,7 +202,7 @@ def main(argv: list[str]) -> None:
         reader = Hdf5Reader(path)
         for demo in demo_keys(reader):
             out = convert_demo(urdf, reader, task, demo, RRD_ROOT)
-            print(f"  {recording_id(task, demo)}: {out} ({out.stat().st_size / 1e6:.1f} MB)")
+            print(f"  {recording_id(task, demo)}: {out} ({out.stat().st_size / 1e3:.0f} KB)")
 
 
 if __name__ == "__main__":

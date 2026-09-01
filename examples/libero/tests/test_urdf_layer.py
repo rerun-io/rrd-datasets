@@ -10,7 +10,6 @@ import pytest
 from conftest import ARM_POSE, BASE_POS, MODEL_FILE, NUM_STEPS, write_fixture
 from rerun.experimental import Hdf5Reader, RrdReader
 
-from libero import urdf_layer
 from libero.urdf_layer import (
     JOINT_NAMES_URDF,
     MODEL_RECORDING_ID,
@@ -131,7 +130,8 @@ def test_urdf_layer_round_trip(tmp_path: Path) -> None:
     fixture = tmp_path / "suite_task_demo.hdf5"
     write_fixture(fixture)
     reader = Hdf5Reader(fixture)
-    out = convert_demo(load_urdf(), reader, "suite/task", "demo_0", tmp_path / "rrds")
+    urdf = load_urdf()
+    out = convert_demo(urdf, reader, "suite/task", "demo_0", tmp_path / "rrds")
 
     entries = RrdReader(str(out)).recordings()
     assert [entry.recording_id for entry in entries] == ["suite/task__demo_0"]
@@ -140,7 +140,8 @@ def test_urdf_layer_round_trip(tmp_path: Path) -> None:
     for chunk in RrdReader(str(out)).stream(store=entries[0]):
         batches.setdefault(chunk.entity_path, []).append(chunk.to_record_batch())
     assert TRANSFORMS in batches
-    assert any(path.startswith(f"/{urdf_layer.ENTITY_PREFIX}/") and "visual_geometries" in path for path in batches)
+    # The meshes ship once in the shared model rrd.
+    assert not any("visual_geometries" in path for path in batches)
     (edge,) = batches[WORLD_FROM_BASE]
     np.testing.assert_allclose(edge.column("Transform3D:translation").to_pylist()[0][0], BASE_POS, atol=1e-6)
 
@@ -148,8 +149,12 @@ def test_urdf_layer_round_trip(tmp_path: Path) -> None:
     names = {name for batch in batches[TRANSFORMS] for name in batch.schema.names}
     assert {"row_index", "sim_time"} <= names
 
-    edges, temporal_rows = _transform_edges(out)
+    demo_edges, temporal_rows = _transform_edges(out)
     assert temporal_rows == NUM_STEPS * N_JOINTS
+
+    # The demo layer connects to the world only together with the shared model.
+    model_edges, _ = _transform_edges(convert_model(urdf, tmp_path / "rrds"))
+    edges = demo_edges | model_edges
 
     # Exactly one root, and every frame reaches it — otherwise links collapse onto the origin.
     parent_of = {child: parent for parent, child in edges}
