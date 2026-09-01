@@ -419,6 +419,11 @@ cmd = "modal run --detach -q -m libero.modal_jobs.convert_tasks"
 cwd = "examples/libero"
 description = "Convert the dataset's episodes on Modal"
 
+[feature.libero-tasks.tasks.upload-blueprint]
+cmd = "python -m libero.upload_blueprint"
+cwd = "examples/libero"
+description = "Upload the dataset's blueprint"
+
 # Test-only: the fixture tests synthesize miniature HDF5 files with h5py.
 [feature.libero-test.dependencies]
 h5py = ">=3.11,<4"
