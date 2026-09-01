@@ -1,11 +1,9 @@
 """
 Register the per-demo LIBERO RRDs into a local Rerun catalog as one dataset.
 
-Each demo is one *segment*, keyed by the `recording_id` its RRDs share (`<suite>/<task>__<demo>`);
-the RRDs attach as the `base`, `properties`, `urdf` and `cameras` *layers* of that segment, and the
-default blueprint is installed on the dataset. Layer names are assigned at registration, not when
-an RRD is written, which is why `rerun server -d rrds/libero` cannot load these files: every one
-would land under the default layer `base`.
+Each demo is one *segment*, keyed by the `recording_id` its RRDs share (`<suite>/<task>__<demo>`).
+All layers (`base`, `properties`, `urdf` and `cameras`) are attached to that segment, and the
+default blueprint as well.
 
     pixi run serve               # start the in-memory Rerun catalog (leave running)
     pixi run -e libero register  # register every demo's layers into a dataset
