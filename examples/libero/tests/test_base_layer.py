@@ -108,6 +108,9 @@ def test_base_layer_round_trip(tmp_path: Path) -> None:
     root_columns = {name for batch in batches["/demo"] for name in batch.schema.names}
     assert {"actions", "dones", "rewards", "robot_states", "states"} <= root_columns
     np.testing.assert_array_equal(np.asarray(_rows(batches["/demo"], "states")), source_states)
+    # The state vector's width is per scene; as a variable-length list every demo fits one catalog schema.
+    assert pa.types.is_list(_column(batches["/demo"], "states").type.value_type)
+    assert pa.types.is_fixed_size_list(_column(batches["/demo"], "actions").type.value_type), "other widths stay fixed"
     assert pa.types.is_uint8(_column(batches["/demo"], "rewards").type.value_type), "dtypes survive"
     assert _rows(batches["/demo"], "rewards") == [0, 0, 1]
 
@@ -118,6 +121,7 @@ def test_base_layer_round_trip(tmp_path: Path) -> None:
     assert _rows(attrs, "model_file") == [MODEL_FILE]
     assert _rows(attrs, "num_samples") == [NUM_STEPS]
     np.testing.assert_allclose(np.asarray(_rows(attrs, "init_state")[0]), source_init)
+    assert pa.types.is_list(_column(attrs, "init_state").type.value_type)
 
     task_attrs = batches["/__hdf5_properties"]
     task_columns = {name for batch in task_attrs for name in batch.schema.names}
@@ -169,11 +173,11 @@ def _plain(array: pa.Array | pa.ChunkedArray) -> pa.Array:
 
 
 def _dataset(batches: list[pa.RecordBatch], name: str) -> np.ndarray:
-    """A reflected dataset as the array the reader saw: `(N, K)` for fixed-size lists, `(N,)` for scalars."""
+    """A reflected dataset as the array the reader saw: `(N, K)` for list rows, `(N,)` for scalars."""
     instances = _ordered(batches, name).flatten()
-    if pa.types.is_fixed_size_list(instances.type):
+    if pa.types.is_fixed_size_list(instances.type) or pa.types.is_list(instances.type):
         flat = np.asarray(instances.flatten().to_numpy(zero_copy_only=False))
-        return flat.reshape(len(instances), instances.type.list_size)
+        return flat.reshape(len(instances), -1)
     return np.asarray(instances.to_numpy(zero_copy_only=False))
 
 

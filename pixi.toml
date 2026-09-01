@@ -223,32 +223,32 @@ description = "Download sample episodes, convert them, and open them in the Reru
 [feature.abc-130k-tasks.tasks.download]
 cmd = "python -m abc_130k.download"
 cwd = "examples/abc-130k"
-description = "Download the ABC-130k sample episodes"
+description = "Download the dataset's sample files"
 
 [feature.abc-130k-tasks.tasks.convert]
 cmd = "python -m abc_130k.convert --pass-through"
 cwd = "examples/abc-130k"
-description = "Convert ABC-130k episodes to rrd"
+description = "Convert the dataset to rrd (every layer)"
 
 [feature.abc-130k-tasks.tasks.blueprint]
 cmd = "python -m abc_130k.blueprint"
 cwd = "examples/abc-130k"
-description = "Generate the ABC-130k blueprint"
+description = "Generate the dataset's blueprint"
 
 [feature.abc-130k-tasks.tasks.register]
 cmd = "python -m abc_130k.catalog"
 cwd = "examples/abc-130k"
-description = "Register the ABC-130k recordings in a catalog"
+description = "Register the dataset's recordings in a catalog"
 
 [feature.abc-130k-tasks.tasks.convert-on-modal]
 cmd = "modal run --detach -q -m abc_130k.modal_jobs.convert_episodes"
 cwd = "examples/abc-130k"
-description = "Convert ABC-130k episodes on Modal"
+description = "Convert the dataset's episodes on Modal"
 
 [feature.abc-130k-tasks.tasks.upload-blueprint]
 cmd = "python -m abc_130k.upload_blueprint"
 cwd = "examples/abc-130k"
-description = "Upload the ABC-130k blueprint"
+description = "Upload the dataset's blueprint"
 
 
 
@@ -290,17 +290,17 @@ mcap-ros2-support = ">=0.5"
 [feature.hiw-500-tasks.tasks.download]
 cmd = "python -m hiw_500.download"
 cwd = "examples/hiw-500"
-description = "Download the HIW-500 sample episodes"
+description = "Download the dataset's sample files"
 
 [feature.hiw-500-tasks.tasks.convert]
 cmd = "python -m hiw_500.convert"
 cwd = "examples/hiw-500"
-description = "Convert HIW-500 episodes to rrd (every layer)"
+description = "Convert the dataset to rrd (every layer)"
 
 [feature.hiw-500-tasks.tasks.convert-base]
 cmd = "python -m hiw_500.base_layer"
 cwd = "examples/hiw-500"
-description = "Convert the HIW-500 base layer"
+description = "Convert the dataset's base layer"
 
 [feature.hiw-500-tasks.tasks.convert-derived-archetypes]
 cmd = "python -m hiw_500.derived_archetypes_layer"
@@ -310,7 +310,7 @@ description = "Convert the HIW-500 derived archetypes layer"
 [feature.hiw-500-tasks.tasks.convert-urdf]
 cmd = "python -m hiw_500.urdf_layer"
 cwd = "examples/hiw-500"
-description = "Convert the HIW-500 URDF layer"
+description = "Convert the dataset's URDF layer"
 
 [feature.hiw-500-tasks.tasks.convert-odom]
 cmd = "python -m hiw_500.odom_layer"
@@ -320,7 +320,7 @@ description = "Convert the HIW-500 odometry layer"
 [feature.hiw-500-tasks.tasks.convert-cameras]
 cmd = "python -m hiw_500.camera_layer"
 cwd = "examples/hiw-500"
-description = "Convert the HIW-500 camera layer"
+description = "Convert the dataset's camera layer"
 
 [feature.hiw-500-tasks.tasks.convert-ir]
 cmd = "python -m hiw_500.ir_layer"
@@ -330,27 +330,27 @@ description = "Convert the HIW-500 wrist IR layer"
 [feature.hiw-500-tasks.tasks.convert-properties]
 cmd = "python -m hiw_500.properties_layer"
 cwd = "examples/hiw-500"
-description = "Convert the HIW-500 properties layer"
+description = "Convert the dataset's properties layer"
 
 [feature.hiw-500-tasks.tasks.blueprint]
 cmd = "python -m hiw_500.blueprint"
 cwd = "examples/hiw-500"
-description = "Generate the HIW-500 blueprint"
+description = "Generate the dataset's blueprint"
 
 [feature.hiw-500-tasks.tasks.register]
 cmd = "python -m hiw_500.catalog"
 cwd = "examples/hiw-500"
-description = "Register the HIW-500 recordings in a catalog"
+description = "Register the dataset's recordings in a catalog"
 
 [feature.hiw-500-tasks.tasks.convert-on-modal]
 cmd = "modal run --detach -q -m hiw_500.modal_jobs.convert_episodes"
 cwd = "examples/hiw-500"
-description = "Convert HIW-500 episodes on Modal"
+description = "Convert the dataset's episodes on Modal"
 
 [feature.hiw-500-tasks.tasks.upload-blueprint]
 cmd = "python -m hiw_500.upload_blueprint"
 cwd = "examples/hiw-500"
-description = "Upload the HIW-500 blueprint"
+description = "Upload the dataset's blueprint"
 
 
 # ─── libero ───────────────────────────────────────────────────────────────────
@@ -368,37 +368,42 @@ PACKAGE_DIR = "examples/libero"
 [feature.libero-tasks.tasks.download]
 cmd = "python -m libero.download"
 cwd = "examples/libero"
-description = "Download the LIBERO sample task files"
+description = "Download the dataset's sample files"
 
 [feature.libero-tasks.tasks.convert]
 cmd = "python -m libero.convert"
 cwd = "examples/libero"
-description = "Convert LIBERO demos to rrd (all layers)"
+description = "Convert the dataset to rrd (every layer)"
 
 [feature.libero-tasks.tasks.convert-base]
 cmd = "python -m libero.base_layer"
 cwd = "examples/libero"
-description = "Convert LIBERO demos (base layer)"
+description = "Convert the dataset's base layer"
 
 [feature.libero-tasks.tasks.convert-properties]
 cmd = "python -m libero.properties_layer"
 cwd = "examples/libero"
-description = "Convert LIBERO demos (properties layer)"
+description = "Convert the dataset's properties layer"
 
 [feature.libero-tasks.tasks.convert-urdf]
 cmd = "python -m libero.urdf_layer"
 cwd = "examples/libero"
-description = "Convert LIBERO demos (urdf layer)"
+description = "Convert the dataset's URDF layer"
 
 [feature.libero-tasks.tasks.convert-cameras]
 cmd = "python -m libero.camera_layer"
 cwd = "examples/libero"
-description = "Convert LIBERO demos (cameras layer)"
+description = "Convert the dataset's camera layer"
+
+[feature.libero-tasks.tasks.register]
+cmd = "python -m libero.catalog"
+cwd = "examples/libero"
+description = "Register the dataset's recordings in a catalog"
 
 [feature.libero-tasks.tasks.blueprint]
 cmd = "python -m libero.blueprint"
 cwd = "examples/libero"
-description = "Generate the LIBERO blueprint"
+description = "Generate the dataset's blueprint"
 
 # Test-only: the fixture tests synthesize miniature HDF5 files with h5py.
 [feature.libero-test.dependencies]

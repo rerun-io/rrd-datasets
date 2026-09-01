@@ -4,7 +4,7 @@
 This example converts each demo into four Rerun recordings (`.rrd`).
 One recording corresponds to one layer: the demo itself, its metadata properties, the posed robot model, and the two cameras placed in the scene.
 
-**Status: incubating.** Download, conversion, the urdf and cameras layers, and the default blueprint work; catalog registration and the remote conversion are still to come.
+**Status: incubating.** Download, conversion, the urdf and cameras layers, the default blueprint, and catalog registration work; the remote conversion is still to come.
 
 Below is the viewer showing a converted demo with the default blueprint.
 
@@ -61,8 +61,6 @@ pixi run -e libero convert <task.hdf5>        # one task file (~50 demos)
 
 > **Note:** This example also includes its own task for each layer (`convert-base`, `convert-properties`, `convert-urdf`, `convert-cameras`) writing the corresponding `.rrd`.
 
-The urdf and cameras layers are derived, so they can be rebuilt on their own — after a URDF change, for instance — without rewriting the base.
-
 ### 3. View
 
 Generate the default blueprint, then view a demo with it:
@@ -77,7 +75,30 @@ pixi run -e libero rerun rrds/libero/*/libero_goal/turn_on_the_stove__demo_0.rrd
 
 ### 4. Local Catalog
 
-_Not built yet — this will register the converted demos as a `libero` dataset with named layers and install the default blueprint._
+Register the converted demos to a [catalog server](https://rerun.io/docs/concepts/how-does-rerun-work#catalog-server), then browse, sort, filter, and query the segments as one dataset.
+Once registered, demos become queryable segments with named layers.
+
+Start a local server:
+
+```bash
+pixi run serve                # start an in-memory catalog server (leave running)
+```
+
+In another shell, register converted demos and the default blueprint to a local catalog:
+
+```bash
+pixi run -e libero register   # register all demos as the `libero` dataset
+```
+
+> **Note:** On a catalog, each demo becomes one segment, keyed by its `recording_id`. Each `.rrd` of that demo attaches as one named layer of the segment (`base`, `properties`, `urdf`, `cameras`).
+> A layer name is an argument to the register call (`layer_name=` in `libero/catalog.py`).
+> The `register` task creates the dataset, attaches each demo's RRDs as its named layers, and installs `blueprints/libero/default.rbl` as the default blueprint (generate it first with `pixi run -e libero blueprint`).
+
+Browse them in the Rerun Viewer:
+
+```sh
+pixi run -e libero rerun rerun+http://127.0.0.1:51234
+```
 
 ## Remote Convert Example on Modal
 
@@ -90,7 +111,7 @@ We share our survey on the source dataset in [observations.md](observations.md).
 ## Mapping to Rerun
 
 The base layer keeps the demo group as `Hdf5Reader` emits it: every dataset is a column named after itself, every attribute a static column, dtypes and array widths unchanged.
-Only the two camera datasets are reshaped, into upright `Image`s.
+Two exceptions: the camera datasets are reshaped into upright `Image`s, and `states` and `init_state` become variable-length lists — their width is the scene's MuJoCo state size (47…110), and a catalog dataset needs one schema across every demo.
 The table shows where each source item lands, and in which layer.
 The datasets that repeat others are listed in [observations.md](observations.md#redundancies); they are kept, not plotted.
 
