@@ -414,6 +414,11 @@ cmd = "python -m libero.blueprint"
 cwd = "examples/libero"
 description = "Generate the dataset's blueprint"
 
+[feature.libero-tasks.tasks.convert-on-modal]
+cmd = "modal run --detach -q -m libero.modal_jobs.convert_tasks"
+cwd = "examples/libero"
+description = "Convert the dataset's episodes on Modal"
+
 # Test-only: the fixture tests synthesize miniature HDF5 files with h5py.
 [feature.libero-test.dependencies]
 h5py = ">=3.11,<4"
