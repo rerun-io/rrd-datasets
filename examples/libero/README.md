@@ -109,28 +109,31 @@ Watch progress in the Modal dashboard.
 
 ### 1. Prerequisite: storage backend
 
-Converted RRDs land in a bucket, and `STORAGE_BACKEND` picks which kind.
-This example converts to a [Hugging Face Storage Bucket](https://huggingface.co/docs/hub/main/en/storage-buckets-s3)
-behind its S3-compatible gateway, reached with `boto3` like any S3 bucket.
-The `libero` environments default `STORAGE_BACKEND` to `hf` and `HF_BUCKET` to `libero`, so the namespace that owns the bucket is the one value you have to set.
-Access uses [HF S3 credentials](https://huggingface.co/docs/hub/storage-buckets-s3#generating-s3-credentials): an access key ID prefixed `HFAK…` and a secret access key.
-Generate them from a fine-grained HF token scoped to the bucket.
-The launcher passes them to the workers as an ephemeral per-run secret.
-
-Set the env vars for your backend, or edit the placeholders in
-[`rrd_datasets_common/storage.py`](../../packages/rrd_datasets_common/rrd_datasets_common/storage.py) (buckets) and
+Set the env vars for your storage backend in the shell, or edit the defaults in
+[`rrd_datasets_common/storage.py`](../../packages/rrd_datasets_common/rrd_datasets_common/storage.py) (backend, buckets) and
 [`rrd_datasets_common/modal_jobs/store.py`](../../packages/rrd_datasets_common/rrd_datasets_common/modal_jobs/store.py) (role ARN).
 The dataset's own layout under the bucket lives in [`storage.py`](libero/storage.py):
 
 | Env var                                           | Backend | What it is                                                            |
 | ------------------------------------------------- | ------- | --------------------------------------------------------------------- |
+| `STORAGE_BACKEND`                                 | both    | Which bucket kind, `hf` or `s3` — `hf` in the `libero` environments   |
 | `HF_NAMESPACE`                                    | hf      | The user or org that owns the bucket — set this one                   |
 | `HF_BUCKET`                                       | hf      | Bucket the RRDs are written to, `libero` by default — create it first |
 | `HF_BUCKET_ACCESS_KEY_ID` / `…_SECRET_ACCESS_KEY` | hf      | The HF S3 credentials                                                 |
 
+Converted RRDs land in a bucket, and `STORAGE_BACKEND` picks which kind.
+
+This example converts to a [Hugging Face Storage Bucket](https://huggingface.co/docs/hub/main/en/storage-buckets-s3)
+behind its S3-compatible gateway, reached with `boto3` like any S3 bucket.
+The `libero` environments default `STORAGE_BACKEND` to `hf` and `HF_BUCKET` to `libero`, so the namespace that owns the bucket is the one value you have to set.
+Your own `export` wins over both defaults.
+Access uses [HF S3 credentials](https://huggingface.co/docs/hub/storage-buckets-s3#generating-s3-credentials): an access key ID prefixed `HFAK…` and a secret access key.
+Generate them from a fine-grained HF token scoped to the bucket.
+The launcher passes them to the workers as an ephemeral per-run secret.
+
 `HF_NAMESPACE` has no default, and the bucket has to exist.
 
-> **Note:** to store in an AWS S3 bucket instead, set `STORAGE_BACKEND=s3` and follow the
+> **Note:** to store in an AWS S3 bucket instead, `export STORAGE_BACKEND=s3` and follow the
 > [S3 prerequisite in the ABC-130k example](../abc-130k/README.md#1-prerequisite-s3-storage).
 
 ### 2. Prerequisite: Modal setup
