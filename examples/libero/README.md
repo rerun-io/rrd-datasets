@@ -56,7 +56,7 @@ Build every layer, for every downloaded file or one task file:
 
 ```bash
 pixi run -e libero convert                    # every downloaded task file
-pixi run -e libero convert <task.hdf5>        # one task file (~50 demos)
+pixi run -e libero convert <task.hdf5>        # one hdf5 file (which contains 50 demos)
 ```
 
 > **Note:** This example also includes its own task for each layer (`convert-base`, `convert-properties`, `convert-urdf`, `convert-cameras`) writing the corresponding `.rrd`.
@@ -102,10 +102,8 @@ pixi run -e libero rerun rerun+http://127.0.0.1:51234
 
 ## Remote Convert Example on Modal
 
-The steps above run locally on the sample files.
-To convert the full dataset off-box, the [Modal](https://modal.com/) job under `libero/modal_jobs/` fans the 130 task files out across workers: each worker downloads one task file, converts every demo in it, and uploads the `.rrd` layers to a Hugging Face bucket.
-It runs detached and returns immediately.
-Watch progress in the Modal dashboard.
+The steps above run locally on the downloaded sample files.
+The following steps convert the full dataset on cloud workers.
 
 ### 1. Prerequisite: storage backend
 
@@ -138,6 +136,10 @@ The launcher passes them to the workers as an ephemeral per-run secret.
 
 ### 2. Prerequisite: Modal setup
 
+The [Modal](https://modal.com/) job under `libero/modal_jobs/` fans the 130 task files out across workers: each worker downloads one task file, converts every demo in it, and uploads the `.rrd` layers to a Hugging Face bucket.
+
+To set it up:
+
 - `pixi run -e libero modal setup` — authenticate the Modal CLI (one-time).
 - `pixi run -e libero hf auth login`, or set `$HF_TOKEN` — optional for this public dataset, but anonymous callers share a smaller per-IP download quota.
 
@@ -146,7 +148,7 @@ The launcher passes them to the workers as an ephemeral per-run secret.
 Run `pixi run -e libero convert-on-modal --help` to see all options.
 
 ```bash
-# One new task file (~50 demos), every layer (the default when no flags are given):
+# One new task file (50 demos), every layer (the default when no flags are given):
 pixi run -e libero convert-on-modal
 
 # Every task file (--limit 0 removes the cap):
@@ -159,9 +161,10 @@ pixi run -e libero convert-on-modal --path-filter libero_goal/ --limit 0 --overw
 pixi run -e libero convert-on-modal --dry-run --limit 10
 ```
 
+The `convert-on-modal` task runs detached and returns immediately.
+Watch progress in the Modal dashboard.
+
 > **Note:** Without `--overwrite`, anything already in the bucket is skipped.
-> The launcher spawns no worker for a task file whose demos all have every selected layer, assuming 50 demos per file ([observations.md](observations.md#source-hdf5-layout)).
-> A task file missing even one `.rrd` still gets a worker, which downloads the file once and builds only what is missing.
 
 #### Picking layers
 
