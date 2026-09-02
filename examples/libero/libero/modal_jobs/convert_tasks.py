@@ -25,7 +25,7 @@ from libero.episodes import HF_REPO_ID, HF_REVISION, WorkItem, discover_task_fil
 from libero.layers import LAYERS
 from libero.storage import DATASET_PREFIX
 from rrd_datasets_common.hf_repo import HF_HUB_ENV
-from rrd_datasets_common.modal_jobs.image import hf_token_secret, image_from_pyproject
+from rrd_datasets_common.modal_jobs.image import image_from_pyproject
 from rrd_datasets_common.modal_jobs.store import (
     check_bucket,
     extra_secrets,
@@ -122,12 +122,27 @@ def _build_demo_layer(layer: str, reader: Hdf5Reader, facts: TaskFacts, task: st
     raise ValueError(f"Unknown layer: {layer}")
 
 
+def _hf_token_secret() -> modal.Secret:
+    """The caller's HuggingFace token as a per-run secret, empty when there is none."""
+    if not modal.is_local():
+        return modal.Secret.from_dict({})
+
+    from huggingface_hub import get_token
+
+    token = get_token()
+    if not token:
+        # LIBERO is public, so a worker can download it anonymously without a token.
+        # No token does not mean a failure, but it means a smaller per-IP quota.
+        return modal.Secret.from_dict({})
+    return modal.Secret.from_dict({"HF_TOKEN": token})
+
+
 @app.function(
     timeout=4 * HOUR,
     cpu=CPU_REQUEST,
     memory=MEMORY_REQUEST,
     region=region_pin(),
-    secrets=[hf_token_secret(), *extra_secrets()],
+    secrets=[_hf_token_secret(), *extra_secrets()],
     max_containers=MAX_CONTAINERS,
 )  # type: ignore[misc]
 def convert_task_remote(item: WorkItem, layers: list[str], overwrite: bool) -> None:
@@ -178,7 +193,7 @@ def convert_task_remote(item: WorkItem, layers: list[str], overwrite: bool) -> N
                 rrd = _build_demo_layer(layer, reader, facts, item.task_id, demo, out_dir)
                 dest = layer_dest(layer, rec_id)
                 upload_file(s3, str(rrd), dest)
-                rrd.unlink()  # ~50 demos per file: keep the container disk flat.
+                rrd.unlink()  # Delete the local copy once uploaded
                 uploaded += 1
                 print(f"uploaded: {dest}")
         print(f"done: {item.task_id} ({uploaded} rrd(s) uploaded, {skipped} demo(s) already complete)")
@@ -227,9 +242,11 @@ def _drop_converted(items: list[WorkItem], layers: list[str]) -> list[WorkItem] 
 @app.local_entrypoint()  # type: ignore[misc]
 def main(*arglist: str) -> None:
     """Discover task files on HuggingFace and fan the conversions out across Modal workers."""
+    from huggingface_hub import get_token
+
     parser = argparse.ArgumentParser(
         description=(
-            "Convert LIBERO demos to RRDs on Modal: one worker per task file (~50 demos each), "
+            "Convert LIBERO demos to RRDs on Modal: one worker per task file, "
             "uploading each demo's .rrd layers to the bucket. Runs detached — watch progress in "
             "the Modal dashboard."
         ),
@@ -279,6 +296,8 @@ def main(*arglist: str) -> None:
 
     print(f"Layers: {', '.join(layers)}. Each worker downloads its whole task file.")
     print(f"Modal worker request: cpu={CPU_REQUEST}, memory={MEMORY_REQUEST} MiB")
+    if not get_token():
+        print("note: no HuggingFace token — workers download anonymously")
 
     if args.dry_run:
         print(f"Dry run: {len(items)} task file(s) would be converted -> {DATASET_PREFIX}")
