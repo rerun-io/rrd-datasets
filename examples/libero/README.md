@@ -140,7 +140,7 @@ The dataset's own layout under the bucket lives in [`storage.py`](libero/storage
 
 ### 3. Run Convert
 
-Run `pixi run -e libero convert-on-modal --help` for the full flag reference.
+Run `pixi run -e libero convert-on-modal --help` to see all options.
 
 ```bash
 # One new task file (~50 demos), every layer (the default when no flags are given):
