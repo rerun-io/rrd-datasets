@@ -48,9 +48,9 @@ if TYPE_CHECKING:
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# The demo keys live inside each HDF5 file, out of the launcher's reach, so it assumes the
-# surveyed invariant: 50 demos per task file (observations.md). The worker converts what the file
-# actually holds, so a wrong count costs a no-op worker per run, never a missing rrd.
+# Number of demos per hdf5 file, as surveyed across the dataset.
+# Used for the launcher to skip a task file if all expected rrds are in the bucket.
+# The worker converts whatever the file actually holds.
 DEMOS_PER_TASK = 50
 
 # The vendored `fer` model goes where `urdf_layer.URDF_PATH` resolves, so `load_urdf()` works
@@ -86,7 +86,7 @@ def layer_dest(layer: str, rec_id: str) -> str:
 
 
 def expected_recording_ids(item: WorkItem) -> list[str]:
-    """The recording ids the launcher expects one task file to produce, under the 50-demo invariant."""
+    """The recording ids the launcher expects one task file to produce."""
     return [recording_id(item.task_id, f"demo_{index}") for index in range(DEMOS_PER_TASK)]
 
 
@@ -98,7 +98,7 @@ _URDF: UrdfTree | None = None
 
 
 def _urdf_tree() -> UrdfTree:
-    """The parsed `fer` model, built once per container: one task file alone poses it for ~50 demos."""
+    """The parsed `fer` model, built once per container."""
     global _URDF
     if _URDF is None:
         from libero import urdf_layer
@@ -201,12 +201,7 @@ def parse_layers(value: str) -> list[str]:
 
 
 def _drop_converted(items: list[WorkItem], layers: list[str]) -> list[WorkItem] | None:
-    """
-    Drop task files whose every expected rrd (all selected layers, all 50 demos) is in the bucket.
-
-    A file missing even one rrd is kept, and its worker rebuilds only what is absent. Returns
-    `None` when the bucket cannot be listed, leaving the skipping to the workers.
-    """
+    """Drop task files whose every expected rrd (all selected layers, all DEMOS_PER_TASK demos) is in the bucket."""
     from botocore.exceptions import BotoCoreError, ClientError
 
     # One listing under the dataset prefix answers for every layer.
