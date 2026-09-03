@@ -1,7 +1,5 @@
 # LIBERO Dataset
 
-These findings come from surveying five task files, one per suite.
-
 ## Summary
 
 The source files are uniform, as expected of simulated data: the same item tree and attribute keys everywhere.
@@ -35,7 +33,7 @@ The source files are uniform, as expected of simulated data: the same item tree 
 - The source does store simulation time: column 0 of the `states` item (`states[:, 0]`), MuJoCo's internal clock.
 - Items within a demo are step-aligned: one entry per 20 Hz control step, `num_samples` in total — the per-demo alignment `Hdf5Reader` needs.
 
-## Example files
+## Sample files
 
 The five files `download` fetches, one per suite:
 

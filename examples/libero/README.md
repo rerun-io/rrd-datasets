@@ -4,7 +4,7 @@
 This example converts each demo into four Rerun recordings (`.rrd`).
 One recording corresponds to one layer: the demo itself, its metadata properties, the posed robot model, and the two cameras placed in the scene.
 
-**Status: incubating.** Download, conversion, the urdf and cameras layers, the default blueprint, and catalog registration work; the remote conversion is still to come.
+**Status: incubating.** Download, conversion, the urdf and cameras layers, the default blueprint, catalog registration, and the remote Modal conversion work; publishing the converted bucket is still to come.
 
 Below is the viewer showing a converted demo with the default blueprint.
 
@@ -13,14 +13,14 @@ Below is the viewer showing a converted demo with the default blueprint.
 The [default blueprint](#3-view) puts the task instruction and the posed arm on the left, with both camera frustums in the scene, the two camera panes on the right, and the joint, gripper, action, and end-effector plots along the bottom.
 
 > **Note:** this example uses Pixi. Get it [here](https://pixi.prefix.dev/latest/installation/).
-> Everything runs inside the pixi env: prefix task commands with `pixi run`, and direct tool commands (`hf`, `rerun`) with `pixi run -e libero`.
+> Everything runs inside the pixi env: prefix task commands with `pixi run`, and direct tool commands (`hf`, `rerun`, `modal`) with `pixi run -e libero`.
 > File paths in the commands below are relative to the repository root.
 
 ## Dataset
 
 - **Source**: [yifengzhu-hf/LIBERO-datasets](https://huggingface.co/datasets/yifengzhu-hf/LIBERO-datasets) on Hugging Face
 - **License**: Apache 2.0. Converted artifacts are derived from the dataset, so redistributing them is governed by the same terms.
-- **Subset used**: the local demo runs on five sample task files (~3.4 GB), one per suite, all listed in [observations.md](observations.md#example-files).
+- **Subset used**: the local demo runs on five sample task files (~3.4 GB), one per suite, all listed in [observations.md](observations.md#sample-files).
 - **Access**: public, not gated.
 
 This example does not redistribute the dataset.
@@ -56,7 +56,7 @@ Build every layer, for every downloaded file or one task file:
 
 ```bash
 pixi run -e libero convert                    # every downloaded task file
-pixi run -e libero convert <task.hdf5>        # one task file (~50 demos)
+pixi run -e libero convert <task.hdf5>        # one hdf5 file (which contains 50 demos)
 ```
 
 > **Note:** This example also includes its own task for each layer (`convert-base`, `convert-properties`, `convert-urdf`, `convert-cameras`) writing the corresponding `.rrd`.
@@ -102,11 +102,96 @@ pixi run -e libero rerun rerun+http://127.0.0.1:51234
 
 ## Remote Convert Example on Modal
 
-_Not built yet — this will fan the 130 task files out across [Modal](https://modal.com/) workers and upload the `.rrd` layers to the Hugging Face bucket._
+The steps above run locally on the downloaded sample files.
+The following steps convert the full dataset on cloud workers.
+
+### 1. Prerequisite: storage backend
+
+Set the env vars for your storage backend in the shell, or edit the defaults in
+[`rrd_datasets_common/storage.py`](../../packages/rrd_datasets_common/rrd_datasets_common/storage.py) (backend, buckets) and
+[`rrd_datasets_common/modal_jobs/store.py`](../../packages/rrd_datasets_common/rrd_datasets_common/modal_jobs/store.py) (role ARN).
+The dataset's own layout under the bucket lives in [`storage.py`](libero/storage.py):
+
+| Env var                                           | Backend | What it is                                                            |
+| ------------------------------------------------- | ------- | --------------------------------------------------------------------- |
+| `STORAGE_BACKEND`                                 | both    | Which bucket kind, `hf` or `s3` — `hf` in the `libero` environments   |
+| `HF_NAMESPACE`                                    | hf      | The user or org that owns the bucket — set this one                   |
+| `HF_BUCKET`                                       | hf      | Bucket the RRDs are written to, `libero` by default — create it first |
+| `HF_BUCKET_ACCESS_KEY_ID` / `…_SECRET_ACCESS_KEY` | hf      | The HF S3 credentials                                                 |
+
+Converted RRDs land in a bucket, and `STORAGE_BACKEND` picks which kind.
+
+This example converts to a [Hugging Face Storage Bucket](https://huggingface.co/docs/hub/main/en/storage-buckets-s3)
+behind its S3-compatible gateway, reached with `boto3` like any S3 bucket.
+The `libero` environments default `STORAGE_BACKEND` to `hf` and `HF_BUCKET` to `libero`, so the namespace that owns the bucket is the one value you have to set.
+Your own `export` wins over both defaults.
+Access uses [HF S3 credentials](https://huggingface.co/docs/hub/storage-buckets-s3#generating-s3-credentials): an access key ID prefixed `HFAK…` and a secret access key.
+Generate them from a fine-grained HF token scoped to the bucket.
+The launcher passes them to the workers as an ephemeral per-run secret.
+
+`HF_NAMESPACE` has no default, and the bucket has to exist.
+
+> **Note:** to store in an AWS S3 bucket instead, `export STORAGE_BACKEND=s3` and follow the
+> [S3 prerequisite in the ABC-130k example](../abc-130k/README.md#1-prerequisite-s3-storage).
+
+### 2. Prerequisite: Modal setup
+
+The [Modal](https://modal.com/) job under `libero/modal_jobs/` fans the 130 task files out across workers: each worker downloads one task file, converts every demo in it, and uploads the `.rrd` layers to a Hugging Face bucket.
+
+To set it up:
+
+- `pixi run -e libero modal setup` — authenticate the Modal CLI (one-time).
+- `pixi run -e libero hf auth login`, or set `$HF_TOKEN` — optional for this public dataset, but anonymous callers share a smaller per-IP download quota.
+
+### 3. Run Convert
+
+Run `pixi run -e libero convert-on-modal --help` to see all options.
+
+```bash
+# One new task file (50 demos), every layer (the default when no flags are given):
+pixi run -e libero convert-on-modal
+
+# Every task file (--limit 0 removes the cap):
+pixi run -e libero convert-on-modal --limit 0
+
+# Rebuild one suite:
+pixi run -e libero convert-on-modal --path-filter libero_goal/ --limit 0 --overwrite
+
+# See what would run, without spawning anything:
+pixi run -e libero convert-on-modal --dry-run --limit 10
+```
+
+The `convert-on-modal` task runs detached and returns immediately.
+Watch progress in the Modal dashboard.
+
+> **Note:** Without `--overwrite`, anything already in the bucket is skipped.
+
+#### Picking layers
+
+`--layers` lets you choose which layers to build:
+
+```bash
+# Only the base layer:
+pixi run -e libero convert-on-modal --layers base --limit 0
+
+# Rebuild layers after changing them:
+pixi run -e libero convert-on-modal --layers urdf,cameras --limit 0 --overwrite
+```
+
+Every layer reads the same task file, so a worker downloads it whatever the selection.
+
+### 4. Upload the blueprint
+
+`pixi run -e libero blueprint` writes `blueprints/libero/default.rbl`.
+To upload it to your HF bucket (`s3://<bucket>/blueprints/`), run:
+
+```bash
+pixi run -e libero upload-blueprint
+```
 
 ## Observations
 
-We share our survey on the source dataset in [observations.md](observations.md).
+We share our summary of the source dataset in [observations.md](observations.md).
 
 ## Mapping to Rerun
 
@@ -126,7 +211,7 @@ The datasets that repeat others are listed in [observations.md](observations.md#
 | file attrs, `num_samples`, filename                                                   | segment properties                | —                                           | properties | suite, scene, task language, num_samples, source file                           |
 | `fer.urdf` meshes and fixed joints                                                    | `/urdf/fer/**`                    | `Asset3D`                                   | urdf       | static; the arm model, ~4 MB per recording                                      |
 | `obs/joint_states`, `obs/gripper_states` → FK                                         | `/urdf/transforms`                | `Transform3D`                               | urdf       | one row per joint per step, named frames                                        |
-| `model_file` `robot0_base` pose                                                       | `/urdf/world_from_base`           | `Transform3D`                               | urdf       | static; stands the arm where the scene puts it                                  |
+| `model_file` `robot0_base` pose                                                       | `/urdf/world_from_base`           | `Transform3D`                               | urdf       | static; places the arm where the scene had it                                   |
 | `model_file` `<camera>` elements                                                      | `/camera/{agentview,eye_in_hand}` | `Transform3D`, `Pinhole`, `CoordinateFrame` | cameras    | static; places the two images in the scene, see [below](#the-cameras-layer)     |
 
 No `Scalars` are derived.
@@ -140,13 +225,14 @@ This is a value-level identity test, not a byte-level one.
 
 ### The urdf layer
 
-The urdf layer poses the vendored franka `fer` model ([`urdf/fer/`](urdf/fer/), provenance and regeneration recipe in its README <!-- add link -->) with the base layer's joint columns: `obs/joint_states[i]` drives `fer_joint{i+1}` and `obs/gripper_states` the two finger joints, the second negated because robosuite signs the fingers against each other.
-A static `world -> base` edge from the `robot0_base` body of each demo's MuJoCo XML stands the arm where the scene puts it. FK to `fer_hand_tcp` reproduces the recorded `obs/ee_pos` up to the fixed offset between franka's TCP and robosuite's grip site.
+The urdf layer poses the vendored Franka `fer` model ([`urdf/fer/`](urdf/fer/), provenance and regeneration recipe in [its README](urdf/fer/README.md)) with the base layer's joint columns.
+The URDF carries no world position, so the model alone would render at the world origin; a static `Transform3D` from the demo's scene XML sets the arm's base pose in the world.
+Forward kinematics to `fer_hand_tcp` reproduces the recorded `obs/ee_pos`, up to the fixed offset between Franka's tool center point and robosuite's grip site.
 
 ### The cameras layer
 
 Each demo's MuJoCo XML lists its cameras with a pose and a vertical field of view.
-`agentview` is fixed in the world; `robot0_eye_in_hand` rides the `robot0_right_hand` body, the URDF's `fer_hand` frame, so it moves with the arm.
+`agentview` is fixed in the world; `robot0_eye_in_hand` moves with the arm.
 The intrinsics follow [robosuite's camera utilities](https://github.com/ARISE-Initiative/robosuite/blob/master/robosuite/utils/camera_utils.py), and the `Pinhole` declares MuJoCo's `RUB` camera axes.
 
 ## Rerun APIs demonstrated

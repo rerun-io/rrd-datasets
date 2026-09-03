@@ -355,11 +355,20 @@ description = "Upload the dataset's blueprint"
 
 # ─── libero ───────────────────────────────────────────────────────────────────
 
+[feature.libero.dependencies]
+# Type stubs for mypy (cloud extra).
+boto3-stubs = ">=1.34"
+mypy-boto3-s3 = ">=1.34"
+
 [feature.libero.pypi-dependencies]
-libero = { path = "examples/libero", editable = true }
+libero = { path = "examples/libero", editable = true, extras = ["cloud"] }
 
 [feature.libero.activation.env]
 PACKAGE_DIR = "examples/libero"
+# The dataset converts into a HuggingFace bucket named after it.
+# The `${VAR:-default}` form lets a caller's own setting win.
+STORAGE_BACKEND = "${STORAGE_BACKEND:-hf}"
+HF_BUCKET = "${HF_BUCKET:-libero}"
 
 # Dataset tasks sit in their own feature, included only in the libero environment.
 # Every dataset names its stages the same way (download, convert, register, …),
@@ -404,6 +413,16 @@ description = "Register the dataset's recordings in a catalog"
 cmd = "python -m libero.blueprint"
 cwd = "examples/libero"
 description = "Generate the dataset's blueprint"
+
+[feature.libero-tasks.tasks.convert-on-modal]
+cmd = "modal run --detach -q -m libero.modal_jobs.convert_tasks"
+cwd = "examples/libero"
+description = "Convert the dataset's episodes on Modal"
+
+[feature.libero-tasks.tasks.upload-blueprint]
+cmd = "python -m libero.upload_blueprint"
+cwd = "examples/libero"
+description = "Upload the dataset's blueprint"
 
 # Test-only: the fixture tests synthesize miniature HDF5 files with h5py.
 [feature.libero-test.dependencies]
