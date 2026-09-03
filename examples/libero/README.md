@@ -105,6 +105,10 @@ Browse them in the Rerun Viewer:
 pixi run -e libero rerun rerun+http://127.0.0.1:51234
 ```
 
+The video below shows what it looks like.
+
+https://github.com/user-attachments/assets/b4396d45-d4ba-4f30-9763-1aa9057c66f7
+
 ## Remote Convert Example on Modal
 
 The steps above run locally on the downloaded sample files.
