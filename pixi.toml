@@ -424,6 +424,11 @@ cmd = "python -m libero.upload_blueprint"
 cwd = "examples/libero"
 description = "Upload the dataset's blueprint"
 
+[feature.libero-tasks.tasks.upload-asset]
+cmd = "python -m libero.upload_asset"
+cwd = "examples/libero"
+description = "Upload the dataset's shared model asset"
+
 # Test-only: the fixture tests synthesize miniature HDF5 files with h5py.
 [feature.libero-test.dependencies]
 h5py = ">=3.11,<4"

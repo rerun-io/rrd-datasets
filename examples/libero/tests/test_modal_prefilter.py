@@ -98,7 +98,7 @@ def test_the_s3_object_keys_are_the_local_relative_paths() -> None:
 
 def test_each_kind_of_file_owns_a_prefix() -> None:
     """
-    The layer directories and the blueprint must not collide.
+    The layer directories, the blueprint and the shared asset must not collide.
 
     Syncing the layer directories is the documented way to pull the recordings, so nothing else
     may live inside them.
@@ -108,6 +108,20 @@ def test_each_kind_of_file_owns_a_prefix() -> None:
     assert storage.BLUEPRINT_URI.startswith(storage.DATASET_PREFIX)
     blueprint_dir = storage.BLUEPRINT_URI.removeprefix(storage.DATASET_PREFIX).split("/")[0]
     assert blueprint_dir not in LAYERS
+
+    assert storage.ASSET_PREFIX.startswith(storage.DATASET_PREFIX)
+    asset_dir = storage.ASSET_PREFIX.removeprefix(storage.DATASET_PREFIX).rstrip("/")
+    assert asset_dir not in LAYERS
+    assert asset_dir != blueprint_dir
+
+
+def test_the_uploaded_asset_lands_where_register_looks_for_it(tmp_path: Path) -> None:
+    """`upload-asset` and `register` have to agree on the shared model's place under the prefix."""
+    from libero import storage, upload_asset
+    from libero.urdf_layer import model_rrd_path
+
+    key = upload_asset.MODEL_ASSET_URI.removeprefix(storage.DATASET_PREFIX)
+    assert (tmp_path / key) == model_rrd_path(tmp_path)
 
 
 def test_the_job_and_the_catalog_agree_on_every_layer_name() -> None:

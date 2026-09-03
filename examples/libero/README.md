@@ -198,6 +198,16 @@ To upload it to your HF bucket (`s3://<bucket>/blueprints/`), run:
 pixi run -e libero upload-blueprint
 ```
 
+### 5. Upload the shared model asset
+
+Run `pixi run -e libero convert-urdf` once locally (no hdf5 file required).
+It will build the asset model rrd as `rrds/libero/assets/urdf-model.rrd`.
+To upload it to your HF bucket (`s3://<bucket>/assets/`), run:
+
+```bash
+pixi run -e libero upload-asset
+```
+
 ## Observations
 
 We share our summary of the source dataset in [observations.md](observations.md).
