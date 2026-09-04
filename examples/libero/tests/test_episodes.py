@@ -56,6 +56,10 @@ def test_local_discovery_raises_without_downloads(tmp_path: Path) -> None:
         discover_local_task_files(tmp_path)
 
 
+def test_local_discovery_returns_nothing_when_missing_is_ok(tmp_path: Path) -> None:
+    assert discover_local_task_files(tmp_path, missing_ok=True) == []
+
+
 def test_samples_cover_every_suite_once() -> None:
     assert sorted(sample.split("/")[0] for sample in SAMPLES) == [
         "libero_10",

@@ -194,9 +194,12 @@ def load_urdf() -> UrdfTree:
 
 def main(argv: list[str]) -> None:
     urdf = load_urdf()
-    inputs = task_files(argv)
     model = convert_model(urdf, RRD_ROOT)
     print(f"Shared model rrd: {model} ({model.stat().st_size / 1e6:.1f} MB)")
+    inputs = task_files(argv, missing_ok=True)
+    if not inputs:
+        print("No task files downloaded; only the shared model rrd was written.")
+        return
     print(f"Building URDF layer for {len(inputs)} task file(s) -> {RRD_ROOT / 'urdf'}/")
     for path, task in inputs:
         reader = Hdf5Reader(path)
