@@ -35,7 +35,6 @@ from rrd_datasets_common.paths import default_blueprint_path
 
 BLUEPRINT_PATH = default_blueprint_path("hiw-500")
 
-# The instruction lane's flat grey, so the eye reads color as meaning on the subtask lane alone.
 INSTRUCTION_COLOR = 0x8A8A8AFF
 
 LEFT_WRIST = "/camera/left_wrist/image/compressed"
