@@ -352,6 +352,11 @@ cmd = "python -m hiw_500.upload_blueprint"
 cwd = "examples/hiw-500"
 description = "Upload the dataset's blueprint"
 
+[feature.hiw-500-tasks.tasks.upload-asset]
+cmd = "python -m hiw_500.upload_asset"
+cwd = "examples/hiw-500"
+description = "Upload the dataset's shared model asset"
+
 
 # ─── libero ───────────────────────────────────────────────────────────────────
 
