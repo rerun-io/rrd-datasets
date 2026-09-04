@@ -13,11 +13,11 @@ from pathlib import Path
 
 from rerun.experimental import RrdReader
 
-from hiw_500.base_layer import APPLICATION_ID
-from hiw_500.blueprint import build_blueprint
+from hiw_500.base_layer import APPLICATION_ID, INSTRUCTION_ENTITY, SUBTASK_ENTITY
+from hiw_500.blueprint import INSTRUCTION_COLOR, build_blueprint
 
 # One entry per view in `build_blueprint`: the 3D scene; head pair, wrist RGB pair, and four wrist
-# IR panes; the joint, end-effector, and two gripper plots; the subtask timeline.
+# IR panes; the joint, end-effector, and two gripper plots; the annotation timeline.
 EXPECTED_VIEWS = {"3D": 1, "2D": 8, "TimeSeries": 4, "StateTimeline": 1}
 # One `SeriesLines` instruction per selector: the joint array (all 29 angles from one `[]` mapping),
 # 12 EE fields x 2 arrays, 4 dex1 jaw angles, 4 gripper controls.
@@ -48,3 +48,21 @@ def test_a_fresh_save_holds_every_declared_view(tmp_path: Path) -> None:
     path = tmp_path / "default.rbl"
     build_blueprint().save(APPLICATION_ID, str(path))
     assert _tally(path) == (EXPECTED_VIEWS, EXPECTED_INSTRUCTIONS)
+
+
+def test_the_annotation_view_stacks_the_instruction_over_the_subtasks(tmp_path: Path) -> None:
+    """Both lanes in one view, and the instruction held to its flat grey — lanes stack in path order."""
+    path = tmp_path / "default.rbl"
+    build_blueprint().save(APPLICATION_ID, str(path))
+    reader = RrdReader(str(path))
+    (entry,) = reader.blueprints()
+    queries: list[list[str]] = []
+    colors: list[list[int]] = []
+    for chunk in reader.stream(store=entry):
+        batch = chunk.to_record_batch()
+        if "ViewContents:query" in batch.schema.names:
+            queries += batch.column("ViewContents:query").to_pylist()
+        if "StateConfiguration:colors" in batch.schema.names:
+            colors += batch.column("StateConfiguration:colors").to_pylist()
+    assert [f"+ {INSTRUCTION_ENTITY}", f"+ {SUBTASK_ENTITY}"] in queries
+    assert colors == [[INSTRUCTION_COLOR]]

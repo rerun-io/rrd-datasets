@@ -12,7 +12,8 @@ So the flow mirrors the cloud ingestion pattern, with two pixi tasks:
 
 Each episode is one *segment* (id = the shared `recording_id`); its RRDs attach as the `base`,
 `urdf`, `odom`, `cameras`, `ir`, and `properties` *layers* of that segment, and a default
-blueprint is installed on the dataset.
+blueprint is installed on the dataset. The shared urdf model registers as the `urdf-model` asset,
+which the catalog merges into every segment.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from rerun.catalog import CatalogClient, DatasetEntry, OnDuplicateSegmentLayer
 
 from hiw_500.blueprint import BLUEPRINT_PATH
 from hiw_500.layers import LAYERS
+from hiw_500.urdf_layer import MODEL_RECORDING_ID, model_rrd_path
 from rrd_datasets_common.paths import dataset_rrd_dir, layer_relpath
 
 DEFAULT_CATALOG_URL = "rerun+http://127.0.0.1:51234"
@@ -44,7 +46,7 @@ def register_episodes(
     recreate: bool = False,
 ) -> DatasetEntry:
     """
-    Register each episode's layers as one segment of the dataset and set the blueprint.
+    Register each episode's layers as one segment, attach the shared model asset, and set the blueprint.
 
     The dataset is created if missing, and layers that are already there are replaced.
     With `recreate`, an existing dataset of the same name is deleted first and rebuilt from scratch.
@@ -72,6 +74,15 @@ def register_episodes(
         # are short rather than let the viewer report it as an unknown frame.
         for missing in (p for p in paths if not p.exists()):
             print(f"    missing: {missing.name} — this episode registers without its '{layer}' layer")
+
+    model = model_rrd_path(rrd_dir)
+    if model.exists():
+        dataset.register_asset(model.resolve().as_uri())
+        print(f"  asset '{MODEL_RECORDING_ID}': {model}")
+    else:
+        print(
+            f"  no model rrd at {model} — segments render without the robot model (run `pixi run -e hiw convert-urdf`)"
+        )
 
     if blueprint.exists():
         dataset.register_blueprint(blueprint.resolve().as_uri(), set_default=True)

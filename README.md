@@ -53,7 +53,7 @@ Currently supported datasets:
 | Dataset                       | Domain                       | Input | Rerun HF bucket                                                   | Status |
 | ----------------------------- | ---------------------------- | ----- | ----------------------------------------------------------------- | ------ |
 | [ABC-130k](examples/abc-130k) | Bi-manual arm                | MCAP  | [`rerun/abc-130k`](https://huggingface.co/buckets/rerun/abc-130k) | ✅     |
-| [HIW-500](examples/hiw-500)   | Humanoid                     | MCAP  | N/A                                                               | 🚧     |
+| [HIW-500](examples/hiw-500)   | Humanoid                     | MCAP  | [`rerun/hiw-500`](https://huggingface.co/buckets/rerun/hiw-500)   | ✅     |
 | [LIBERO](examples/libero)     | (Sim) manipulation benchmark | HDF5  | N/A                                                               | 🚧     |
 | _More to come_                |                              |       |                                                                   |        |
 
@@ -64,7 +64,8 @@ The repository is organized around self-contained dataset examples, with shared 
     examples/       one directory per dataset — the conversion code
     packages/       shared utilities used by the examples
     blueprints/     each dataset's generated default viewer layout (gitignored)
-    data/  rrds/    created locally by the tasks: downloads and converted recordings (gitignored)
+    data/           created locally by the tasks  (gitignored)
+    rrds/           downloads and converted recordings (gitignored)
 
 Each example is a small Python package:
 

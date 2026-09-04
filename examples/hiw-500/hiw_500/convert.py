@@ -3,9 +3,10 @@ Build every layer (base, derived archetypes, URDF, odom, cameras, IR, properties
 
 Each layer module owns its conversion and runs on its own (`convert-base` / `convert-derived-archetypes` /
 `convert-urdf` / `convert-odom` / `convert-cameras` / `convert-ir` / `convert-properties`); this
-module runs them in order. The URDF model is parsed once and reused across episodes. Episodes
-without a head stereo calibration skip the cameras layer, without wrist IR streams the ir layer,
-and without `/wbc_lerobot` the derived archetypes layer.
+module runs them in order. The URDF model is parsed once, written as the dataset's shared model
+rrd, and reused across episodes. Episodes without a head stereo calibration skip the cameras
+layer, without wrist IR streams the ir layer, and without `/wbc_lerobot` the derived archetypes
+layer.
 
 Run:  pixi run -e hiw convert            # all episodes under data/HIW-500/
       pixi run -e hiw convert <ep.mcap>  # a single episode
@@ -58,11 +59,8 @@ def main() -> None:
         print(f"No episodes found under {DATASET_ROOT}")
         print("-> download some first: 'pixi run -e hiw download' (see README).")
         return
-    urdf = UrdfTree.from_file_path(
-        str(urdf_layer.URDF_PATH),
-        entity_path_prefix=urdf_layer.ENTITY_PREFIX,
-        static_transform_entity_path=f"{urdf_layer.ENTITY_PREFIX}/tf_static",
-    )
+    urdf = urdf_layer.load_urdf()
+    urdf_layer.convert_model(urdf, RRD_ROOT)
 
     print(f"Converting {len(episodes)} episode(s) -> {RRD_ROOT}/<layer>/ ({' + '.join(LAYERS)})")
     for ep in episodes:

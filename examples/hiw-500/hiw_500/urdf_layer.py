@@ -1,13 +1,9 @@
 """
 Build a URDF forward-kinematics *layer* for each HIW-500 episode.
 
-A derived layer: the animated Unitree G1 mesh, driven by the joint positions in
-`/stamped/lowstate`. Written as a separate `.rrd` per episode sharing the base `recording_id`,
-so base + URDF load as one logical recording.
-
-Two lenses on one `McapReader` joint stream: the first `DeriveLens` calls
-`compute_joint_transform_batches` per row, and a second `scatter` lens explodes each batch into
-per-joint `Transform3D` rows at `/robot/transforms`.
+The vendored Unitree G1 model is written once as a shared model rrd (`convert_model`); each
+episode's own `.rrd` carries only the FK rows. Two lenses on one `McapReader` stream build them,
+and the layer shares the base `recording_id` so base + URDF load as one logical recording.
 
 The model is `g1_29dof_mode_15_with_dex1_1.urdf` (Dex1 variant). Its 29 revolute joints follow
 the documented Unitree G1 motor order, so motor index i maps to `<name>_joint`. The 4 prismatic
@@ -53,15 +49,20 @@ from rrd_datasets_common.paths import layer_relpath
 list_element = pc.list_element  # type: ignore[attr-defined]
 list_flatten = pc.list_flatten  # type: ignore[attr-defined]
 
-URDF_PATH = Path("urdf/g1/g1_29dof_mode_15_with_dex1_1.urdf")
+URDF_PATH = Path(__file__).resolve().parents[1] / "urdf" / "g1" / "g1_29dof_mode_15_with_dex1_1.urdf"
 ENTITY_PREFIX = "robot"
+
+# Used in three places: the model rrd's file name, its recording id, and its asset id on the catalog.
+MODEL_RECORDING_ID = "urdf-model"
+
 LOWSTATE_TOPIC = "/stamped/lowstate"
 BATCH = "rerun.urdf.JointTransformBatch"
+TRANSFORMS = f"/{ENTITY_PREFIX}/transforms"
 
 # Motor index -> URDF joint name (verified: identical order, "_joint" suffix).
 JOINT_NAMES_URDF = [f"{name}_joint" for name in G1_JOINT_NAMES]
 
-# Entity paths log under /robot/<robot-name>/...; the content glob only supports a trailing
+# Entity paths log under /robot/<robot-name>/…; the content glob only supports a trailing
 # `**`, so the collision-drop pattern needs the literal robot-name segment.
 ROBOT_NAME = ET.parse(URDF_PATH).getroot().attrib["name"]
 COLLISION_GLOB = f"/{ENTITY_PREFIX}/{ROBOT_NAME}/collision_geometries/**"
@@ -104,7 +105,7 @@ def fk_stream(urdf: UrdfTree, path: Path) -> LazyChunkStream:
             output_mode="forward_all",
         )
         .lenses(
-            DeriveLens(BATCH, output_entity="/robot/transforms", scatter=True)
+            DeriveLens(BATCH, output_entity=TRANSFORMS, scatter=True)
             .to_component(rr.Transform3D.descriptor_translation(), Selector("[].translation"))
             .to_component(rr.Transform3D.descriptor_quaternion(), Selector("[].quaternion"))
             .to_component(rr.Transform3D.descriptor_parent_frame(), Selector("[].parent_frame"))
@@ -112,27 +113,49 @@ def fk_stream(urdf: UrdfTree, path: Path) -> LazyChunkStream:
             content="/tmp/batches",
             output_mode="drop_unmatched",
         )
-        .filter(content="/robot/transforms")
+        .filter(content=TRANSFORMS)
     )
 
 
+def model_rrd_path(rrd_root: Path) -> Path:
+    """Where the shared model rrd lives under a dataset's rrd root."""
+    return rrd_root / "assets" / f"{MODEL_RECORDING_ID}.rrd"
+
+
+def convert_model(urdf: UrdfTree, rrd_root: Path) -> Path:
+    """Write the shared model rrd: the meshes and fixed transforms every episode's FK layer poses."""
+    out_path = model_rrd_path(rrd_root)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    urdf.stream(include_joint_transforms=True).drop(content=COLLISION_GLOB).collect(
+        optimize=OptimizationProfile.OBJECT_STORE
+    ).write_rrd(str(out_path), application_id=APPLICATION_ID, recording_id=MODEL_RECORDING_ID)
+    return out_path
+
+
 def convert_episode(urdf: UrdfTree, ep: Episode, rrd_root: Path) -> Path:
-    model = urdf.stream(include_joint_transforms=True).drop(content=COLLISION_GLOB)
+    """Write one episode's FK rows; returns the written path."""
     out_path = rrd_root / layer_relpath("urdf", ep.recording_id)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    LazyChunkStream.merge(model, fk_stream(urdf, ep.mcap)).collect(optimize=OptimizationProfile.OBJECT_STORE).write_rrd(
+    fk_stream(urdf, ep.mcap).collect(optimize=OptimizationProfile.OBJECT_STORE).write_rrd(
         str(out_path), application_id=APPLICATION_ID, recording_id=ep.recording_id
     )
     return out_path
 
 
-def main(argv: list[str]) -> None:
-    urdf = UrdfTree.from_file_path(
+def load_urdf() -> UrdfTree:
+    """The vendored G1 model, rooted under `/robot`."""
+    return UrdfTree.from_file_path(
         str(URDF_PATH),
         entity_path_prefix=ENTITY_PREFIX,
         static_transform_entity_path=f"{ENTITY_PREFIX}/tf_static",
     )
+
+
+def main(argv: list[str]) -> None:
+    urdf = load_urdf()
     episodes = [episode_from_mcap(Path(argv[1]))] if len(argv) > 1 else discover_episodes(DATASET_ROOT)
+    model = convert_model(urdf, RRD_ROOT)
+    print(f"Shared model rrd: {model} ({model.stat().st_size / 1e6:.1f} MB)")
     print(f"Building URDF FK layer for {len(episodes)} episode(s) -> {RRD_ROOT / 'urdf'}/")
     for ep in episodes:
         out = convert_episode(urdf, ep, RRD_ROOT)
