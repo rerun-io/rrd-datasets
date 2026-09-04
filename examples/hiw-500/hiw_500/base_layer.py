@@ -314,8 +314,7 @@ def names_chunks() -> list[Chunk]:
     """
     Joint labels for the motor arrays, static beside their structs.
 
-    Element i of `motor_state` / `motor_cmd` is the joint `joint_names[i]`. The blueprint carries
-    the display labels; this is the machine-readable mapping.
+    The blueprint carries the display labels; this is the machine-readable mapping.
     """
     return [
         Chunk.from_columns(entity, indexes=[], columns=rr.AnyValues.columns(joint_names=[G1_JOINT_NAMES]))
@@ -424,13 +423,7 @@ def calibration_chunks(ep: Episode) -> list[Chunk]:
 
 
 def has_ir(ep: Episode) -> bool:
-    """
-    Whether the episode records the wrist IR streams.
-
-    Inferred from the per-serial wrist calibrations beside the episode — the IR streams and those
-    files arrived on the rig together — so metadata-only layers can answer it without downloading
-    the mcap. `ir_layer` reads the streams themselves and decides for itself.
-    """
+    """Whether the episode records the wrist IR streams."""
     return any((ep.mcap.parent / "calibration" / "params").glob("camera_*.json"))
 
 
@@ -440,12 +433,9 @@ def has_ir(ep: Episode) -> bool:
 
 
 def expected_message_counts(info: McapInfo, exclude: Iterable[str] = ()) -> dict[str, int]:
-    """
-    Per-topic message counts from the MCAP summary, without the topics matching an `exclude` pattern.
-
-    A channel the summary gives no count for cannot be checked and is left out.
-    """
+    """Per-topic message counts from the MCAP summary, without the topics matching an `exclude` pattern."""
     skipped = [re.compile(pattern) for pattern in exclude]
+    # A channel the summary gives no count for cannot be checked and is left out.
     return {
         channel.topic: channel.message_count
         for channel in info.channels
@@ -454,20 +444,12 @@ def expected_message_counts(info: McapInfo, exclude: Iterable[str] = ()) -> dict
 
 
 def undecodable_topics(expected: Mapping[str, int], chunks: Iterable[Chunk]) -> list[str]:
-    """
-    Topics whose decoded rows fall short of the MCAP's own message counts.
-
-    A message that fails CDR decoding is skipped without a row (e.g. the Feb 2026 Clothes-Washing
-    sessions declare `MotorStateStamped` on the left dex1 state channel but carry smaller `MotorCmd`
-    payloads), so the recording silently under-reports the channel. Rows are counted per component:
-    a topic entity carries several chunk families (the decoded message, a lens output, a second
-    reader's columns), each with one row per decoded message, so summing chunks would count a
-    message several times.
-    """
+    """Topics whose decoded rows fall short of the MCAP's message counts."""
     decoded: dict[str, dict[str, int]] = {}
     for chunk in chunks:
         if chunk.is_static:
             continue
+        # Per component: several chunk families share a topic entity, each with one row per message.
         per_component = decoded.setdefault(chunk.entity_path, {})
         for name in chunk.to_record_batch().schema.names:
             if name != "rerun.controls.RowId" and name not in chunk.timeline_names:
@@ -515,32 +497,18 @@ class Episode:
 
 
 def recording_id_for(mcap: Path) -> str:
-    """
-    `<task>__<session>__<episode_NNNN>` for an episode MCAP.
-
-    Those three directories above the file are the dataset's layout, so the id comes out the same
-    whether the episode was found by scanning `HIW-500/` or named on the command line, and it
-    matches what the Modal job derives from the HuggingFace path (`episode_index.recording_id`).
-    Deriving it any other way (say from the episode directory alone) collides across sessions and
-    tasks — every `episode_0001` would land on one catalog segment.
-    """
+    """`<task>__<session>__<episode_NNNN>` for an episode MCAP."""
     return "__".join(mcap.resolve().parent.parts[-3:])
 
 
 def episode_from_mcap(mcap: Path) -> Episode:
-    """
-    Build an `Episode` from one episode mcap (or its `episode_NNNN/` directory).
-
-    Parses the sibling `info.json` when it exists (episode metadata + subtask labels), picks up
-    the sibling head stereo calibration when the episode ships one, and derives the recording id
-    from the episode path (`recording_id_for`). The path may be absolute, or relative to either
-    the working directory or the workspace root.
-    """
+    """Build an `Episode` from one episode mcap, or from its `episode_NNNN/` directory."""
     mcap = resolve_input_path(mcap)
-    if mcap.is_dir():  # accept the episode dir too; the mcap inside is named after it.
+    if mcap.is_dir():  # the mcap inside an episode directory is named after it
         mcap = mcap / f"{mcap.name}.mcap"
     if not mcap.is_file():
         raise FileNotFoundError(f"no episode mcap at '{mcap}'")
+    # Both sidecars are optional: a missing info.json reads as empty, a missing head calibration as None.
     info = EpisodeInfo.from_json(mcap.with_name("info.json"))
     head_calib = mcap.with_name("calibration") / "params" / "head_camera_params.yaml"
     return Episode(
@@ -557,14 +525,7 @@ def discover_episodes(root: Path) -> list[Episode]:
 
 
 def convert_episode(ep: Episode, rrd_root: Path) -> Path:
-    """
-    Convert one episode into an optimized base-layer `.rrd` and return its path.
-
-    Merges the base entity stream with the camera fields and the sidecars (the subtask boundaries from
-    `info.json`, the parsed calibration files, the series labels), then checks the collected store against the MCAP
-    summary: a channel that came up short keeps its raw bytes. The census verdict and the MCAP
-    header ride along as recording properties.
-    """
+    """Convert one episode into its base-layer `.rrd` and return the path."""
     out_path = rrd_root / layer_relpath("base", ep.recording_id)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     merged = LazyChunkStream.merge(
@@ -575,6 +536,7 @@ def convert_episode(ep: Episode, rrd_root: Path) -> Path:
         ),
     )
     store = merged.collect(optimize=OptimizationProfile.OBJECT_STORE)
+    # Census: a channel short of the MCAP summary keeps its raw bytes too; IR is excluded since the ir layer carries it.
     info = McapReader(str(ep.mcap)).info()
     short = undecodable_topics(expected_message_counts(info, exclude=IR_TOPICS), store.stream())
     properties = [census_chunk(short), mcap_chunk(info.profile, info.library, [c.codec for c in info.compression])]
