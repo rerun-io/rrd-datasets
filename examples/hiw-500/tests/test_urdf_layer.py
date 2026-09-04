@@ -1,21 +1,31 @@
 """
-Tests for the URDF model against the joint mapping the FK layer feeds it.
+Tests for the URDF model, the joint mapping the FK layer feeds it, and the model/FK layer split.
 
 The motor-to-joint mapping is not in the data: `JOINT_NAMES_URDF` asserts that motor index i is
 URDF joint `<name>_joint`, and FK writes a confident wrong pose if that drifts — a reordered or
 renamed joint in the model, or an SDK change in `UrdfTree`. These tests hold the model, the
-mapping, and the FK output shape together without touching an MCAP.
+mapping, and the FK output shape together; only the layer round trip needs an MCAP.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pyarrow as pa
 import pytest
+from rerun.experimental import RrdReader
 from rerun.urdf import UrdfTree
 
-from hiw_500.base_layer import N_JOINTS
+from hiw_500.base_layer import N_JOINTS, episode_from_mcap
 from hiw_500.odom_layer import ROOT_FRAME
-from hiw_500.urdf_layer import ENTITY_PREFIX, JOINT_NAMES_URDF, URDF_PATH
+from hiw_500.urdf_layer import (
+    JOINT_NAMES_URDF,
+    MODEL_RECORDING_ID,
+    TRANSFORMS,
+    convert_episode,
+    convert_model,
+    load_urdf,
+)
 
 IDENTITY_QUATERNION = [0.0, 0.0, 0.0, 1.0]
 
@@ -23,11 +33,29 @@ IDENTITY_QUATERNION = [0.0, 0.0, 0.0, 1.0]
 @pytest.fixture(scope="module")
 def urdf() -> UrdfTree:
     """The tree exactly as `urdf_layer.main` builds it."""
-    return UrdfTree.from_file_path(
-        str(URDF_PATH),
-        entity_path_prefix=ENTITY_PREFIX,
-        static_transform_entity_path=f"{ENTITY_PREFIX}/tf_static",
-    )
+    return load_urdf()
+
+
+def test_the_model_rrd_is_a_valid_asset(urdf: UrdfTree, tmp_path: Path) -> None:
+    """The catalog rejects temporal chunks in an asset, so the model rrd must stay static only."""
+    reader = RrdReader(str(convert_model(urdf, tmp_path)))
+    (entry,) = reader.recordings()
+    assert entry.recording_id == MODEL_RECORDING_ID
+    chunks = list(reader.stream(store=entry))
+    assert chunks
+    assert all(chunk.is_static for chunk in chunks)
+    assert any("visual_geometries" in chunk.entity_path for chunk in chunks)
+    assert not any("collision_geometries" in chunk.entity_path for chunk in chunks)
+
+
+def test_the_episode_layer_leaves_the_meshes_to_the_shared_model(
+    urdf: UrdfTree, cached_episode: Path, tmp_path: Path
+) -> None:
+    """The 24 MB of G1 meshes ship once per dataset, so an episode's layer holds only its FK rows."""
+    out = convert_episode(urdf, episode_from_mcap(cached_episode), tmp_path)
+    reader = RrdReader(str(out))
+    (entry,) = reader.recordings()
+    assert {chunk.entity_path for chunk in reader.stream(store=entry)} == {TRANSFORMS}
 
 
 def test_the_29_motors_are_the_urdf_revolute_joints_in_motor_order(urdf: UrdfTree) -> None:
