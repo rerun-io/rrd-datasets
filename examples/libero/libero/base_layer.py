@@ -234,12 +234,12 @@ def convert_demo(reader: Hdf5Reader, task: str, demo: str, rrd_root: Path) -> Pa
     return out_path
 
 
-def task_files(argv: list[str]) -> list[tuple[Path, str]]:
+def task_files(argv: list[str], *, missing_ok: bool = False) -> list[tuple[Path, str]]:
     """The task files to convert as `(filesystem path, task id)`: one user-passed file, or every downloaded one."""
     if len(argv) > 1:
         path = resolve_input_path(Path(argv[1]))
         return [(path, task_id(f"{path.parent.name}/{path.name}"))]
-    return [(LOCAL_DIR / item.path, item.task_id) for item in discover_local_task_files()]
+    return [(LOCAL_DIR / item.path, item.task_id) for item in discover_local_task_files(missing_ok=missing_ok)]
 
 
 def main(argv: list[str]) -> None:

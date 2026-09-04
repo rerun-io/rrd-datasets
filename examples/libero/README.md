@@ -51,6 +51,7 @@ To download different files, edit `SAMPLES` in [`libero/download.py`](libero/dow
 Convert downloaded task files into per-demo Rerun recordings (`.rrd`) that share a `recording_id`.
 The viewer/catalog stacks them as **layers** of one logical recording: a base layer that carries the full demo, a properties layer that carries the catalog metadata, a urdf layer that carries the posed robot model, and a cameras layer that places the two cameras in the scene.
 Each layer can be added, replaced, or re-run without touching the others.
+The arm meshes are written once for the whole dataset, as the shared model rrd `rrds/libero/assets/urdf-model.rrd`.
 
 Build every layer, for every downloaded file or one task file:
 
@@ -73,6 +74,10 @@ pixi run -e libero rerun rrds/libero/*/libero_goal/turn_on_the_stove__demo_0.rrd
 > Keep the `*` to load all layers.
 > To modify the layout, edit `libero/blueprint.py` and rerun the `blueprint` task.
 
+> **Note:** Viewed from files alone, the demo shows no arm meshes.
+> The urdf model rrd is an asset of the whole dataset and no longer shares the demos' recording id.
+> To see the posed arm with its meshes, move to the next step.
+
 ### 4. Local Catalog
 
 Register the converted demos to a [catalog server](https://rerun.io/docs/concepts/how-does-rerun-work#catalog-server), then browse, sort, filter, and query the segments as one dataset.
@@ -91,14 +96,18 @@ pixi run -e libero register   # register all demos as the `libero` dataset
 ```
 
 > **Note:** On a catalog, each demo becomes one segment, keyed by its `recording_id`. Each `.rrd` of that demo attaches as one named layer of the segment (`base`, `properties`, `urdf`, `cameras`).
-> A layer name is an argument to the register call (`layer_name=` in `libero/catalog.py`).
 > The `register` task creates the dataset, attaches each demo's RRDs as its named layers, and installs `blueprints/libero/default.rbl` as the default blueprint (generate it first with `pixi run -e libero blueprint`).
+> It also registers the shared model rrd as the dataset's `urdf-model` [asset](https://rerun.io/docs/concepts/query-and-transform/catalog-object-model#assets).
 
 Browse them in the Rerun Viewer:
 
 ```sh
 pixi run -e libero rerun rerun+http://127.0.0.1:51234
 ```
+
+The video below shows what it looks like.
+
+https://github.com/user-attachments/assets/4b107809-2565-43d2-93e3-b8ca97cc54a4
 
 ## Remote Convert Example on Modal
 
@@ -189,6 +198,16 @@ To upload it to your HF bucket (`s3://<bucket>/blueprints/`), run:
 pixi run -e libero upload-blueprint
 ```
 
+### 5. Upload the shared model asset
+
+Run `pixi run -e libero convert-urdf` once locally.
+It will build the asset model rrd as `rrds/libero/assets/urdf-model.rrd`.
+To upload it to your HF bucket (`s3://<bucket>/assets/`), run:
+
+```bash
+pixi run -e libero upload-asset
+```
+
 ## Observations
 
 We share our summary of the source dataset in [observations.md](observations.md).
@@ -209,7 +228,7 @@ The datasets that repeat others are listed in [observations.md](observations.md#
 | file attrs                                                                            | `/__hdf5_properties`              | static columns                              | base       | the two JSON attrs also parsed, as `problem_info:parsed` and `env_args:parsed`  |
 | `problem_info.language_instruction`                                                   | `/task/instruction`               | `TextDocument`                              | base       | static, for the instruction pane                                                |
 | file attrs, `num_samples`, filename                                                   | segment properties                | —                                           | properties | suite, scene, task language, num_samples, source file                           |
-| `fer.urdf` meshes and fixed joints                                                    | `/urdf/fer/**`                    | `Asset3D`                                   | urdf       | static; the arm model, ~4 MB per recording                                      |
+| `fer.urdf` meshes and fixed joints                                                    | `/urdf/fer/**`                    | `Asset3D`                                   | asset      | static; the shared model rrd, ~4 MB once per dataset                            |
 | `obs/joint_states`, `obs/gripper_states` → FK                                         | `/urdf/transforms`                | `Transform3D`                               | urdf       | one row per joint per step, named frames                                        |
 | `model_file` `robot0_base` pose                                                       | `/urdf/world_from_base`           | `Transform3D`                               | urdf       | static; places the arm where the scene had it                                   |
 | `model_file` `<camera>` elements                                                      | `/camera/{agentview,eye_in_hand}` | `Transform3D`, `Pinhole`, `CoordinateFrame` | cameras    | static; places the two images in the scene, see [below](#the-cameras-layer)     |
@@ -228,6 +247,9 @@ This is a value-level identity test, not a byte-level one.
 The urdf layer poses the vendored Franka `fer` model ([`urdf/fer/`](urdf/fer/), provenance and regeneration recipe in [its README](urdf/fer/README.md)) with the base layer's joint columns.
 The URDF carries no world position, so the model alone would render at the world origin; a static `Transform3D` from the demo's scene XML sets the arm's base pose in the world.
 Forward kinematics to `fer_hand_tcp` reproduces the recorded `obs/ee_pos`, up to the fixed offset between Franka's tool center point and robosuite's grip site.
+
+The meshes and fixed transforms ship once in the shared model rrd, registered on the catalog as the `urdf-model` asset.
+The urdf rrd for each demo carries only its mounting pose and FK rows.
 
 ### The cameras layer
 

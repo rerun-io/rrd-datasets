@@ -3,7 +3,8 @@ Register the per-demo LIBERO RRDs into a local Rerun catalog as one dataset.
 
 Each demo is one *segment*, keyed by the `recording_id` its RRDs share (`<suite>/<task>__<demo>`).
 All layers (`base`, `properties`, `urdf` and `cameras`) are attached to that segment, and the
-default blueprint as well.
+default blueprint as well. The shared urdf model registers as the `urdf-model` asset, which the
+catalog merges into every segment.
 
     pixi run serve               # start the in-memory Rerun catalog (leave running)
     pixi run -e libero register  # register every demo's layers into a dataset
@@ -18,6 +19,7 @@ from rerun.catalog import CatalogClient, DatasetEntry, OnDuplicateSegmentLayer
 
 from libero.blueprint import BLUEPRINT_PATH
 from libero.layers import LAYERS
+from libero.urdf_layer import MODEL_RECORDING_ID, model_rrd_path
 from rrd_datasets_common.paths import dataset_rrd_dir, layer_relpath
 
 DEFAULT_CATALOG_URL = "rerun+http://127.0.0.1:51234"
@@ -38,10 +40,10 @@ def register_demos(
     recreate: bool = False,
 ) -> DatasetEntry:
     """
-    Register each demo's layers as one segment of the dataset and set the blueprint.
+    Register each demo's layers as one segment, attach the shared model asset, and set the blueprint.
 
-    The dataset is created if missing, and layers already there are replaced. With `recreate`, an
-    existing dataset of the same name is deleted first and rebuilt from scratch.
+    The dataset is created when it does not exist. Re-registering a layer replaces the previous one.
+    With `recreate`, an existing dataset of the same name is deleted first and rebuilt from scratch.
     """
     ids = demo_ids(rrd_dir)
     if not ids:
@@ -62,6 +64,15 @@ def register_demos(
         print(f"  layer '{layer}': registered {len(uris)} file(s)")
         for missing in (path for path in paths if not path.exists()):
             print(f"    missing: {missing.relative_to(rrd_dir)} — this demo registers without its '{layer}' layer")
+
+    model = model_rrd_path(rrd_dir)
+    if model.exists():
+        dataset.register_asset(model.resolve().as_uri())
+        print(f" register asset '{MODEL_RECORDING_ID}': {model}")
+    else:
+        print(
+            f"  no model rrd at {model} — segments render without the robot model (run `pixi run -e libero convert-urdf`)"
+        )
 
     if blueprint.exists():
         dataset.register_blueprint(blueprint.resolve().as_uri(), set_default=True)
