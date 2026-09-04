@@ -57,6 +57,10 @@ MSG_MOTOR_CMD = "homies.msg.MotorCmdStamped:message"
 MSG_IMU = "homies.msg.IMUStateStamped:message"
 MSG_ODOM = "unitree_go.msg.SportModeState:message"
 TEXT = "TextDocument:text"
+
+# The two annotation lanes: the episode's task sentence and its subtask boundaries.
+INSTRUCTION_ENTITY = "/task/instruction"
+SUBTASK_ENTITY = "/task/subtask"
 BLOB = "EncodedImage:blob"
 # The camera message as `ros2_reflection` decodes it, and the two fields kept from it per row. The
 # fields carry the message type as their archetype, as the reader tags its structs, so the viewer
@@ -285,9 +289,23 @@ def subtask_chunks(info: EpisodeInfo) -> list[Chunk]:
     ts = np.array([s.timestamp_ns for s in info.subtasks], dtype="datetime64[ns]")
     return [
         Chunk.from_columns(
-            "/task/subtask",
+            SUBTASK_ENTITY,
             indexes=[rr.TimeColumn("message_publish_time", timestamp=ts)],
             columns=rr.StateChange.columns(state=[s.task for s in info.subtasks]),
+        )
+    ]
+
+
+def instruction_chunks(info: EpisodeInfo) -> list[Chunk]:
+    """The episode's task sentence from `info.json` on `/task/instruction`; nothing when it has none."""
+    if not info.task:
+        return []
+    ts = np.array([info.start_timestamp_ns], dtype="datetime64[ns]")
+    return [
+        Chunk.from_columns(
+            INSTRUCTION_ENTITY,
+            indexes=[rr.TimeColumn("message_publish_time", timestamp=ts)],
+            columns=rr.TextDocument.columns(text=[info.task]),
         )
     ]
 
@@ -552,7 +570,9 @@ def convert_episode(ep: Episode, rrd_root: Path) -> Path:
     merged = LazyChunkStream.merge(
         base_stream(ep.mcap),
         camera_fields_stream(ep.mcap, RGB_CAMERA_TOPICS),
-        LazyChunkStream.from_iter(subtask_chunks(ep.info) + calibration_chunks(ep) + names_chunks()),
+        LazyChunkStream.from_iter(
+            instruction_chunks(ep.info) + subtask_chunks(ep.info) + calibration_chunks(ep) + names_chunks()
+        ),
     )
     store = merged.collect(optimize=OptimizationProfile.OBJECT_STORE)
     info = McapReader(str(ep.mcap)).info()

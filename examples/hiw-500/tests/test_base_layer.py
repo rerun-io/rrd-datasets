@@ -24,6 +24,7 @@ from rerun.experimental import Chunk
 from hiw_500.base_layer import (
     CALIBRATION_ARCHETYPE,
     G1_JOINT_NAMES,
+    INSTRUCTION_ENTITY,
     MCAP_PROPERTY,
     PROPERTY_PATH,
     Episode,
@@ -33,6 +34,7 @@ from hiw_500.base_layer import (
     calibration_components,
     census_chunk,
     has_ir,
+    instruction_chunks,
     mcap_chunk,
     names_chunks,
     undecodable_topics,
@@ -135,6 +137,24 @@ def test_an_info_json_without_a_scene_reads_as_minus_one(tmp_path: Path) -> None
     path.write_text('{"task": "sweep floor", "duration_sec": 16.6}')
     assert EpisodeInfo.from_json(path).scene == -1
     assert EpisodeInfo.from_json(tmp_path / "absent.json").scene == -1
+
+
+def test_the_instruction_is_stamped_at_the_episode_start() -> None:
+    """The blueprint draws it as a state lane, and a lane spans from a temporal row — static draws nothing."""
+    info = EpisodeInfo(task="sweep floor", start_timestamp_ns=1779172788952000000)
+    (chunk,) = instruction_chunks(info)
+    assert chunk.entity_path == INSTRUCTION_ENTITY
+    assert not chunk.is_static
+    batch = chunk.to_record_batch()
+    assert batch.column("TextDocument:text").to_pylist() == [["sweep floor"]]
+    assert batch.column("message_publish_time").to_pylist() == [
+        np.datetime64(info.start_timestamp_ns, "ns").astype("datetime64[us]").item()
+    ]
+
+
+def test_an_episode_without_a_task_has_no_instruction() -> None:
+    """`info.json` is optional, and an absent one must not put an empty band on the lane."""
+    assert instruction_chunks(EpisodeInfo()) == []
 
 
 def test_ir_is_inferred_from_the_wrist_calibrations(tmp_path: Path) -> None:

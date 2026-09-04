@@ -1,8 +1,8 @@
 """
 Build the default Rerun blueprint for HIW-500 episodes and save it as an `.rbl`.
 
-The blueprint decides how an episode is shown: a 3D scene, the camera streams, the subtask lane and
-the signal plots. The plots read the raw message structs through component mappings, so no scalar
+The blueprint decides how an episode is shown: a 3D scene, the camera streams, the annotation lanes
+and the signal plots. The plots read the raw message structs through component mappings, so no scalar
 is materialised in any layer. The `register` task installs the result as the dataset's default.
 
 Run:  pixi run -e hiw blueprint   # regenerates blueprints/hiw-500/default.rbl
@@ -20,17 +20,23 @@ from rerun.blueprint.visualizers import Visualizer
 from hiw_500.base_layer import (
     APPLICATION_ID,
     G1_JOINT_NAMES,
+    INSTRUCTION_ENTITY,
     MOTOR_SLOTS,
     MSG_LOWSTATE,
     MSG_MOTOR_CMD,
     MSG_MOTOR_STATE,
     N_JOINTS,
+    SUBTASK_ENTITY,
+    TEXT,
 )
 from hiw_500.derived_archetypes_layer import EE_NAMES, MSG_WBC, WBC_TOPIC
 from hiw_500.odom_layer import START_FRAME
 from rrd_datasets_common.paths import default_blueprint_path
 
 BLUEPRINT_PATH = default_blueprint_path("hiw-500")
+
+# The instruction lane's flat grey, so the eye reads color as meaning on the subtask lane alone.
+INSTRUCTION_COLOR = 0x8A8A8AFF
 
 LEFT_WRIST = "/camera/left_wrist/image/compressed"
 RIGHT_WRIST = "/camera/right_wrist/image/compressed"
@@ -127,11 +133,46 @@ def _wrist_view(origin: str, name: str) -> rrb.Spatial2DView:
     )
 
 
+def _instruction_text(target: str) -> VisualizerComponentMapping:
+    """The instruction's `TextDocument` text, read into one of the state visualizer's slots."""
+    return VisualizerComponentMapping(
+        target=target,
+        source_kind=ComponentSourceKind.SourceComponent,
+        source_component=TEXT,
+    )
+
+
+def _annotation_view() -> rrb.StateTimelineView:
+    """
+    What the episode was asked to do: the whole-episode instruction above its subtask lanes.
+
+    Lanes stack in entity-path order, so the instruction sits above the subtasks. It holds a
+    `TextDocument` rather than a `StateChange`, so its text is mapped into the state slot; being a
+    single static value, it draws as one band across the episode.
+
+    A lane's color is otherwise hashed from its state value, which differs per episode. Feeding the
+    same text into `values` makes the one configured entry match whatever this episode says, holding
+    the instruction to a flat grey while the subtask labels keep their per-value colors.
+    """
+    instruction = rr.StateConfiguration(colors=[INSTRUCTION_COLOR]).visualizer(
+        mappings=[
+            _instruction_text("StateChange:state"),
+            _instruction_text("StateConfiguration:values"),
+        ]
+    )
+    return rrb.StateTimelineView(
+        origin="/task",
+        name="Annotation",
+        contents=[f"+ {INSTRUCTION_ENTITY}", f"+ {SUBTASK_ENTITY}"],
+        overrides={INSTRUCTION_ENTITY: [instruction]},  # type: ignore[dict-item]
+    )
+
+
 def build_blueprint() -> rrb.Blueprint:
     return rrb.Blueprint(
         rrb.Vertical(
             rrb.Horizontal(
-                # Left: 3D scene with the subtask state timeline beneath it.
+                # Left: 3D scene with the annotation lanes beneath it.
                 rrb.Vertical(
                     # 3D scene in the episode's `start` frame: robot mesh + FK, EE positions, left head cam.
                     # `start` is fixed in `odom` at the robot's initial pose (odom layer), so one eye frames
@@ -165,7 +206,7 @@ def build_blueprint() -> rrb.Blueprint:
                             ]
                         },
                     ),
-                    rrb.StateTimelineView(origin="/task/subtask", name="Subtasks"),
+                    _annotation_view(),
                     row_shares=[4, 1],
                 ),
                 # Right: the head pair above the wrists, whose colour and infrared views

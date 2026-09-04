@@ -7,7 +7,7 @@ Below is the viewer showing a converted episode with the default blueprint.
 
 ![HIW-500 in the Rerun viewer](screenshot.png)
 
-The [default blueprint](#3-view) puts a 3D scene centred on the robot on the left with the subtask timeline beneath it, the cameras on the right, and joint, end-effector and gripper plots along the bottom.
+The [default blueprint](#3-view) puts a 3D scene centred on the robot on the left with the annotation lanes beneath it, the cameras on the right, and joint, end-effector and gripper plots along the bottom.
 The camera pane shows the head pair above the wrists, where an `RGB` and an `IR` tab switch between the two modalities of the same cameras.
 
 There are two ways to run it.
@@ -250,7 +250,8 @@ Every message stays whole: a custom `homies/*` or `unitree_go/*` message is one 
 | `/annotation`                             | `TextDocument`                                                                                                                   | ✅                   | —                                     |
 | every topic                               | `McapSchema`, `McapChannel` (static)                                                                                             | ✅                   | —                                     |
 | MCAP metadata, statistics, header         | `rosbag2`, `McapStatistics`, `profile`/`library`/`compression` at `/__mcap_metadata`, `/__mcap_properties`, `/__properties/mcap` | ✅                   | —                                     |
-| `info.json` subtasks                      | `StateChange` at `/task/subtask`                                                                                                 | ✅                   | Subtasks                              |
+| `info.json` task                          | `TextDocument` at `/task/instruction`                                                                                            | ✅                   | Annotation                            |
+| `info.json` subtasks                      | `StateChange` at `/task/subtask`                                                                                                 | ✅                   | Annotation                            |
 | `calibration/` sidecars                   | `CalibrationFile` at `/calibration/…`                                                                                            | ✅                   | —                                     |
 | `/camera/<side>_wrist/ir{1,2}/compressed` | `EncodedImage`, `CompressedImage:{header,format}`                                                                                | `ir`                 | IR tab                                |
 | `/wbc_lerobot`                            | `wbc_lerobot:message`; `Transform3D` at `/lerobot/{ee_state,ee_action}/<side>`                                                   | `derived_archetypes` | End-effector, Gripper(LeRobot), Scene |
@@ -288,7 +289,7 @@ Each layer is a separate module that writes its own `.rrd`.
 `hiw_500/base_layer.py` — Everything in the MCAP, as recorded.
 Each decoded message stays one struct, the file's own records (schemas, channel QoS, metadata, statistics) come along, and only the wrist IR streams go to their own layer.
 The stereo head image is split into its two eyes; the recorded frame stays too, since the crop is not byte-exact at the seam.
-Beside the MCAP it logs the sidecars: the subtask boundaries from `info.json`, the calibration files as `CalibrationFile` components, and the joint labels.
+Beside the MCAP it logs the sidecars: the task sentence and subtask boundaries from `info.json`, the calibration files as `CalibrationFile` components, and the joint labels.
 A census compares the decoded rows with the MCAP summary; a channel that lost messages is flagged (`has_undecodable`, `undecodable_topics`) and its raw bytes are kept.
 
 ### Derived archetypes layer
