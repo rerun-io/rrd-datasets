@@ -133,46 +133,50 @@ https://github.com/user-attachments/assets/004b2ee1-9312-44a6-a5e4-6b01ec334188
 
 ## Remote Convert Example on Modal
 
-The steps above run locally.
-To convert the full dataset off-box, the [Modal](https://modal.com/) job under `hiw_500/modal_jobs/` fans episodes out across workers: each worker downloads one episode, converts it, and uploads the `.rrd` files to a Hugging Face bucket.
-It runs detached and returns immediately.
-Watch progress in the Modal dashboard.
+The steps above run locally on the downloaded sample episodes.
+The following steps convert the full dataset on cloud workers.
 
 ### 1. Prerequisite: storage backend
 
-Converted RRDs land in a bucket, and `STORAGE_BACKEND` picks which kind.
-This example converts to a [Hugging Face Storage Bucket](https://huggingface.co/docs/hub/main/en/storage-buckets-s3)
-behind its S3-compatible gateway, reached with `boto3` like any S3 bucket.
-The `hiw` environments default `STORAGE_BACKEND` to `hf` and `HF_BUCKET` to `hiw-500`, so the namespace that owns the bucket is the one value you have to set.
-Access uses [HF S3 credentials](https://huggingface.co/docs/hub/storage-buckets-s3#generating-s3-credentials): an access key ID prefixed `HFAK…` and a secret access key.
-Generate them from a fine-grained HF token scoped to the bucket.
-These credentials are shipped to the Modal workers as an ephemeral per-run secret.
-
-Set the env vars for your backend, or edit the placeholders in
-[`rrd_datasets_common/storage.py`](../../packages/rrd_datasets_common/rrd_datasets_common/storage.py) (buckets) and
-[`rrd_datasets_common/modal_jobs/store.py`](../../packages/rrd_datasets_common/rrd_datasets_common/modal_jobs/store.py) (role ARN);
-the dataset's own layout under the bucket lives in [`storage.py`](hiw_500/storage.py):
+Set the env vars for your storage backend in the shell, or edit the defaults in
+[`rrd_datasets_common/storage.py`](../../packages/rrd_datasets_common/rrd_datasets_common/storage.py) (backend, buckets) and
+[`rrd_datasets_common/modal_jobs/store.py`](../../packages/rrd_datasets_common/rrd_datasets_common/modal_jobs/store.py) (role ARN).
+The dataset's own layout under the bucket lives in [`storage.py`](hiw_500/storage.py):
 
 | Env var                                           | Backend | What it is                                                             |
 | ------------------------------------------------- | ------- | ---------------------------------------------------------------------- |
+| `STORAGE_BACKEND`                                 | both    | Which bucket kind, `hf` or `s3` — `hf` in the `hiw` environments       |
 | `HF_NAMESPACE`                                    | hf      | The user or org that owns the bucket — set this one                    |
 | `HF_BUCKET`                                       | hf      | Bucket the RRDs are written to, `hiw-500` by default — create it first |
 | `HF_BUCKET_ACCESS_KEY_ID` / `…_SECRET_ACCESS_KEY` | hf      | The HF S3 credentials                                                  |
 
+Converted RRDs land in a bucket, and `STORAGE_BACKEND` picks which kind.
+
+This example converts to a [Hugging Face Storage Bucket](https://huggingface.co/docs/hub/main/en/storage-buckets-s3)
+behind its S3-compatible gateway, reached with `boto3` like any S3 bucket.
+The `hiw` environments default `STORAGE_BACKEND` to `hf` and `HF_BUCKET` to `hiw-500`, so the namespace that owns the bucket is the one value you have to set.
+Your own `export` wins over both defaults.
+Access uses [HF S3 credentials](https://huggingface.co/docs/hub/storage-buckets-s3#generating-s3-credentials): an access key ID prefixed `HFAK…` and a secret access key.
+Generate them from a fine-grained HF token scoped to the bucket.
+The launcher passes them to the workers as an ephemeral per-run secret.
+
 `HF_NAMESPACE` has no default, and the bucket has to exist.
 
-> **Note:** to store in an AWS S3 bucket instead, set `STORAGE_BACKEND=s3` and follow the
+> **Note:** to store in an AWS S3 bucket instead, `export STORAGE_BACKEND=s3` and follow the
 > [S3 prerequisite in the ABC-130k example](../abc-130k/README.md#1-prerequisite-s3-storage).
 
 ### 2. Prerequisite: Modal setup
 
+The [Modal](https://modal.com/) job under `hiw_500/modal_jobs/` fans episodes out across workers: each worker downloads one episode, converts it, and uploads the `.rrd` layers to a Hugging Face bucket.
+
+To set it up:
+
 - `pixi run -e hiw modal setup` — authenticate the Modal CLI (one-time).
-- `pixi run -e hiw hf auth login`, or set `$HF_TOKEN` — not required since the dataset is public, but it raises the download quota.
-  (Anonymous callers share a smaller per-IP quota.)
+- `pixi run -e hiw hf auth login`, or set `$HF_TOKEN` — optional for this public dataset, but anonymous callers share a smaller per-IP download quota.
 
 ### 3. Run Convert
 
-Run `pixi run -e hiw convert-on-modal --help` for the full flag reference.
+Run `pixi run -e hiw convert-on-modal --help` to see all options.
 
 ```bash
 # One new episode, every layer it can have (the default when no flags are given):
@@ -187,6 +191,9 @@ pixi run -e hiw convert-on-modal --task-filter Sweep-Floor --limit 5 --overwrite
 # See what would run, without spawning anything:
 pixi run -e hiw convert-on-modal --dry-run --limit 10
 ```
+
+The `convert-on-modal` task runs detached and returns immediately.
+Watch progress in the Modal dashboard.
 
 > **Note:** Without `--overwrite`, anything already in the bucket is skipped.
 > The launcher spawns no worker for an episode whose layers are all present.
