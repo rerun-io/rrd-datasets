@@ -44,6 +44,7 @@ MODEL_RECORDING_ID = "urdf-model"
 TRANSFORMS = f"/{ENTITY_PREFIX}/transforms"
 WORLD_FROM_BASE = f"/{ENTITY_PREFIX}/world_from_base"
 WORLD_FRAME = "world"
+BASE_FRAME = "base"  # the URDF root link, where the arm meets its mount
 
 # The reader emits the demo's observations as one struct column.
 OBS_ENTITY = "/obs"
@@ -115,7 +116,7 @@ def world_from_base_chunk(model_file: str) -> Chunk:
             translation=[translation],
             quaternion=[quaternion],
             parent_frame=[WORLD_FRAME],
-            child_frame=["base"],
+            child_frame=[BASE_FRAME],
         ),
     )
 

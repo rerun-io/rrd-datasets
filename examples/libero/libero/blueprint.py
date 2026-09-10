@@ -59,13 +59,14 @@ def build_blueprint() -> rrb.Blueprint:
             rrb.Horizontal(
                 rrb.Vertical(
                     rrb.TextDocumentView(origin="/task/instruction", name="Instruction"),
-                    # The eye sits behind the agent camera and off to its side, so the pane shows that
-                    # camera's frustum and image plane next to the arm.
+                    # The scene is drawn in the arm's base frame. The eye sits behind the agent
+                    # camera and off to its side.
                     rrb.Spatial3DView(
                         origin="/",
                         contents=[f"+ {URDF_ORIGIN}/fer/**", f"+ {CAMERA_ORIGIN}/**"],
                         name="Robot",
-                        eye_controls=rrb.archetypes.EyeControls3D(position=[1.0, 0.5, 1.8]),
+                        spatial_information=rrb.SpatialInformation(target_frame=urdf_layer.BASE_FRAME),
+                        eye_controls=rrb.archetypes.EyeControls3D(position=[1.7, 0.5, 0.9]),
                         overrides={
                             f"{CAMERA_ORIGIN}/agentview": [
                                 rr.Pinhole.from_fields(image_plane_distance=0.4),
