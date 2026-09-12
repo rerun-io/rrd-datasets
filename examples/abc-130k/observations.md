@@ -68,8 +68,6 @@ The converter detects the layout from the arm array width: converted arm entitie
 Four camera models and six resolutions appear in the original source, though the dataset documentation mentions only two models ("Realsense" and "ZED_X").
 `640×480 RealSense @30 Hz` is the dominant case.
 
-TODO: convert the following block into a table.
-
 ```text
 640×480    Intel RealSense D405   declares 30 or 60 fps
 848×480    Intel RealSense D405

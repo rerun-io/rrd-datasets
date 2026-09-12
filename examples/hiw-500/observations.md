@@ -30,6 +30,8 @@ The table below shows representative converted segments, with one example for ea
 | `pillow-feb`  | `Move-The-Pillow-To-The-Sofa-From-Floor/episode_2026-02-24_14-31-06/episode_0001` | 13     | none         | no IR streams and no sidecars at all         |
 | `clothes-feb` | `Clothes-Washing/episode_2026-02-26_12-11-27/episode_0001`                        | 17     | wrist only   | the left-gripper state payload bug           |
 | `kitchen-jan` | `Kitchen-Organization/episode_2026-01-28_11-27-45/episode_0001`                   | 12     | none         | the oldest variant, no `/wbc_lerobot`        |
+| `fridge-feb`  | `Restocking-Fridge/episode_2026-02-04_15-34-50/episode_0003`                      | 13     | none         | a near-empty 47 ms episode, no subtasks      |
+| `fridge-apr`  | `Restocking-Fridge/episode_2026-04-30_13-22-50/episode_0004`                      | 17     | wrist + head | a near-empty 1.1 s episode, no subtasks      |
 
 ## Topic set — three variants, growing by recording date
 
@@ -110,3 +112,18 @@ Files are uncompressed MCAP, so anything that rewrites chunks shrinks storage su
 In one February Clothes-Washing session including `clothes-feb`, every message on the left gripper state channel is serialized as `unitree_go/MotorCmd` and numerically identical to the concurrent `/stamped/dex1/left/cmd` messages. The channel still declares `MotorStateStamped`, which is 12 bytes larger, so strict CDR decoders throw.
 
 The `.rrd` base layer compares decoded rows against the MCAP's own per-channel counts and records `has_undecodable` and `undecodable_topics` in `property:episode`.
+
+### Near-empty episodes
+
+Two episodes are affected:
+
+| episode      | size   | duration | messages | channels |
+| ------------ | ------ | -------- | -------- | -------- |
+| `fridge-feb` | 321 KB | 47 ms    | 38       | 13       |
+| `fridge-apr` | 7.9 MB | 1.1 s    | 1,079    | 17       |
+
+Neither carries subtasks.
+Both are valid MCAP and agree with the duration in their `info.json`, and each abuts a full episode to the nanosecond: `fridge-feb` starts where the previous episode ends, `fridge-apr` ends where the next one starts.
+
+The converter passes them through unchanged, so the `.rrd` is as short as the MCAP it came from.
+Filter on `property:episode:duration_sec` when querying the catalog.
