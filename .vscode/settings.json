@@ -4,6 +4,9 @@
     "files.insertFinalNewline": true,
     "files.trimTrailingWhitespace": true,
 
+    // pixi keeps one env per example under .pixi/envs; without this only .venv is discovered.
+    "python-envs.workspaceSearchPaths": [".venv", "*/.venv", ".pixi/envs/*"],
+
     "ruff.configuration": "pyproject.toml",
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff"
