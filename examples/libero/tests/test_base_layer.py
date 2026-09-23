@@ -10,7 +10,8 @@ import numpy as np
 import pyarrow as pa
 import pytest
 from conftest import ENV_ARGS, HEIGHT, MODEL_FILE, NUM_STEPS, WIDTH, write_fixture
-from rerun.experimental import Hdf5Reader, RrdReader
+from rerun.chunk import RrdReader
+from rerun.experimental import Hdf5Reader
 
 from libero import properties_layer
 from libero.base_layer import convert_demo, demo_keys, discover_cameras, flip_vertical

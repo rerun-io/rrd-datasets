@@ -19,7 +19,7 @@ import pyarrow as pa
 import pytest
 import rerun as rr
 import yaml
-from rerun.experimental import Chunk
+from rerun.chunk import Chunk
 
 from hiw_500.base_layer import (
     CALIBRATION_ARCHETYPE,

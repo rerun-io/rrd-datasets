@@ -31,11 +31,7 @@ from pathlib import Path
 import numpy as np
 import rerun as rr
 import yaml
-from rerun.experimental import (
-    Chunk,
-    LazyChunkStream,
-    OptimizationProfile,
-)
+from rerun.chunk import Chunk, LazyChunkStream, OptimizationProfile
 
 from hiw_500.base_layer import APPLICATION_ID, DATASET_ROOT, RRD_ROOT, Episode, discover_episodes, episode_from_mcap
 from rrd_datasets_common.paths import layer_relpath

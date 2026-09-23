@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pyarrow as pa
 import pytest
-from rerun.experimental import RrdReader
+from rerun.chunk import RrdReader
 from rerun.urdf import UrdfTree
 
 from hiw_500.base_layer import N_JOINTS, episode_from_mcap

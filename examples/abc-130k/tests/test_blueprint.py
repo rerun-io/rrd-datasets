@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from rerun.experimental import RrdReader
+from rerun.chunk import RrdReader
 
 from abc_130k.blueprint import build_blueprint
 from abc_130k.convert import APPLICATION_ID

@@ -338,7 +338,7 @@ The default blueprint shows them under the `IR` tab of the wrist camera pane, be
 
 ## Rerun APIs demonstrated
 
-- [`McapReader`](https://ref.rerun.io/docs/python/stable/experimental/#rerun.experimental.McapReader) decodes the episode topics into chunk streams — the custom `homies/*` messages by reflection into structs, the cameras and text topics into archetypes — and its summary drives the channel census (`base_layer.py`).
+- [`McapReader`](https://ref.rerun.io/docs/python/stable/chunk/#rerun.chunk.McapReader) decodes the episode topics into chunk streams — the custom `homies/*` messages by reflection into structs, the cameras and text topics into archetypes — and its summary drives the channel census (`base_layer.py`).
 - [Lenses](https://rerun.io/docs/concepts/query-and-transform/lenses) turn the raw messages into what the viewer needs typed: `EncodedImage` halves for the split stereo head, `Transform3D` for the base pose and the end-effector markers, a struct from the `/wbc_lerobot` JSON (`base_layer.py`, `odom_layer.py`, `derived_archetypes_layer.py`).
 - [Component mappings](https://rerun.io/docs/howto/visualization/plot-any-scalar) plot the joint, gripper and end-effector series straight out of the message structs, one `VisualizerComponentMapping` per series, so no `Scalars` are materialised (`blueprint.py`).
 - [`rerun.urdf.UrdfTree`](https://ref.rerun.io/docs/python/stable/urdf/#rerun.urdf.UrdfTree) loads the vendored G1 model and runs forward kinematics from the joint states (`urdf_layer.py`).

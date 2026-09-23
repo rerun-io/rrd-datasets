@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from rerun.experimental import RrdReader
+from rerun.chunk import RrdReader
 
 from libero.base_layer import APPLICATION_ID
 from libero.blueprint import build_blueprint

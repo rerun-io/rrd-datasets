@@ -17,7 +17,7 @@ import numpy as np
 import pyarrow as pa
 from mcap_ros2.writer import Writer
 from PIL import Image
-from rerun.experimental import ChunkStore, LazyChunkStream, McapReader
+from rerun.chunk import ChunkStore, LazyChunkStream, McapReader
 
 from hiw_500.base_layer import (
     CAMERA_FORMAT,
