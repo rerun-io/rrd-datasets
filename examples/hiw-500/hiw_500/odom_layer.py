@@ -21,15 +21,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import rerun as rr
-from rerun.experimental import (
-    Chunk,
-    ChunkStore,
-    DeriveLens,
-    LazyChunkStream,
-    McapReader,
-    OptimizationProfile,
-    Selector,
-)
+from rerun.chunk import Chunk, ChunkStore, DeriveLens, LazyChunkStream, McapReader, OptimizationProfile, Selector
 
 from hiw_500.base_layer import (
     APPLICATION_ID,

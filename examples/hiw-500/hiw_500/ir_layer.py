@@ -21,7 +21,7 @@ import argparse
 import re
 from pathlib import Path
 
-from rerun.experimental import LazyChunkStream, McapReader, OptimizationProfile
+from rerun.chunk import LazyChunkStream, McapReader, OptimizationProfile
 
 from hiw_500.base_layer import (
     APPLICATION_ID,

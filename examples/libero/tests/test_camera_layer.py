@@ -7,7 +7,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 from conftest import AGENTVIEW_POS, EYE_IN_HAND_POS, HEIGHT, MODEL_FILE, WIDTH, write_fixture
-from rerun.experimental import Hdf5Reader, RrdReader
+from rerun.chunk import RrdReader
+from rerun.experimental import Hdf5Reader
 
 from libero.base_layer import Camera
 from libero.camera_layer import camera_mounts, convert_demo, image_from_camera

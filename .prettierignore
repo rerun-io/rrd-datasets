@@ -1,3 +1,6 @@
 # Files inherited from rerun_template — kept as upstream ships them:
 CODE_OF_CONDUCT.md
 .github/pull_request_template.md
+
+# Local virtualenvs ignore themselves through their own .gitignore, which prettier does not read.
+.venv/

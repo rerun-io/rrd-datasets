@@ -8,7 +8,8 @@ import numpy as np
 import pyarrow as pa
 import pytest
 from conftest import ARM_POSE, BASE_POS, MODEL_FILE, NUM_STEPS, write_fixture
-from rerun.experimental import Hdf5Reader, RrdReader
+from rerun.chunk import RrdReader
+from rerun.experimental import Hdf5Reader
 
 from libero.urdf_layer import (
     JOINT_NAMES_URDF,

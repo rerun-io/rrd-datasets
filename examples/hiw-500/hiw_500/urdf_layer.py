@@ -23,13 +23,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import rerun as rr
-from rerun.experimental import (
-    DeriveLens,
-    LazyChunkStream,
-    McapReader,
-    OptimizationProfile,
-    Selector,
-)
+from rerun.chunk import DeriveLens, LazyChunkStream, McapReader, OptimizationProfile, Selector
 from rerun.urdf import UrdfTree
 
 from hiw_500.base_layer import (

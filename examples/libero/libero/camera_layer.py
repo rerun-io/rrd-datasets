@@ -20,7 +20,8 @@ from pathlib import Path
 
 import numpy as np
 import rerun as rr
-from rerun.experimental import Chunk, Hdf5Reader, LazyChunkStream, OptimizationProfile
+from rerun.chunk import Chunk, LazyChunkStream, OptimizationProfile
+from rerun.experimental import Hdf5Reader
 
 from libero.base_layer import APPLICATION_ID, RRD_ROOT, Camera, demo_keys, discover_cameras, task_files
 from libero.episodes import recording_id

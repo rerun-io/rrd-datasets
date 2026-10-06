@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from rerun.experimental import Chunk
+from rerun.chunk import Chunk
 
 from hiw_500.base_layer import PROPERTY_PATH, Episode, EpisodeInfo
 from hiw_500.properties_layer import ROBOT, properties_chunk

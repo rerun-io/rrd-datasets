@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from mcap.writer import Writer
-from rerun.experimental import RrdReader
+from rerun.chunk import RrdReader
 
 from hiw_500.base_layer import MCAP_PROPERTY, PROPERTY_PATH, convert_episode, episode_from_mcap
 

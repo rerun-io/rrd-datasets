@@ -18,7 +18,7 @@ import numpy as np
 import pyarrow as pa
 import rerun as rr
 from av.video.codeccontext import VideoCodecContext
-from rerun.experimental import Chunk, LazyChunkStream, McapReader, MutateLens, Selector
+from rerun.chunk import Chunk, LazyChunkStream, McapReader, MutateLens, Selector
 
 DEFAULT_GOP = 60
 DEFAULT_CRF = 23

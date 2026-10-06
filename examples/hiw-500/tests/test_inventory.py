@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
-from rerun.experimental import McapChannelInfo, McapReader, RrdReader
+from rerun.chunk import McapChannelInfo, McapReader, RrdReader
 
 from hiw_500 import base_layer, derived_archetypes_layer, ir_layer
 from hiw_500.base_layer import CAMERA_FORMAT, CAMERA_HEADER, HEAD_TOPIC, MCAP_PROPERTY, episode_from_mcap

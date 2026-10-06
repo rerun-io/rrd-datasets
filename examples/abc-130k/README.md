@@ -194,7 +194,7 @@ The table below shows where each source topic lands in the recording.
 
 Rerun APIs demonstrated in this example:
 
-- [`McapReader`](https://ref.rerun.io/docs/python/stable/experimental/#rerun.experimental.McapReader) decodes the episode topics, including the custom protobuf messages, into chunk streams (`convert.py`).
+- [`McapReader`](https://ref.rerun.io/docs/python/stable/chunk/#rerun.chunk.McapReader) decodes the episode topics, including the custom protobuf messages, into chunk streams (`convert.py`).
 - [`Lenses`](https://rerun.io/docs/concepts/query-and-transform/lenses) turn the raw messages into typed components: `Scalars` for the joint signals, `TextDocument` for the instruction, `StateChange` for the subtask labels (`convert.py`).
 - The [blueprint](https://rerun.io/docs/concepts/visualization/blueprints) API composes the default layout, including the per-series legend overrides (`blueprint.py`).
 - [`CatalogClient`](https://rerun.io/docs/concepts/query-and-transform/catalog-object-model) registers each episode as a dataset segment and installs the default blueprint (`catalog.py`).

@@ -19,14 +19,8 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import rerun as rr
-from rerun.experimental import (
-    Chunk,
-    DeriveLens,
-    Hdf5Reader,
-    LazyChunkStream,
-    OptimizationProfile,
-    Selector,
-)
+from rerun.chunk import Chunk, DeriveLens, LazyChunkStream, OptimizationProfile, Selector
+from rerun.experimental import Hdf5Reader
 from rerun.urdf import UrdfTree
 
 from libero.base_layer import APPLICATION_ID, RRD_ROOT, demo_keys, discover_cameras, task_files, with_sim_time

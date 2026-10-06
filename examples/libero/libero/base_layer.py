@@ -20,15 +20,8 @@ from pathlib import Path
 import numpy as np
 import pyarrow as pa
 import rerun as rr
-from rerun.experimental import (
-    Chunk,
-    DeriveLens,
-    Hdf5Reader,
-    LazyChunkStream,
-    MutateLens,
-    OptimizationProfile,
-    Selector,
-)
+from rerun.chunk import Chunk, DeriveLens, LazyChunkStream, MutateLens, OptimizationProfile, Selector
+from rerun.experimental import Hdf5Reader
 
 from libero.episodes import LOCAL_DIR, discover_local_task_files, recording_id, task_id
 from rrd_datasets_common.paths import dataset_rrd_dir, layer_relpath, resolve_input_path

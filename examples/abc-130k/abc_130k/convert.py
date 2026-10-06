@@ -21,14 +21,7 @@ from typing import Any
 
 import pyarrow.compute as pc
 import rerun as rr
-from rerun.experimental import (
-    Chunk,
-    DeriveLens,
-    LazyChunkStream,
-    McapReader,
-    OptimizationProfile,
-    Selector,
-)
+from rerun.chunk import Chunk, DeriveLens, LazyChunkStream, McapReader, OptimizationProfile, Selector
 
 from abc_130k.video_transcode import (
     DEFAULT_CRF,

@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from rerun.experimental import RrdReader
+from rerun.chunk import RrdReader
 
 from hiw_500.base_layer import APPLICATION_ID, INSTRUCTION_ENTITY, SUBTASK_ENTITY
 from hiw_500.blueprint import INSTRUCTION_COLOR, build_blueprint

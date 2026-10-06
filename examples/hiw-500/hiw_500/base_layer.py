@@ -29,7 +29,7 @@ import pyarrow as pa
 import rerun as rr
 import yaml
 from PIL import Image
-from rerun.experimental import Chunk, DeriveLens, LazyChunkStream, McapInfo, McapReader, OptimizationProfile, Selector
+from rerun.chunk import Chunk, DeriveLens, LazyChunkStream, McapInfo, McapReader, OptimizationProfile, Selector
 from turbojpeg import TurboJPEG
 
 from rrd_datasets_common.paths import dataset_data_dir, dataset_rrd_dir, layer_relpath, resolve_input_path
