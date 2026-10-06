@@ -50,13 +50,13 @@ npx skills experimental_install
 
 Currently supported datasets:
 
-| Dataset                         | Domain                       | Input    | Rerun HF bucket                                                   | Status |
-| ------------------------------- | ---------------------------- | -------- | ----------------------------------------------------------------- | ------ |
-| [ABC-130k](examples/abc-130k)   | Bi-manual arm                | MCAP     | [`rerun/abc-130k`](https://huggingface.co/buckets/rerun/abc-130k) | ✅     |
-| [HIW-500](examples/hiw-500)     | Humanoid                     | MCAP     | [`rerun/hiw-500`](https://huggingface.co/buckets/rerun/hiw-500)   | ✅     |
-| [LIBERO](examples/libero)       | (Sim) manipulation benchmark | HDF5     | N/A                                                               | 🚧     |
-| [MolmoAct2](examples/molmoact2) | Bi-manual arm                | LeRobot3 | N/A                                                               | 🚧     |
-| _More to come_                  |                              |          |                                                                   |        |
+| Dataset                         | Domain                        | Input    | Rerun HF bucket                                                   | Status |
+| ------------------------------- | ----------------------------- | -------- | ----------------------------------------------------------------- | ------ |
+| [ABC-130k](examples/abc-130k)   | Bi-manual arm                 | MCAP     | [`rerun/abc-130k`](https://huggingface.co/buckets/rerun/abc-130k) | ✅     |
+| [HIW-500](examples/hiw-500)     | Humanoid                      | MCAP     | [`rerun/hiw-500`](https://huggingface.co/buckets/rerun/hiw-500)   | ✅     |
+| [LIBERO](examples/libero)       | (Sim) single arm manipulation | HDF5     | [`rerun/libero`](https://huggingface.co/buckets/rerun/libero)     | ✅     |
+| [MolmoAct2](examples/molmoact2) | Bi-manual arm                 | LeRobot3 | N/A                                                               | 🚧     |
+| _More to come_                  |                               |          |                                                                   |        |
 
 ## Repository structure
 
