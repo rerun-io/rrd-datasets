@@ -7,7 +7,7 @@ Bump `HF_REVISION` in [`molmoact2/episode_index.py`](molmoact2/episode_index.py)
 
 ### 1. Download
 
-Download the dataset's `meta/` folder (72 MB) and five sample file groups (~5 GB, 111 episodes) into `data/MolmoAct2/`.
+Download the dataset's `meta/` folder (72 MB) and three sample file groups (~1.1 GB, 19 episodes) into `data/MolmoAct2/`.
 The dataset stores many episodes in each video file, so the samples are file groups: runs of consecutive episodes whose files hold no other episode.
 
 ```bash

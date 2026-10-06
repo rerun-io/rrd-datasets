@@ -3,8 +3,8 @@ Download sample file groups from the allenai/MolmoAct2-BimanualYAM-Dataset.
 
 MolmoAct2-BimanualYAM is a LeRobot v3 dataset of bimanual tabletop manipulation on two I2RT YAM
 arms: 32,246 teleoperated episodes (about 704 hours) with three cameras stored as AV1 video. This
-script grabs `meta/` and five file groups (~5 GB, 111 episodes) so there is something to poke at
-locally without pulling the full ~2.4 TB.
+script grabs `meta/` and three file groups (~1.1 GB, 19 episodes) so there is something to poke
+at locally without pulling the full ~2.4 TB.
 
 Run:  pixi run -e molmo download
 """
@@ -17,10 +17,8 @@ from molmoact2.episode_index import HF_REPO_ID, HF_REVISION, LOCAL_DIR, discover
 
 # Each sample is a file group, named by its first episode.
 SAMPLES = [
-    28126,  # 0.69 GB, 33 episodes of "Pack container", one under 1 s and one where neither arm moves
-    11726,  # 0.81 GB, 17 episodes of "Clothes Folding", one under 1 s
     800,  # 0.66 GB, 10 episodes of "spell out CVPR"
-    31746,  # 2.75 GB, 50 episodes of "Fold the cloth"; episode 31749's video runs 40 s past its data
+    1825,  # 0.37 GB, 8 episodes of "Pack container"; episode 1832 has no motion
     31673,  # 0.04 GB, a group of a single "Fold the cloth" episode
 ]
 # The dataset structure looks like the following:
