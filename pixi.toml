@@ -468,6 +468,11 @@ cmd = "python -m molmoact2.base_layer"
 cwd = "examples/molmoact2"
 description = "Convert the dataset's base layer"
 
+[feature.molmoact2-tasks.tasks.blueprint]
+cmd = "python -m molmoact2.blueprint"
+cwd = "examples/molmoact2"
+description = "Generate the dataset's blueprint"
+
 
 [environments]
 default = { features = ["dev"] }

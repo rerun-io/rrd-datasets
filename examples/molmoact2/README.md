@@ -1,5 +1,11 @@
 # MolmoAct2
 
+Below is the viewer showing a converted episode with the default blueprint.
+
+![MolmoAct2 in the Rerun viewer](screenshot.png)
+
+The [default blueprint](#3-view) puts the episode's instruction at the top, the top and wrist cameras below it, and the state and action plots of each arm along the bottom.
+
 ## Dataset
 
 - **Source**: [allenai/MolmoAct2-BimanualYAM-Dataset](https://huggingface.co/datasets/allenai/MolmoAct2-BimanualYAM-Dataset) on Hugging Face
@@ -40,6 +46,30 @@ pixi run -e molmo convert-base --from 800 --to 809   # downloaded episodes 800 t
 
 The recordings are written to `rrds/molmoact2/base/`.
 See [More about Layers](#more-about-layers) for what the base layer contains.
+
+### 3. View
+
+View a result in the Rerun Viewer:
+
+```bash
+pixi run -e molmo rerun rrds/molmoact2/base/*.rrd                # every episode
+pixi run -e molmo rerun rrds/molmoact2/base/episode_00800.rrd    # one episode
+```
+
+Generate the default blueprint, then view one episode with it:
+
+```bash
+pixi run -e molmo blueprint
+pixi run -e molmo rerun rrds/molmoact2/base/episode_00800.rrd blueprints/molmoact2/default.rbl
+```
+
+> **Note:** The viewer opens local files through its Viewer catalog by default, and it can then ignore the blueprint file.
+> Turn off **Settings** → **Viewer catalog** → **Load files via Viewer catalog** before running the command above.
+
+> **Note:** Each plot shows the 7 values of one arm.
+> The other arm's values are hidden, and the legend lists them as a single `left arm` or `right arm` entry, which shows them when clicked.
+> A joint has the same color in every plot, so its state and action can be compared.
+> To modify the layout, edit `molmoact2/blueprint.py` and rerun the `blueprint` task.
 
 ## Observations
 
@@ -94,3 +124,5 @@ The episode's metadata is logged as recording properties, which the catalog show
 - [`LeRobotReader`](https://ref.rerun.io/docs/python/stable/experimental/#rerun.experimental.LeRobotReader) reads one episode at a time into chunk streams, with each camera's video cut to the episode and copied without re-encoding (`base_layer.py`).
 - A `LazyChunkStream.map` step adds the `timestamp` timeline to every chunk as an extra index column (`base_layer.py`).
 - `Chunk.from_property` logs the episode's metadata as recording properties (`base_layer.py`).
+- The [blueprint](https://rerun.io/docs/concepts/visualization/blueprints) API composes the default layout.
+  A component mapping shows the `instruction` property as text, and `SeriesLines` overrides split the 14 state and action values by arm (`blueprint.py`).
