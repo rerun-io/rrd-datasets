@@ -148,6 +148,7 @@ depends-on = [
     { task = "py-lint", environment = "abc-dev" },
     { task = "py-lint", environment = "hiw-dev" },
     { task = "py-lint", environment = "libero-dev" },
+    { task = "py-lint", environment = "molmo-dev" },
 ]
 description = "Type-check the repo root and every package"
 
@@ -157,6 +158,7 @@ depends-on = [
     { task = "tests", environment = "abc-dev" },
     { task = "tests", environment = "hiw-dev" },
     { task = "tests", environment = "libero-dev" },
+    { task = "tests", environment = "molmo-dev" },
 ]
 description = "Run every package's tests"
 
@@ -211,7 +213,7 @@ rerun-notebook = "==0.38.1"
 [feature.abc-130k.activation.env]
 PACKAGE_DIR = "examples/abc-130k"
 
-# Dataset tasks sit in their own feature, included only in the abc environment.
+# Dataset tasks are in their own feature, which only the abc environment includes.
 # Every dataset names its stages the same way (download, convert, register, …),
 # and the environment selects the dataset: `pixi run -e abc convert`.
 
@@ -283,7 +285,7 @@ HF_BUCKET = "${HF_BUCKET:-hiw-500}"
 mcap = ">=1.2"
 mcap-ros2-support = ">=0.5"
 
-# Dataset tasks sit in their own feature, included only in the hiw environment.
+# Dataset tasks are in their own feature, which only the hiw environment includes.
 # Every dataset names its stages the same way (download, convert, register, …),
 # and the environment selects the dataset: `pixi run -e hiw convert`.
 
@@ -375,7 +377,7 @@ PACKAGE_DIR = "examples/libero"
 STORAGE_BACKEND = "${STORAGE_BACKEND:-hf}"
 HF_BUCKET = "${HF_BUCKET:-libero}"
 
-# Dataset tasks sit in their own feature, included only in the libero environment.
+# Dataset tasks are in their own feature, which only the libero environment includes.
 # Every dataset names its stages the same way (download, convert, register, …),
 # and the environment selects the dataset: `pixi run -e libero download`.
 
@@ -439,6 +441,39 @@ description = "Upload the dataset's shared model asset"
 h5py = ">=3.11,<4"
 
 
+# ─── molmoact2 ────────────────────────────────────────────────────────────────
+
+[feature.molmoact2.dependencies]
+# Type stubs for mypy (cloud extra).
+boto3-stubs = ">=1.34"
+mypy-boto3-s3 = ">=1.34"
+
+[feature.molmoact2.pypi-dependencies]
+molmoact2 = { path = "examples/molmoact2", editable = true, extras = ["cloud"] }
+
+[feature.molmoact2.activation.env]
+PACKAGE_DIR = "examples/molmoact2"
+
+# Dataset tasks are in their own feature, which only the molmo environment includes.
+# Every dataset names its stages the same way (download, convert, register, …),
+# and the environment selects the dataset: `pixi run -e molmo download`.
+
+[feature.molmoact2-tasks.tasks.download]
+cmd = "python -m molmoact2.download"
+cwd = "examples/molmoact2"
+description = "Download the dataset's metadata and sample file groups"
+
+[feature.molmoact2-tasks.tasks.convert-base]
+cmd = "python -m molmoact2.base_layer"
+cwd = "examples/molmoact2"
+description = "Convert the dataset's base layer"
+
+[feature.molmoact2-tasks.tasks.blueprint]
+cmd = "python -m molmoact2.blueprint"
+cwd = "examples/molmoact2"
+description = "Generate the dataset's blueprint"
+
+
 [environments]
 default = { features = ["dev"] }
 serve = { features = ["common", "serve-tasks"], no-default-feature = true }
@@ -481,3 +516,13 @@ libero-dev = { features = [
     "libero-test",
     "dev",
 ], solve-group = "libero", no-default-feature = true }
+molmo = { features = [
+    "common",
+    "molmoact2",
+    "molmoact2-tasks",
+], solve-group = "molmo", no-default-feature = true }
+molmo-dev = { features = [
+    "common",
+    "molmoact2",
+    "dev",
+], solve-group = "molmo", no-default-feature = true }
