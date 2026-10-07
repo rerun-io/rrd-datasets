@@ -463,6 +463,11 @@ cmd = "python -m molmoact2.download"
 cwd = "examples/molmoact2"
 description = "Download the dataset's metadata and sample file groups"
 
+[feature.molmoact2-tasks.tasks.convert-base]
+cmd = "python -m molmoact2.base_layer"
+cwd = "examples/molmoact2"
+description = "Convert the dataset's base layer"
+
 
 [environments]
 default = { features = ["dev"] }
