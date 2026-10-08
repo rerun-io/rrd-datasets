@@ -78,20 +78,12 @@ The rest of this step is what the repo adds on top.
 ### 5. Validate base conversion (agent and user)
 
 Read the `rerun-dataset-conversion` skill's "conversion check" section, which details the round-trip test and the source-versus-base size comparison.
-Once it passes, its "initial blueprint" section covers giving the user something to inspect.
 
 - Never compare `.rrd` bytes, since two writes of the same data differ.
   Rebuild the source message from the layer's columns and compare it against the source bytes.
 - Write the tests as the "Tests" section of `references/project-layout.md` describes.
 
-### 6. Add derived / augmented layers (agent and user)
-
-Read the `rerun-dataset-conversion` skill's "enrich the data" step and its "splitting into layers" guideline, which decide what earns a layer of its own.
-Follow `references/layer-module.md` for the module itself.
-Build it on one machine first.
-The same derivation runs later as an append job on Modal (step 9) once the dataset is registered and too large for one machine.
-
-### 7. Add blueprint and visualizations (agent and user)
+### 6. Add blueprint and visualizations (agent and user)
 
 Read the `rerun-dataset-conversion` skill's "initial blueprint" step, then `rerun-blueprint` for the layout itself.
 
@@ -103,6 +95,13 @@ Read the `rerun-dataset-conversion` skill's "initial blueprint" step, then `reru
 - Expect a file-based view to show no shared asset.
   The asset can be viewed once the dataset is registered.
 - Ask the user to inspect the result before moving on.
+
+### 7. Add derived / augmented layers (agent and user)
+
+Read the `rerun-dataset-conversion` skill's "enrich the data" step and its "splitting into layers" guideline, which decide what earns a layer of its own.
+Follow `references/layer-module.md` for the module itself.
+Build it on one machine first.
+The same derivation runs later as an append job on Modal (step 9) once the dataset is registered and too large for one machine.
 
 ### 8. Add catalog registration (agent)
 

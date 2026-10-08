@@ -18,7 +18,6 @@ There are two kinds of job:
 | Pending when | a selected layer is missing from the bucket                   | the input layer is registered and the derived layer is not |
 
 `references/project-layout.md` defines a [unit] under "Terms", and its "Storage" section says where the output goes.
-Step 6 of `SKILL.md` says when a layer runs as an append job.
 Reuse the shared code in `rrd_datasets_common/modal_jobs/`, which builds the worker image and handles both storage backends.
 
 Each kind of job below ends with a skeleton that leaves out the imports and constants.
