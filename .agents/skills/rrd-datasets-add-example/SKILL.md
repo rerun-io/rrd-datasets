@@ -16,15 +16,14 @@ description:
 
 This skill adds a dataset example to [rerun-io/rrd-datasets](https://github.com/rerun-io/rrd-datasets).
 The example converts the source into layered Rerun recordings (`.rrd`), with the repo's standard download, convert, view, and register tasks.
-This skill covers the repo's conventions.
 The `rerun-dataset-conversion` skill covers the conversion principles, and the other `rerun-*` skills cover the Rerun SDK.
+This skill covers the repo's conventions and aims to guide users to add new dataset examples consistently.
 
 Read `references/project-layout.md` and `references/readme-template.md` before starting.
 Read each other reference at the step that names it.
 
-Existing examples may predate the current practice, so follow this skill where they differ.
+Existing examples in this project may predate the current practice, so follow this skill where they differ.
 The Modal jobs and the append workflow are still changing.
-Where a dataset needs something different, explain why in the module's docstring.
 
 ## Workflow
 
@@ -42,7 +41,7 @@ Two modules are written at this step: (1) the episode index, which turns the sou
 Follow `references/episode-index.md` for the index module.
 Follow `references/data-sources.md` for what to pin, cache, and avoid when listing and downloading.
 
-Keep `download.py` sequential.
+`download.py` should be a simple, sequential download of a small sample of the dataset.
 Parallel downloads belong to the Modal job in step 9, where each worker converts what it downloads.
 
 - Name the sample [unit]s in `download.py`'s `SAMPLES`, each with its size in a comment, and keep the total to a few GB.
@@ -51,31 +50,34 @@ Parallel downloads belong to the Modal job in step 9, where each worker converts
 ### 3. Inspect the source dataset (agent and user)
 
 Read the `rerun-dataset-conversion` skill's "understand your data — expect the unexpected" section carefully before proceeding.
-
+Use `download.py` or variants to fetch the samples for inspection.
 Write what the survey finds in `observations.md`, beside the example's README.
 Its outline is in `references/observations-template.md`.
 
-Once the user approves, put the most interesting and representative samples in `download.py`'s `SAMPLES`.
+Once the user reviews and approves the contents, put the most interesting and representative samples in `download.py`'s `SAMPLES`.
 
-- Run the inspection inside the pixi env (`pixi run -e [env] …`), against the samples under `data/[Dataset Name]/`.
-- Read the source's inventory from the episode index's cached listing rather than querying the source again.
-- Record which streams or sidecars only some [episode]s have: that later decides where a layer module skips an [episode] instead of failing.
+- Run the inspection scripts inside the pixi env (`pixi run -e [env] …`).
+  Point them at the samples under `data/[Dataset Name]/`.
+- Read the source's inventory from the episode index's cached listing.
+  Avoid listing a large inventory again and again.
+- While reading the samples, note which streams are missing from some [episode]s, and list them in `observations.md`.
+  The layer modules that read those streams skip the [episode]s without them.
 
 ### 4. Design the Rerun representation and implement base conversion (agent and user)
 
 Read the `rerun-dataset-conversion` skill's "conversion - base" section and suggest the conversion mapping.
-It owns the mapping rules, the properties, the layer split, and the sign-off before any code is written.
+It describes the mapping rules, the properties, the layer split, and the sign-off before any code is written.
 The rest of this step is what the repo adds on top.
 
-- Keep the entity paths and names the reader emits, such as `/__hdf5_properties`.
-  Document them in the README instead of renaming them in the converter, and raise a request upstream when a name is wrong.
+- Keep the entity paths and names the reader emits.
+  Document them in the README.
 - Keep an episode's recording id identical across the episode index, local discovery, the id written into each `.rrd`, the file stem of every layer, and the catalog segment.
 - Never round-trip a numeric Arrow column through Python objects.
   Flatten the buffer and reshape it, rather than calling `.tolist()` or `np.asarray` on the column.
 
 ### 5. Validate base conversion (agent and user)
 
-Read the `rerun-dataset-conversion` skill's "conversion check" section, which owns the round-trip test and the source-versus-base size comparison.
+Read the `rerun-dataset-conversion` skill's "conversion check" section, which details the round-trip test and the source-versus-base size comparison.
 Once it passes, its "initial blueprint" section covers giving the user something to inspect.
 
 - Never compare `.rrd` bytes, since two writes of the same data differ.
