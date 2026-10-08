@@ -16,12 +16,12 @@ Expect one narrow exception, an outside resource that no layer contains, such as
 Read `rerun-urdf` for such a resource: how to stream it, and what belongs in a dataset asset rather than in every episode's `.rrd`.
 Keep reading the input layer for everything the episodes themselves contain.
 
-## One machine or many
+## Local or remote
 
-On one machine, read the input layers' `.rrd` files, build the layer for every episode, then register all of them at once.
+Locally, read the input layers' `.rrd` files, build the layer for every episode, then register all of them at once.
 That is the local `convert-[layer]` task followed by `register`, and the skeleton below follows it.
 
-Once the dataset is registered and too large for one machine, an append job builds the same layer one segment at a time across many cloud workers, as the "Append job" section of `references/modal-job.md` describes.
+Once the dataset is registered and too large to build locally, a remote append job builds the same layer one segment at a time across many cloud workers, as the "Append job" section of `references/modal-job.md` describes.
 
 Keep the derivation itself a pure function over chunks or a dataframe, such as `[layer]_stream` below.
 Both ways then call the same code and differ only in how they read the input and where they write.
