@@ -86,22 +86,17 @@ Read the `rerun-dataset-conversion` skill's "conversion check" section, which de
 ### 6. Add blueprint and visualizations (agent and user)
 
 Read the `rerun-dataset-conversion` skill's "initial blueprint" step, then `rerun-blueprint` for the layout itself.
+Write the blueprint in `blueprint.py`, and save it with `default_blueprint_path`.
 
-- Write the blueprint in `blueprint.py`, saved to `blueprints/[dataset]/default.rbl` through `default_blueprint_path`.
-  The `blueprint` pixi task regenerates it, and `upload-blueprint` copies it to the bucket.
-- Plot from the message structs through component mappings rather than materialising scalars into a layer.
+- Plot from the message structs through component mappings rather than materializing scalars into a layer.
 - Map a repeated field once with a `[]` selector, such as `.data.motor_state[].q`.
   A mapping per index copies the whole struct per series per frame and collapses the frame rate.
-- Expect a file-based view to show no shared asset.
-  The asset can be viewed once the dataset is registered.
-- Ask the user to inspect the result before moving on.
 
 ### 7. Add derived / augmented layers (agent and user)
 
 Read the `rerun-dataset-conversion` skill's "enrich the data" step and its "splitting into layers" guideline, which decide what earns a layer of its own.
 Follow `references/layer-module.md` for the module itself.
-Build it on one machine first.
-The same derivation runs later as an append job on Modal (step 9) once the dataset is registered and too large for one machine.
+Build the layer locally first, and let the user confirm the result.
 
 ### 8. Add catalog registration (agent)
 
@@ -119,11 +114,5 @@ Ask the user to test a small run, adjust the compute resource requests (CPU/GPU/
 
 ### 10. Document the example (agent and user)
 
-Most of the README exists by now, since each earlier step added its sections (see the table in `references/readme-template.md`).
-Write the parts that depend on the finished example:
-
-- the opening paragraph, which names every layer
-- the status line, kept only while the bucket is unpublished
-- the "Converted `.rrd` Dataset" section, with the bucket, the source revision, and the SDK version once the bucket is published
-- the References section
-- the example's row in the dataset table of the root README
+Each earlier step should have added its own sections to the README by now.
+Add any that are missing, then write the parts listed under "the final pass" in the table of `references/readme-template.md`.

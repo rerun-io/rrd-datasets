@@ -152,6 +152,7 @@ CI runs `py-fmt-check`, `py-lint-all`, and `tests-all`.
 `check-all` runs those plus the markdown, typo, and link checks.
 
 Add each layer module together with its test.
+Keep essential tests only.
 Nothing is downloaded before the tests run, so no test may assume that `data/` holds anything.
 libero and abc-130k build a small synthetic input in the test itself, and hiw-500 reads a downloaded episode through a fixture that skips when `data/` is empty.
 No sample file is committed.
