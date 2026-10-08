@@ -116,7 +116,7 @@ Read the `rerun-dataset-conversion` skill's "use the data" step and its `referen
 Follow `references/modal-job.md`.
 The conversion job builds the base layer from the source, and an append job adds derived layers to the registered dataset.
 Test each job as its "Tests" section describes, then leave the full run (`--limit 0`) to the user.
-Ask the user to test a small run.
+Ask the user to test a small run, adjust the compute resource requests (CPU/GPU/memory), and check the cost.
 
 ### 10. Document the example (agent and user)
 
