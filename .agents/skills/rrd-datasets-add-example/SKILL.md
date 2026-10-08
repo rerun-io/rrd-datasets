@@ -1,0 +1,120 @@
+---
+name: rrd-datasets-add-example
+description:
+  "Convert a multimodal robotics dataset (MCAP, HDF5, LeRobot, Parquet,
+  raw video, or similar formats) into layered Rerun recordings (.rrd)
+  and a catalog-ready dataset, following the conventions and workflow
+  of the [rerun-io/rrd-datasets](https://github.com/rerun-io/rrd-datasets) project. Use when adding a new dataset
+  example to rrd-datasets, implementing its conversion and ingestion
+  workflow, or creating a new dataset-conversion project modeled on
+  rrd-datasets."
+---
+
+# RRD Datasets: Add Example
+
+## Purpose
+
+This skill adds a dataset example to [rerun-io/rrd-datasets](https://github.com/rerun-io/rrd-datasets).
+The example converts the source into layered Rerun recordings (`.rrd`), with the repo's standard download, convert, view, and register tasks.
+The `rerun-dataset-conversion` skill covers the conversion principles, and the other `rerun-*` skills cover the Rerun SDK.
+This skill covers the repo's conventions and aims to guide users to add new dataset examples consistently.
+
+Read `references/project-layout.md` and `references/readme-template.md` before starting.
+Read each other reference at the step that names it.
+
+Existing examples in this project may predate the current practice, so follow this skill where they differ.
+The Modal jobs and the append workflow are still changing.
+
+## Workflow
+
+The agent implements each step and reports progress.
+It leaves uncertain design decisions to the user.
+The user provides design choices, validation, and domain-specific knowledge as needed.
+
+### 1. Review the repository structure and existing rrd-datasets examples (agent)
+
+Share the overall workflow with the user, and give a heads-up that this is a long process that will require multiple steps and user decisions.
+
+### 2. Add download tooling (agent)
+
+Two modules are written at this step: (1) the episode index, which turns the source's file listing into work items, and (2) `download.py`, which fetches a sample of them into `data/[Dataset Name]/` through `dataset_data_dir`.
+Follow `references/episode-index.md` for the index module.
+Follow `references/data-sources.md` for what to pin, cache, and avoid when listing and downloading.
+
+`download.py` should be a simple, sequential download of a small sample of the dataset.
+Parallel downloads belong to the Modal job in step 9, where each worker converts what it downloads.
+
+- Name the sample [unit]s in `download.py`'s `SAMPLES`, each with its size in a comment, and keep the total to a few GB.
+- Open the module docstring with what the dataset is, how big the sample is, and the `pixi run -e [env] download` line.
+
+### 3. Inspect the source dataset (agent and user)
+
+Read the `rerun-dataset-conversion` skill's "understand your data — expect the unexpected" section carefully before proceeding.
+Use `download.py` or variants to fetch the samples for inspection.
+Write what the survey finds in `observations.md`, beside the example's README.
+Its outline is in `references/observations-template.md`.
+
+Once the user reviews and approves the contents, put the most interesting and representative samples in `download.py`'s `SAMPLES`.
+
+- Run the inspection scripts inside the pixi env (`pixi run -e [env] …`).
+  Point them at the samples under `data/[Dataset Name]/`.
+- Read the source's inventory from the episode index's cached listing.
+  Avoid listing a large inventory again and again.
+- While reading the samples, note which streams are missing from some [episode]s, and list them in `observations.md`.
+  The layer modules that read those streams skip the [episode]s without them.
+
+### 4. Design the Rerun representation and implement base conversion (agent and user)
+
+Read the `rerun-dataset-conversion` skill's "conversion - base" section and suggest the conversion mapping.
+It describes the mapping rules, the properties, the layer split, and the sign-off before any code is written.
+The rest of this step is what the repo adds on top.
+
+- Keep the entity paths and names the reader emits.
+  Document them in the README.
+- Keep an episode's recording id identical across the episode index, local discovery, the id written into each `.rrd`, the file stem of every layer, and the catalog segment.
+- Never round-trip a numeric Arrow column through Python objects.
+  Flatten the buffer and reshape it, rather than calling `.tolist()` or `np.asarray` on the column.
+
+### 5. Validate base conversion (agent and user)
+
+Read the `rerun-dataset-conversion` skill's "conversion check" section, which details the round-trip test and the source-versus-base size comparison.
+
+- Never compare `.rrd` bytes, since two writes of the same data differ.
+  Rebuild the source message from the layer's columns and compare it against the source bytes.
+- Write the tests as the "Tests" section of `references/project-layout.md` describes.
+
+### 6. Add blueprint and visualizations (agent and user)
+
+Read the `rerun-dataset-conversion` skill's "initial blueprint" step, then `rerun-blueprint` for the layout itself.
+Write the blueprint in `blueprint.py`, and save it with `default_blueprint_path`.
+
+- Plot from the message structs through component mappings rather than materializing scalars into a layer.
+- Map a repeated field once with a `[]` selector, such as `.data.motor_state[].q`.
+  A mapping per index copies the whole struct per series per frame and collapses the frame rate.
+
+### 7. Add derived / augmented layers (agent and user)
+
+Read the `rerun-dataset-conversion` skill's "enrich the data" step and its "splitting into layers" guideline, which decide what earns a layer of its own.
+Follow `references/layer-module.md` for the module itself.
+Build the layer locally first, and let the user confirm the result.
+
+### 8. Add catalog registration (agent)
+
+Read the `rerun-dataset-conversion` skill's "use the data" step and its `references/registering.md`, then `rerun-catalog-queries` for reading back.
+
+- Follow `references/catalog-module.md` for `catalog.py`, which registers the layers, the shared asset, and the default blueprint in one run.
+- Serve the catalog with `pixi run serve` first.
+
+### 9. Add remote execution on Modal (agent and user)
+
+Follow `references/modal-job.md`.
+The conversion job builds the base layer from the source, and an append job adds derived layers to the registered dataset.
+Test each job as its "Tests" section describes, then leave the full run (`--limit 0`) to the user.
+Ask the user to test a small run, adjust the compute resource requests (CPU/GPU/memory), and check the cost.
+
+### 10. Document the example (agent and user)
+
+Each earlier step should have added its own sections to the README by now.
+Add any that are missing, then write the parts listed under "the final pass" in the table of `references/readme-template.md`.
+Then run the Local Runs commands in order on the sample data.
+Fix any command that fails.
