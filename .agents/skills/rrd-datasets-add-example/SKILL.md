@@ -116,3 +116,5 @@ Ask the user to test a small run, adjust the compute resource requests (CPU/GPU/
 
 Each earlier step should have added its own sections to the README by now.
 Add any that are missing, then write the parts listed under "the final pass" in the table of `references/readme-template.md`.
+Then run the Local Runs commands in order on the sample data.
+Fix any command that fails.
