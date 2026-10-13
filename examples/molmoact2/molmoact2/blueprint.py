@@ -2,7 +2,8 @@
 Build the default Rerun blueprint for MolmoAct2 episodes and save it as an `.rbl`.
 
 Registered as the dataset's default, every episode opens with the same layout: the instruction
-and the three cameras on top, and one state plot and one action plot per arm below.
+on top, the posed arms next to the three cameras, and one state plot and one action plot per arm
+below, as two tabs.
 
 Run:  pixi run -e molmo blueprint   # regenerates blueprints/molmoact2/default.rbl
 """
@@ -12,6 +13,7 @@ from __future__ import annotations
 import rerun as rr
 import rerun.blueprint as rrb
 
+from molmoact2 import urdf_layer
 from molmoact2.base_layer import APPLICATION_ID, PROPERTY, TIMESTAMP_TIMELINE
 from rrd_datasets_common.paths import default_blueprint_path
 
@@ -82,24 +84,45 @@ def instruction_view() -> rrb.TextDocumentView:
     )
 
 
+def arms_view() -> rrb.Spatial3DView:
+    """Both posed arms in the `world` frame, seen from behind and above the right arm."""
+    return rrb.Spatial3DView(
+        origin="/",
+        contents=[f"+ {urdf_layer.arm_entity(arm)}/**" for arm in ARMS],
+        name="Arms",
+        spatial_information=rrb.SpatialInformation(target_frame=urdf_layer.WORLD_FRAME),
+        eye_controls=rrb.archetypes.EyeControls3D(
+            position=[-0.79, -0.37, 0.64], look_target=[0.18, 0.08, 0.05], eye_up=[0.0, 0.0, 1.0]
+        ),
+    )
+
+
+def camera_view(camera: str) -> rrb.Spatial2DView:
+    return rrb.Spatial2DView(origin=f"/observation.images.{camera}", name=CAMERAS[camera])
+
+
 def build_blueprint() -> rrb.Blueprint:
     return rrb.Blueprint(
         rrb.Vertical(
             instruction_view(),
             rrb.Horizontal(
-                *(
-                    rrb.Spatial2DView(origin=f"/observation.images.{camera}", name=title)
-                    for camera, title in CAMERAS.items()
-                ),
-                name="Cameras",
+                arms_view(),
+                rrb.Vertical(camera_view("top"), camera_view("left"), camera_view("right")),
+                column_shares=[2, 1],
+                name="Scene",
             ),
-            rrb.Grid(
-                *(arm_plot(STATE_ENTITY, arm, "state") for arm in ARMS),
-                *(arm_plot(ACTION_ENTITY, arm, "action") for arm in ARMS),
-                grid_columns=2,
+            rrb.Horizontal(
+                *(
+                    rrb.Tabs(
+                        arm_plot(STATE_ENTITY, arm, "state"),
+                        arm_plot(ACTION_ENTITY, arm, "action"),
+                        name=f"{arm.capitalize()} arm",
+                    )
+                    for arm in ARMS
+                ),
                 name="Signals",
             ),
-            row_shares=[4, 22, 34],
+            row_shares=[6, 52, 22],
         ),
         rrb.TimePanel(
             timeline=TIMESTAMP_TIMELINE,

@@ -31,7 +31,7 @@ from rerun.chunk import (
 from rerun.urdf import UrdfTree
 
 from molmoact2.base_layer import APPLICATION_ID, RRD_ROOT
-from rrd_datasets_common.paths import layer_relpath
+from rrd_datasets_common.paths import layer_relpath, resolve_input_path
 
 LAYER = "urdf"
 INPUT_LAYER = "base"
@@ -224,7 +224,7 @@ def main() -> None:
     urdfs = load_urdfs()
     model = write_asset(urdfs, args.out_dir)
     print(f"Model asset: {model} ({model.stat().st_size / 1e6:.1f} MB)")
-    inputs = discover_inputs(args.input)
+    inputs = discover_inputs(resolve_input_path(args.input))
     if not inputs:
         raise SystemExit(f"No .rrd at {args.input} — run `pixi run -e molmo convert-{INPUT_LAYER}` first.")
     print(f"Building {LAYER} layer for {len(inputs)} recording(s) -> {args.out_dir / LAYER}/")
