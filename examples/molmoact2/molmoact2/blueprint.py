@@ -38,6 +38,12 @@ JOINT_COLORS = [0x3987E5FF, 0xD95926FF, 0x199E70FF, 0xC98500FF, 0xD55181FF, 0x00
 # start of long episodes.
 WHOLE_EPISODE = rr.TimeRange(start=rr.TimeRangeBoundary.infinite(), end=rr.TimeRangeBoundary.infinite())
 
+# How far in front of each camera its video is drawn in the 3D view, in meters.
+IMAGE_PLANE_DISTANCE = {"top": 0.3, "left": 0.1, "right": 0.1}
+
+# How opaque the camera videos are in the 3D view, so the arms behind an image plane stay visible.
+VIDEO_OPACITY = 0.7
+
 
 def arm_lines(arm: str) -> rr.SeriesLines:
     """
@@ -85,11 +91,23 @@ def instruction_view() -> rrb.TextDocumentView:
 
 
 def arms_view() -> rrb.Spatial3DView:
-    """Both posed arms in the `world` frame, seen from behind and above the right arm."""
+    """Both posed arms and the three cameras in the `world` frame, seen from behind and above the right arm."""
+    cameras = {camera: f"/observation.images.{camera}" for camera in CAMERAS}
     return rrb.Spatial3DView(
         origin="/",
-        contents=[f"+ {urdf_layer.arm_entity(arm)}/**" for arm in ARMS],
+        contents=[
+            *(f"+ {urdf_layer.arm_entity(arm)}/**" for arm in ARMS),
+            *(f"+ {entity}" for entity in cameras.values()),
+        ],
         name="Arms",
+        # A 3D view draws a `VideoStream` only when its visualizer is set: the visualizer prefers 2D views.
+        overrides={
+            entity: [
+                rr.Pinhole.from_fields(image_plane_distance=IMAGE_PLANE_DISTANCE[camera]),
+                rr.VideoStream.from_fields(opacity=VIDEO_OPACITY).visualizer(),
+            ]
+            for camera, entity in cameras.items()
+        },
         spatial_information=rrb.SpatialInformation(target_frame=urdf_layer.WORLD_FRAME),
         eye_controls=rrb.archetypes.EyeControls3D(
             position=[-0.79, -0.37, 0.64], look_target=[0.18, 0.08, 0.05], eye_up=[0.0, 0.0, 1.0]

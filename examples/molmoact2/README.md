@@ -46,15 +46,18 @@ pixi run -e molmo convert-base --from 800 --to 809   # downloaded episodes 800 t
 
 The recordings are written to `rrds/molmoact2/base/`.
 
-Then build the urdf layer from the base recordings.
-It poses the two arms and keeps each episode's recording id:
+Then build the urdf and cameras layers from the base recordings.
+The urdf layer poses the two arms, and the cameras layer places the three cameras in the scene.
+Both keep each episode's recording id:
 
 ```bash
-pixi run -e molmo convert-urdf                                          # every recording under rrds/molmoact2/base/
-pixi run -e molmo convert-urdf rrds/molmoact2/base/episode_00800.rrd    # one recording
+pixi run -e molmo convert-urdf                                             # every recording under rrds/molmoact2/base/
+pixi run -e molmo convert-urdf rrds/molmoact2/base/episode_00800.rrd       # one recording
+pixi run -e molmo convert-cameras                                          # every recording under rrds/molmoact2/base/
+pixi run -e molmo convert-cameras rrds/molmoact2/base/episode_00800.rrd    # one recording
 ```
 
-The layers are written to `rrds/molmoact2/urdf/`, and the arm model is written once for the whole dataset, as `rrds/molmoact2/assets/urdf-model.rrd`.
+The layers are written to `rrds/molmoact2/urdf/` and `rrds/molmoact2/cameras/`, and the arm model is written once for the whole dataset, as `rrds/molmoact2/assets/urdf-model.rrd`.
 See [More about Layers](#more-about-layers) for what each layer contains.
 
 ### 3. View
@@ -70,13 +73,15 @@ Generate the default blueprint, then view one episode with it:
 
 ```bash
 pixi run -e molmo blueprint
-pixi run -e molmo rerun rrds/molmoact2/base/episode_00800.rrd blueprints/molmoact2/default.rbl
+pixi run -e molmo rerun rrds/molmoact2/*/episode_00800.rrd blueprints/molmoact2/default.rbl
 ```
+
+> Keep the `*` to load all layers.
 
 > **Note:** The viewer opens local files through its Viewer catalog by default, and it can then ignore the blueprint file.
 > Turn off **Settings** → **Viewer catalog** → **Load files via Viewer catalog** before running the command above.
 
-> **Note:** Viewed from files alone, the **Arms** view is empty.
+> **Note:** Viewed from files alone, the **Arms** view shows the three cameras but not the arm meshes.
 > The arm meshes are in the dataset's model asset, which has its own recording id, so the viewer does not add it to the episode.
 > A catalog with the asset registered shows the posed arms, as in the screenshot above.
 
@@ -97,18 +102,20 @@ The base layer keeps each episode as `LeRobotReader` emits it: one entity per fe
 It adds two things: a `timestamp` timeline for the source column the reader drops, and the episode's recording properties.
 The urdf layer and the model asset add the two posed arms, computed from `/observation.state`.
 
-| Source                                                       | Entity path                                                 | Component / archetype                 | Layer | Notes                                                                                      |
-| ------------------------------------------------------------ | ----------------------------------------------------------- | ------------------------------------- | ----- | ------------------------------------------------------------------------------------------ |
-| `action` [14]                                                | `/action`                                                   | `Scalars`, static `SeriesLines:names` | base  | commanded joints in radians, grippers from 0 (closed) to 1 (open), named as in `info.json` |
-| `observation.state` [14]                                     | `/observation.state`                                        | `Scalars`, static `SeriesLines:names` | base  | measured joints, in the same units                                                         |
-| `task_index`                                                 | `/task`                                                     | `TextDocument`                        | base  | the task text, repeated on every frame                                                     |
-| `observation.images.{top,left,right}`                        | `/observation.images.{top,left,right}`                      | `VideoStream`                         | base  | the AV1 samples of the episode, copied without re-encoding                                 |
-| `frame_index`                                                | `frame_index` timeline                                      | —                                     | base  | the frame number within the episode                                                        |
-| `timestamp`                                                  | `timestamp` timeline                                        | —                                     | base  | `float32(frame_index / 30)` seconds, as whole nanoseconds                                  |
-| `meta/episodes`, `meta/tasks_annotated.parquet`, `info.json` | segment properties                                          | —                                     | base  | see [Base layer](#base-layer)                                                              |
-| `yam.urdf` meshes and joints                                 | `/urdf_{left,right}/yam/**`, `/urdf_{left,right}/tf_static` | `Asset3D`, `Transform3D`              | asset | static; both arms in one model rrd, 6.6 MB once per dataset                                |
-| `observation.state` [14] → forward kinematics                | `/urdf_{left,right}/transforms`                             | `Transform3D`                         | urdf  | 8 joints per arm per frame, between named frames                                           |
-| estimated arm placement                                      | `/urdf_{left,right}/world_from_base`                        | `Transform3D`                         | urdf  | static; see [URDF layer](#urdf-layer)                                                      |
+| Source                                                       | Entity path                                                 | Component / archetype                       | Layer   | Notes                                                                                      |
+| ------------------------------------------------------------ | ----------------------------------------------------------- | ------------------------------------------- | ------- | ------------------------------------------------------------------------------------------ |
+| `action` [14]                                                | `/action`                                                   | `Scalars`, static `SeriesLines:names`       | base    | commanded joints in radians, grippers from 0 (closed) to 1 (open), named as in `info.json` |
+| `observation.state` [14]                                     | `/observation.state`                                        | `Scalars`, static `SeriesLines:names`       | base    | measured joints, in the same units                                                         |
+| `task_index`                                                 | `/task`                                                     | `TextDocument`                              | base    | the task text, repeated on every frame                                                     |
+| `observation.images.{top,left,right}`                        | `/observation.images.{top,left,right}`                      | `VideoStream`                               | base    | the AV1 samples of the episode, copied without re-encoding                                 |
+| `frame_index`                                                | `frame_index` timeline                                      | —                                           | base    | the frame number within the episode                                                        |
+| `timestamp`                                                  | `timestamp` timeline                                        | —                                           | base    | `float32(frame_index / 30)` seconds, as whole nanoseconds                                  |
+| `meta/episodes`, `meta/tasks_annotated.parquet`, `info.json` | segment properties                                          | —                                           | base    | see [Base layer](#base-layer)                                                              |
+| `yam.urdf` meshes and joints                                 | `/urdf_{left,right}/yam/**`, `/urdf_{left,right}/tf_static` | `Asset3D`, `Transform3D`                    | asset   | static; both arms in one model rrd, 6.6 MB once per dataset                                |
+| `observation.state` [14] → forward kinematics                | `/urdf_{left,right}/transforms`                             | `Transform3D`                               | urdf    | 8 joints per arm per frame, between named frames                                           |
+| estimated arm placement                                      | `/urdf_{left,right}/world_from_base`                        | `Transform3D`                               | urdf    | static; see [URDF layer](#urdf-layer)                                                      |
+| i2rt's wrist camera mount                                    | `/observation.images.{left,right}`                          | `Transform3D`, `Pinhole`, `CoordinateFrame` | cameras | static; on the gripper flange, so the video moves with the arm                             |
+| estimated top camera pose                                    | `/observation.images.top`                                   | `Transform3D`, `Pinhole`, `CoordinateFrame` | cameras | static; see [Cameras layer](#cameras-layer)                                                |
 
 ### Round trip test (LeRobot → RRD → LeRobot)
 
@@ -145,11 +152,18 @@ The episode's metadata is logged as recording properties, which the catalog show
 `molmoact2/urdf_layer.py` — Both arms, posed by forward kinematics from `/observation.state` with the model in [`urdf/yam/`](urdf/yam/).
 The source dataset does not provide the arm placement. We use an estimate.
 
+### Cameras layer
+
+`molmoact2/camera_layer.py` — The three cameras, placed in the scene so their videos show in the **Arms** view.
+The source dataset does not provide camera calibration.
+The wrist mounts come from i2rt's station model, and the top camera's pose and all intrinsics are estimates.
+
 ## Rerun APIs demonstrated
 
 - [`LeRobotReader`](https://ref.rerun.io/docs/python/stable/experimental/#rerun.experimental.LeRobotReader) reads one episode at a time into chunk streams, with each camera's video cut to the episode and copied without re-encoding (`base_layer.py`).
 - A `LazyChunkStream.map` step adds the `timestamp` timeline to every chunk as an extra index column (`base_layer.py`).
 - `Chunk.from_property` logs the episode's metadata as recording properties (`base_layer.py`).
 - `rerun.urdf.UrdfTree` streams the arm model and solves forward kinematics (`urdf_layer.py`).
+- `Pinhole`, `CoordinateFrame` and a static `Transform3D` place the camera videos in 3D (`camera_layer.py`).
 - The [blueprint](https://rerun.io/docs/concepts/visualization/blueprints) API composes the default layout.
   A component mapping shows the `instruction` property as text, and `SeriesLines` overrides split the 14 state and action values by arm (`blueprint.py`).
