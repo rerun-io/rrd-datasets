@@ -473,6 +473,11 @@ cmd = "python -m molmoact2.urdf_layer"
 cwd = "examples/molmoact2"
 description = "Convert the dataset's URDF layer"
 
+[feature.molmoact2-tasks.tasks.convert-cameras]
+cmd = "python -m molmoact2.camera_layer"
+cwd = "examples/molmoact2"
+description = "Convert the dataset's camera layer"
+
 [feature.molmoact2-tasks.tasks.blueprint]
 cmd = "python -m molmoact2.blueprint"
 cwd = "examples/molmoact2"
