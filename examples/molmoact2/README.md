@@ -79,7 +79,7 @@ See [observations.md](observations.md) for the full survey.
 ## Mapping to Rerun
 
 The base layer keeps each episode as `LeRobotReader` emits it: one entity per feature, named after the feature, with the values and the video samples unchanged.
-It adds two things: a `timestamp` timeline, which brings back the source column the reader drops, and the episode's recording properties.
+It adds two things: a `timestamp` timeline for the source column the reader drops, and the episode's recording properties.
 
 | Source                                                       | Entity path                            | Component / archetype                 | Layer | Notes                                                                                      |
 | ------------------------------------------------------------ | -------------------------------------- | ------------------------------------- | ----- | ------------------------------------------------------------------------------------------ |
@@ -88,7 +88,7 @@ It adds two things: a `timestamp` timeline, which brings back the source column 
 | `task_index`                                                 | `/task`                                | `TextDocument`                        | base  | the task text, repeated on every frame                                                     |
 | `observation.images.{top,left,right}`                        | `/observation.images.{top,left,right}` | `VideoStream`                         | base  | the AV1 samples of the episode, copied without re-encoding                                 |
 | `frame_index`                                                | `frame_index` timeline                 | —                                     | base  | the frame number within the episode                                                        |
-| `timestamp`                                                  | `timestamp` timeline                   | —                                     | base  | the source's float32 seconds, as whole nanoseconds                                         |
+| `timestamp`                                                  | `timestamp` timeline                   | —                                     | base  | `float32(frame_index / 30)` seconds, as whole nanoseconds                                  |
 | `meta/episodes`, `meta/tasks_annotated.parquet`, `info.json` | segment properties                     | —                                     | base  | see [Base layer](#base-layer)                                                              |
 
 ### Round trip test (LeRobot → RRD → LeRobot)
@@ -106,7 +106,9 @@ Each layer is a separate module that writes its own `.rrd`.
 ### Base layer
 
 `molmoact2/base_layer.py` — Everything in the episode's data rows and videos, as recorded.
-The reader keeps `frame_index` as the only timeline, so the base layer adds the source's `timestamp` back as a second one.
+The reader keeps `frame_index` as the only timeline, so the base layer adds `timestamp` as a second one.
+It computes each value as `float32(frame_index / 30)`, which also gives a time to video frames that have no data row (episode 31749).
+The source `timestamp` column holds the same values: its per-episode statistics in `meta/episodes` (count, min, max, mean) match `frame_index / 30` in all 32,246 episodes of the pinned revision.
 The episode's metadata is logged as recording properties, which the catalog shows as columns to filter, sort, and search on:
 
 | Property             | Type   | Source                                                                                                                                                      |
