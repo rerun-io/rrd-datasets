@@ -111,6 +111,7 @@ The full task list is in the [appendix](#appendix-task-list).
 
 The dataset-wide statistics in `meta/stats.json` are combined from the per-episode statistics in `meta/episodes`.
 `min` and `max` are exact, while `mean` and the quantiles are averages of the per-episode values, weighted by frame count.
+The dataset card's [Normalization Statistics](https://huggingface.co/datasets/allenai/MolmoAct2-BimanualYAM-Dataset#normalization-statistics) section says the averaged quantiles are approximate on purpose.
 
 The image statistics and the bookkeeping fields have errors, described under [Edge cases and data bugs](#edge-cases-and-data-bugs).
 Joint `std` also reads 0 for 270 joints whose `min` and `max` differ within the episode, so it is unreliable for joints that barely move.
