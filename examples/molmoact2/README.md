@@ -201,6 +201,24 @@ pixi run -e molmo convert-on-modal --layers urdf,cameras --limit 0 --overwrite
 
 Every layer derives from the base layer, so a worker downloads its whole file group whatever the selection.
 
+### 4. Upload the blueprint
+
+`pixi run -e molmo blueprint` writes `blueprints/molmoact2/default.rbl`.
+To upload it to your bucket (`s3://<bucket>/blueprints/`), run:
+
+```bash
+pixi run -e molmo upload-blueprint
+```
+
+### 5. Upload the arm model assets
+
+`pixi run -e molmo convert-urdf` writes the two arm models as `rrds/molmoact2/assets/urdf-model-{left,right}.rrd`.
+To upload them to your bucket (`s3://<bucket>/assets/`), run:
+
+```bash
+pixi run -e molmo upload-asset
+```
+
 ## Observations
 
 We share our observations including useful details beyond the dataset card.

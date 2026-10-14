@@ -497,6 +497,16 @@ cmd = "modal run --detach -q -m molmoact2.modal_jobs.convert_groups"
 cwd = "examples/molmoact2"
 description = "Convert the dataset's file groups on Modal"
 
+[feature.molmoact2-tasks.tasks.upload-blueprint]
+cmd = "python -m molmoact2.upload_blueprint"
+cwd = "examples/molmoact2"
+description = "Upload the dataset's blueprint"
+
+[feature.molmoact2-tasks.tasks.upload-asset]
+cmd = "python -m molmoact2.upload_asset"
+cwd = "examples/molmoact2"
+description = "Upload the dataset's arm model assets"
+
 
 [environments]
 default = { features = ["dev"] }
