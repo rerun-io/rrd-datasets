@@ -98,13 +98,35 @@ pixi run -e molmo rerun rrds/molmoact2/*/episode_00800.rrd blueprints/molmoact2/
 
 > **Note:** Viewed from files alone, the **Arms** view shows the three cameras but not the arm meshes.
 > The arm meshes are in the dataset's model assets, which have their own recording ids, so the viewer does not add them to the episode.
-> A catalog with the assets registered shows the posed arms, as in the screenshot above.
+> The [local catalog](#4-local-catalog) registers the assets and shows the posed arms, as in the screenshot above.
 
 > **Note:** Each arm's action plot is in the tab next to its state plot.
 > Each plot shows the 7 values of one arm.
 > The other arm's values are hidden, and the legend lists them as a single `left arm` or `right arm` entry, which shows them when clicked.
 > A joint has the same color in every plot, so its state and action can be compared.
 > To modify the layout, edit `molmoact2/blueprint.py` and rerun the `blueprint` task.
+
+### 4. Local Catalog
+
+Register the converted episodes to a [catalog server](https://rerun.io/docs/concepts/how-does-rerun-work#catalog-server), then browse, sort, filter, and query them as one dataset.
+
+Start a local server:
+
+```bash
+pixi run serve              # start an in-memory catalog server (leave running)
+```
+
+In another shell, register the converted episodes:
+
+```bash
+pixi run -e molmo register   # register all episodes as the `molmoact2` dataset
+```
+
+Browse them in the Rerun Viewer:
+
+```bash
+pixi run -e molmo rerun rerun+http://127.0.0.1:51234
+```
 
 ## Observations
 
@@ -180,5 +202,7 @@ The wrist mounts come from i2rt's station model, and the top camera's pose and a
 - `Chunk.from_property` logs the episode's metadata as recording properties (`base_layer.py`).
 - `rerun.urdf.UrdfTree` streams the arm model and solves forward kinematics (`urdf_layer.py`).
 - `Pinhole`, `CoordinateFrame` and a static `Transform3D` place the camera videos in 3D (`camera_layer.py`).
+- [`CatalogClient`](https://rerun.io/docs/concepts/query-and-transform/catalog-object-model) registers each episode as a dataset segment with named layers and installs the default blueprint (`catalog.py`).
+- [`DatasetEntry.register_asset`](https://ref.rerun.io/docs/python/stable/catalog/#rerun.catalog.DatasetEntry.register_asset) attaches each arm's model as a dataset asset, which the viewer loads with every segment (`catalog.py`).
 - The [blueprint](https://rerun.io/docs/concepts/visualization/blueprints) API composes the default layout.
   A component mapping shows the `instruction` property as text, and `SeriesLines` overrides split the 14 state and action values by arm (`blueprint.py`).
