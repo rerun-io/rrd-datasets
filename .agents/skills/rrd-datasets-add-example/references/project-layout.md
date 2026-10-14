@@ -92,6 +92,7 @@ Only the catalog stores that name, not the `.rrd` file.
 An asset is a recording that every segment of a dataset shares, such as the robot meshes.
 
 A dataset can have several, each at `assets/<name>.rrd`.
+Each asset holds one connected transform tree, so it shows on its own in the viewer: a dataset with two robots writes one asset per robot, and the edges that place them in one scene stay in a layer.
 hiw-500 and libero have one each, `assets/urdf-model.rrd`, written by `urdf_layer.py`.
 `convert-urdf` builds it locally and `upload-asset` copies it to the bucket.
 `register` attaches it with `register_asset`, and the catalog merges it into every segment.
