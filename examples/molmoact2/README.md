@@ -128,6 +128,79 @@ Browse them in the Rerun Viewer:
 pixi run -e molmo rerun rerun+http://127.0.0.1:51234
 ```
 
+## Remote Convert Example on Modal
+
+The steps above run locally on the downloaded sample files.
+The following steps convert the full dataset on cloud workers.
+
+### 1. Prerequisite: storage backend
+
+Set the env vars for your storage backend in the shell, or edit the defaults in
+[`rrd_datasets_common/storage.py`](../../packages/rrd_datasets_common/rrd_datasets_common/storage.py).
+The dataset's own layout under the bucket lives in [`storage.py`](molmoact2/storage.py):
+
+| Env var                                           | Backend | What it is                                                              |
+| ------------------------------------------------- | ------- | ----------------------------------------------------------------------- |
+| `STORAGE_BACKEND`                                 | both    | Which bucket kind, `hf` or `s3`, `hf` in the `molmo` environments       |
+| `HF_NAMESPACE`                                    | hf      | The user or org that owns the bucket, set this one                      |
+| `HF_BUCKET`                                       | hf      | Bucket the RRDs are written to, `molmoact2` by default, create it first |
+| `HF_BUCKET_ACCESS_KEY_ID` / `…_SECRET_ACCESS_KEY` | hf      | The HF S3 credentials                                                   |
+
+This example converts to a [Hugging Face Storage Bucket](https://huggingface.co/docs/hub/main/en/storage-buckets-s3) behind its S3-compatible gateway.
+Access uses [HF S3 credentials](https://huggingface.co/docs/hub/storage-buckets-s3#generating-s3-credentials), generated from a fine-grained HF token scoped to the bucket.
+The launcher passes them to the workers as a per-run secret.
+
+> **Note:** to store in an AWS S3 bucket instead, `export STORAGE_BACKEND=s3` and follow the
+> [S3 prerequisite in the ABC-130k example](../abc-130k/README.md#1-prerequisite-s3-storage).
+
+### 2. Prerequisite: Modal setup
+
+The [Modal](https://modal.com/) job under `molmoact2/modal_jobs/` starts one worker per [file group](#a-note-on-episodes-and-files).
+Each worker downloads `meta/` and its group's files, converts every episode in it, and uploads the `.rrd` layers to the bucket.
+
+To set it up:
+
+- `pixi run -e molmo modal setup` — authenticate the Modal CLI (one-time).
+- `pixi run -e molmo hf auth login`, or set `$HF_TOKEN` — optional for this public dataset, but anonymous callers share a smaller per-IP download quota.
+
+### 3. Run Convert
+
+Run `pixi run -e molmo convert-on-modal --help` to see all options.
+
+```bash
+# One new file group, every layer (the default when no flags are given):
+pixi run -e molmo convert-on-modal
+
+# Every file group (--limit 0 removes the cap):
+pixi run -e molmo convert-on-modal --limit 0
+
+# The file groups of one task:
+pixi run -e molmo convert-on-modal --task-filter "Fold the cloth" --limit 0
+
+# See what would run, without starting any worker:
+pixi run -e molmo convert-on-modal --dry-run --limit 10
+```
+
+The `convert-on-modal` task runs detached and returns immediately.
+Watch progress in the Modal dashboard.
+A full run writes about 2.4 TB to the bucket, about the size of the source.
+
+> **Note:** Without `--overwrite`, anything already in the bucket is skipped.
+
+#### Picking layers
+
+`--layers` lets you choose which layers to build:
+
+```bash
+# Only the base layer:
+pixi run -e molmo convert-on-modal --layers base --limit 0
+
+# Rebuild layers after changing them:
+pixi run -e molmo convert-on-modal --layers urdf,cameras --limit 0 --overwrite
+```
+
+Every layer derives from the base layer, so a worker downloads its whole file group whatever the selection.
+
 ## Observations
 
 We share our observations including useful details beyond the dataset card.
