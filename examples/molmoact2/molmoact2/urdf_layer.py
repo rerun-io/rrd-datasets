@@ -2,7 +2,7 @@
 Build the *urdf* layer: both YAM arms posed by forward kinematics.
 
 Derived from the base layer's `/observation.state`.
-The vendored model is written as the asset `assets/urdf-model.rrd` for the whole dataset.
+The vendored model is written once for the whole dataset, as one asset per arm: `assets/urdf-model-{left,right}.rrd`.
 Each episode's `.rrd` holds the joint transforms and the two edges that place the arms in one `world` frame.
 
 Run:  pixi run -e molmo convert-urdf              # every base RRD under rrds/molmoact2/base/
@@ -37,9 +37,6 @@ LAYER = "urdf"
 INPUT_LAYER = "base"
 
 URDF_PATH = Path(__file__).resolve().parents[1] / "urdf" / "yam" / "yam.urdf"
-
-# Used in three places: the asset rrd's file name, its recording id, and its asset id on the catalog.
-MODEL_RECORDING_ID = "urdf-model"
 
 # Every mesh is painted this packed RGBA instead of the per-link colors the URDF declares.
 MODEL_ALBEDO = 0xFFFFFFFF
@@ -167,9 +164,14 @@ def urdf_stream(store: LazyStore, urdfs: dict[str, UrdfTree]) -> LazyChunkStream
 # --------------------------------------------------------------------------------------
 
 
-def model_rrd_path(out_dir: Path) -> Path:
-    """Where the dataset asset with the arm model is under an rrd root."""
-    return out_dir / "assets" / f"{MODEL_RECORDING_ID}.rrd"
+def model_recording_id(arm: str) -> str:
+    """One arm's model id: the asset rrd's file name, its recording id, and its asset id on the catalog."""
+    return f"urdf-model-{arm}"
+
+
+def model_rrd_path(out_dir: Path, arm: str) -> Path:
+    """Where one arm's model asset is under an rrd root."""
+    return out_dir / "assets" / f"{model_recording_id(arm)}.rrd"
 
 
 def albedo_lens() -> MutateLens:
@@ -181,15 +183,16 @@ def albedo_lens() -> MutateLens:
     return MutateLens("Asset3D:albedo_factor", Selector(".").pipe(repaint))
 
 
-def write_asset(urdfs: dict[str, UrdfTree], out_dir: Path) -> Path:
-    """Write both arms' meshes and rest-pose joint transforms once, under their own recording id."""
-    out_path = model_rrd_path(out_dir)
+def write_asset(urdf: UrdfTree, arm: str, out_dir: Path) -> Path:
+    """Write one arm's meshes and rest-pose joint transforms once, under the arm's model id."""
+    # One arm per asset: the `world` edges that join the two arms are in the urdf layer, and an
+    # asset holding both arms has no common frame, so the viewer cannot show it on its own.
+    out_path = model_rrd_path(out_dir, arm)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    model = LazyChunkStream.merge(*(urdfs[arm].stream(include_joint_transforms=True) for arm in ARMS))
     # The lens changes only the albedo; every other chunk passes through.
-    model = model.lenses(albedo_lens(), output_mode="forward_unmatched")
+    model = urdf.stream(include_joint_transforms=True).lenses(albedo_lens(), output_mode="forward_unmatched")
     model.collect(optimize=OptimizationProfile.OBJECT_STORE).write_rrd(
-        str(out_path), application_id=APPLICATION_ID, recording_id=MODEL_RECORDING_ID
+        str(out_path), application_id=APPLICATION_ID, recording_id=model_recording_id(arm)
     )
     return out_path
 
@@ -222,8 +225,9 @@ def main() -> None:
     args = parser.parse_args()
 
     urdfs = load_urdfs()
-    model = write_asset(urdfs, args.out_dir)
-    print(f"Model asset: {model} ({model.stat().st_size / 1e6:.1f} MB)")
+    for arm in ARMS:
+        model = write_asset(urdfs[arm], arm, args.out_dir)
+        print(f"Model asset: {model} ({model.stat().st_size / 1e6:.1f} MB)")
     inputs = discover_inputs(resolve_input_path(args.input))
     if not inputs:
         raise SystemExit(f"No .rrd at {args.input} — run `pixi run -e molmo convert-{INPUT_LAYER}` first.")

@@ -72,7 +72,7 @@ pixi run -e molmo convert-cameras                                          # eve
 pixi run -e molmo convert-cameras rrds/molmoact2/base/episode_00800.rrd    # one recording
 ```
 
-The layers are written to `rrds/molmoact2/urdf/` and `rrds/molmoact2/cameras/`, and the arm model is written once for the whole dataset, as `rrds/molmoact2/assets/urdf-model.rrd`.
+The layers are written to `rrds/molmoact2/urdf/` and `rrds/molmoact2/cameras/`, and the arm model is written once for the whole dataset, as one asset per arm: `rrds/molmoact2/assets/urdf-model-{left,right}.rrd`.
 See [More about Layers](#more-about-layers) for what each layer contains.
 
 ### 3. View
@@ -97,8 +97,8 @@ pixi run -e molmo rerun rrds/molmoact2/*/episode_00800.rrd blueprints/molmoact2/
 > Turn off **Settings** → **Viewer catalog** → **Load files via Viewer catalog** before running the command above.
 
 > **Note:** Viewed from files alone, the **Arms** view shows the three cameras but not the arm meshes.
-> The arm meshes are in the dataset's model asset, which has its own recording id, so the viewer does not add it to the episode.
-> A catalog with the asset registered shows the posed arms, as in the screenshot above.
+> The arm meshes are in the dataset's model assets, which have their own recording ids, so the viewer does not add them to the episode.
+> A catalog with the assets registered shows the posed arms, as in the screenshot above.
 
 > **Note:** Each arm's action plot is in the tab next to its state plot.
 > Each plot shows the 7 values of one arm.
@@ -115,7 +115,7 @@ See [observations.md](observations.md) for the full survey.
 
 The base layer keeps each episode as `LeRobotReader` emits it: one entity per feature, named after the feature, with the values and the video samples unchanged.
 It adds two things: a `timestamp` timeline for the source column the reader drops, and the episode's recording properties.
-The urdf layer and the model asset add the two posed arms, computed from `/observation.state`.
+The urdf layer and the model assets add the two posed arms, computed from `/observation.state`.
 
 | Source                                                       | Entity path                                                 | Component / archetype                       | Layer   | Notes                                                                                      |
 | ------------------------------------------------------------ | ----------------------------------------------------------- | ------------------------------------------- | ------- | ------------------------------------------------------------------------------------------ |
@@ -126,7 +126,7 @@ The urdf layer and the model asset add the two posed arms, computed from `/obser
 | `frame_index`                                                | `frame_index` timeline                                      | —                                           | base    | the frame number within the episode                                                        |
 | `timestamp`                                                  | `timestamp` timeline                                        | —                                           | base    | `float32(frame_index / 30)` seconds, as whole nanoseconds                                  |
 | `meta/episodes`, `meta/tasks_annotated.parquet`, `info.json` | segment properties                                          | —                                           | base    | see [Base layer](#base-layer)                                                              |
-| `yam.urdf` meshes and joints                                 | `/urdf_{left,right}/yam/**`, `/urdf_{left,right}/tf_static` | `Asset3D`, `Transform3D`                    | asset   | static; both arms in one model rrd, 6.6 MB once per dataset                                |
+| `yam.urdf` meshes and joints                                 | `/urdf_{left,right}/yam/**`, `/urdf_{left,right}/tf_static` | `Asset3D`, `Transform3D`                    | asset   | static; one model rrd per arm, 3.3 MB each, once per dataset                               |
 | `observation.state` [14] → forward kinematics                | `/urdf_{left,right}/transforms`                             | `Transform3D`                               | urdf    | 8 joints per arm per frame, between named frames                                           |
 | estimated arm placement                                      | `/urdf_{left,right}/world_from_base`                        | `Transform3D`                               | urdf    | static; see [URDF layer](#urdf-layer)                                                      |
 | i2rt's wrist camera mount                                    | `/observation.images.{left,right}`                          | `Transform3D`, `Pinhole`, `CoordinateFrame` | cameras | static; on the gripper flange, so the video moves with the arm                             |
