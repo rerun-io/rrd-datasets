@@ -4,7 +4,7 @@ These findings come from surveying a subset of the source episodes, with a focus
 We're sharing them because they may be useful to others working with the dataset, especially when validating assumptions or building data pipelines around it.
 
 The source revision is [`e9f21ae1`](https://huggingface.co/datasets/allenai/MolmoAct2-BimanualYAM-Dataset/tree/e9f21ae15074330839f2ac25ed4b49d76dfa1f9c).
-The survey downloaded 15 file groups, runs of consecutive episodes whose files hold no other episode (see [Episodes share files](#episodes-share-files)).
+The survey downloaded 15 file groups, runs of consecutive episodes whose files hold no other episode (see [A note on episodes and files](README.md#a-note-on-episodes-and-files)).
 The checks on `meta/` cover every episode.
 
 |             | Surveyed  | Full dataset |
@@ -26,7 +26,6 @@ The recording format is the same in every episode, while the episodes vary widel
 | -------------- | ------------ | ------------------------------------------------------------------------------------ |
 | Episode length | Diverse      | 23 to 8,953 frames (0.8 s to 5 min), median 2,076 (69 s)                             |
 | Video          | Identical    | AV1, 640×360, yuv420p, a keyframe every second frame, for all three cameras          |
-| Calibration    | None         | no robot model, no camera intrinsics or extrinsics                                   |
 | Tasks          | 34 strings   | 32 after ignoring case and trailing dots, plus one free-text instruction per episode |
 | File layout    | Shared files | a median of 10 episodes per data file and 12 to 19 per video file                    |
 
@@ -66,19 +65,10 @@ The `Tag` column provides a short name for referring to each episode in the sect
 | `two-demos`  | `episode_31749` | video that holds a second demonstration with no data rows                                   |
 | `mislabeled` | `episode_07294` | labeled `Pack container`, but shows clothes folded on the table                             |
 
-## Episodes share files
-
-Each data parquet holds a median of 10 consecutive episodes, and each mp4 a median of 12 to 19 depending on the camera, back to back.
-The three cameras start new files at different episodes, so the files of one episode also hold parts of its neighbors.
-
-Because neighboring episodes share files, the episodes fall into 786 file groups: runs of consecutive episodes whose files hold no other episode.
-A group holds a median of 40 episodes, at most 130, and about 3 GB.
-Most groups match one of the smaller datasets that were merged into this repository (see [Statistics left over from the merge](#statistics-left-over-from-the-merge)).
-The exception is the `Fold the cloth` dataset with episodes 31647–31696, which stored every episode in its own files, so each of its 50 episodes is a group of its own, such as `cloth-fold`.
-
 ## Video
 
-Every second frame is a keyframe in every surveyed video, so every episode window starts on a keyframe.
+In every surveyed video, every second frame is a keyframe.
+This matches the [default settings](https://github.com/huggingface/lerobot/blob/a3a8653a5b569e8e70cd6fe4b0973c4b2b983120/src/lerobot/configs/video.py#L86-L92) of LeRobot's video encoder: a keyframe every 2 frames.
 
 ## Joint values
 
@@ -118,41 +108,46 @@ Joint `std` also reads 0 for 270 joints whose `min` and `max` differ within the 
 
 ## Edge cases and data bugs
 
-### Episode 31749's video holds a second demonstration
+Edge cases are unusual episodes that a pipeline has to handle.
+Data bugs and inaccuracies are labels or statistics in the source that are wrong.
+
+### Edge cases
+
+#### Episode 31749's video holds a second demonstration
 
 The time windows of `two-demos` are longer than its 1,619 data rows: 2,832 frames on `top` and `left`, and 2,658 on `right`.
 The extra video shows a second, complete fold of the same cloth, which has no state, action, or task rows.
 The video runs 40 s past the data on `top` and `left`, and the `right` window ends 174 frames (5.8 s) earlier than the other two.
 It is the only episode whose windows disagree with its length.
 
-### Episode 7315's top video is one frame short
+#### Episode 7315's top video is one frame short
 
 `videos/observation.images.top/chunk-000/file-490.mp4` holds 32,576 frames, one fewer than the metadata says.
 Episode 7315 is the last episode in that file, so it has 4,109 `top` frames for 4,110 data rows.
 
-### Some `Pack container` episodes show clothes folding
+### Data bugs and inaccuracies
+
+#### Some `Pack container` episodes show clothes folding
 
 The episodes 7294–7317 are labeled `Pack container`.
 In the three we checked (7294, 7295, and 7297), the `top` camera shows clothes folded onto the table, with no container in view.
 Several of their instructions still say "place it in the container".
 Across the dataset, 52 `Pack container` episodes share their exact instruction with `Clothes Folding` episodes, so the same mislabel likely affects other groups.
 
-### Image `std` is 0 in every episode
+#### Image `std` is 0 in every episode
 
 The per-episode image `std` is 0 for every camera in all 32,246 episodes.
 The dataset-wide image `std` in `stats.json` (0.017 to 0.037) therefore only measures how much the episode means vary.
 The real pixel spread is far wider: the dataset-wide `q01` and `q99` are about 0.01–0.05 and 0.98–1.0.
 
-### Statistics left over from the merge
+#### Statistics left over from the merge
 
-This repository merges many smaller LeRobot datasets.
-The per-episode statistics of `episode_index`, `index`, and `task_index` still hold the values from before the merge: each source dataset numbered its episodes and frames from 0, and used task 0.
-Only the first 16 episodes match their merged values.
-The data rows hold the correct merged values.
-The dataset-wide values in `stats.json` are meaningless for the same reason: `episode_index` ends at 129, and `task_index` is 0 everywhere.
+This repository merges many smaller LeRobot datasets, each numbered from 0.
+In `meta/episodes`, the statistics of `episode_index`, `index`, and `task_index` still hold those old numbers, while the data rows hold the merged ones.
+`stats.json` is combined from the old numbers, so its `episode_index` ends at 129 and its `task_index` is 0 everywhere.
 
-The old numbering marks 737 merged datasets, since it starts over at 0 or 1 wherever a new one begins.
-It skips 92 numbers in 64 places, and two datasets start at 1, which suggests some source episodes were left out of the merge.
+The old numbering starts over 737 times, once per merged dataset.
+It also skips 92 numbers in 64 places, and two datasets start at 1, so some source episodes were likely left out of the merge.
 
 ## Surveyed file groups
 

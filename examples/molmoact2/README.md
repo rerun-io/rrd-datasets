@@ -30,10 +30,25 @@ The dataset stores many episodes in each video file, so the samples are file gro
 pixi run -e molmo download
 ```
 
-To download different file groups, edit `SAMPLES` in [`molmoact2/download.py`](molmoact2/download.py).
+To download different file groups (see below [A note on episodes and files](#a-note-on-episodes-and-files)), edit `SAMPLES` in [`molmoact2/download.py`](molmoact2/download.py).
 
 The downloader caches a listing of the whole repo in `.cache/hf_files.json.gz`.
 Building it takes a while on the first run, and it is rebuilt when the dataset revision changes.
+
+#### A note on episodes and files
+
+Each data parquet contains a median of 10 consecutive episodes, and each mp4 holds different numbers of episodes, a median of 12 to 19 depending on the camera.
+This is expected in the [LeRobot v3 format](https://huggingface.co/docs/lerobot/en/lerobot-dataset-v3): the data and each camera start a new file separately, whenever the current file reaches a size limit.
+So the files of one episode also hold parts of its neighbors.
+
+To handle this efficiently, we define a `file group`: A file group is the smallest set of consecutive episodes that can be downloaded without parts of other episodes.
+The figure below shows a specific example, covering episodes from 947 to 959.
+Each bar represents a file in the figure.
+
+![Episodes 947–959 form one file group](file-groups.png)
+
+The dataset has 786 file groups, and a group holds a median of 40 episodes, at most 130, and about 3 GB.
+No two groups share a file, so each group can be downloaded and converted on its own, for example on separate machines.
 
 ### 2. Convert (LeRobot → RRD)
 
