@@ -1,16 +1,32 @@
 # MolmoAct2-BimanualYAM
 
+[MolmoAct2-BimanualYAM](https://huggingface.co/datasets/allenai/MolmoAct2-BimanualYAM-Dataset) is a bimanual manipulation dataset recorded on two I2RT YAM arms: 32,246 teleoperated episodes (about 704 hours) with three cameras, in the LeRobot v3 format.
+This example converts each episode into three Rerun recordings (`.rrd`).
+One recording corresponds to one layer: the episode as recorded, the two posed arms, and the three cameras placed in the scene.
+
+**Status: incubating.** The conversion works end to end, but the converted dataset is not published yet.
+
 Below is the viewer showing a converted episode with the default blueprint.
 
 ![MolmoAct2 in the Rerun viewer](screenshot.png)
 
 The [default blueprint](#3-view) puts the episode's instruction at the top, the posed arms next to the top and wrist cameras below it, and each arm's state and action plots, as two tabs, along the bottom.
 
+There are two ways to run it.
+The [local version](#local-runs) downloads three sample file groups, converts them, and registers them to a catalog you can query.
+The [Modal](https://modal.com/)-based [remote version](#remote-convert-example-on-modal) converts the whole dataset into a storage bucket.
+
+> **Note:** this example uses Pixi.
+> Get it [here](https://pixi.prefix.dev/latest/installation/).
+> Everything runs inside the pixi env: prefix task commands with `pixi run`, and direct tool commands (`hf`, `rerun`, `modal`) with `pixi run -e molmo`.
+> File paths in the commands below are relative to the repository root.
+
 ## Dataset
 
 - **Source**: [allenai/MolmoAct2-BimanualYAM-Dataset](https://huggingface.co/datasets/allenai/MolmoAct2-BimanualYAM-Dataset) on Hugging Face
 - **License**: Apache 2.0. Converted artifacts are derived from the dataset, so redistributing them is governed by the same terms.
 - **Subset used**: the local demo runs on three sample file groups (~1.1 GB, 19 episodes) spanning three tasks, all listed in [observations.md](observations.md#surveyed-file-groups).
+  The Modal job supports the full dataset conversion with options to filter or limit file groups.
 - **Access**: public, not gated.
 
 This example does not redistribute the dataset.
@@ -288,12 +304,12 @@ The wrist mounts come from i2rt's station model, and the top camera's pose and a
 
 ## Rerun APIs demonstrated
 
-- [`LeRobotReader`](https://ref.rerun.io/docs/python/stable/experimental/#rerun.experimental.LeRobotReader) reads one episode at a time into chunk streams, with each camera's video cut to the episode and copied without re-encoding (`base_layer.py`).
-- A `LazyChunkStream.map` step adds the `timestamp` timeline to every chunk as an extra index column (`base_layer.py`).
-- `Chunk.from_property` logs the episode's metadata as recording properties (`base_layer.py`).
-- `rerun.urdf.UrdfTree` streams the arm model and solves forward kinematics (`urdf_layer.py`).
-- `Pinhole`, `CoordinateFrame` and a static `Transform3D` place the camera videos in 3D (`camera_layer.py`).
-- [`CatalogClient`](https://rerun.io/docs/concepts/query-and-transform/catalog-object-model) registers each episode as a dataset segment with named layers and installs the default blueprint (`catalog.py`).
-- [`DatasetEntry.register_asset`](https://ref.rerun.io/docs/python/stable/catalog/#rerun.catalog.DatasetEntry.register_asset) attaches each arm's model as a dataset asset, which the viewer loads with every segment (`catalog.py`).
-- The [blueprint](https://rerun.io/docs/concepts/visualization/blueprints) API composes the default layout.
-  A component mapping shows the `instruction` property as text, and `SeriesLines` overrides split the 14 state and action values by arm (`blueprint.py`).
+The conversion is built on the [chunk processing API](https://rerun.io/docs/concepts/logging-and-ingestion/chunk-processing-api) and [lenses](https://rerun.io/docs/concepts/query-and-transform/lenses).
+
+- [`LeRobotReader`](https://ref.rerun.io/docs/python/stable/experimental/#rerun.experimental.LeRobotReader) reads each episode of the [LeRobot v3](https://huggingface.co/docs/lerobot/en/lerobot-dataset-v3) source (`base_layer.py`).
+- `LazyChunkStream.map` adds the `timestamp` timeline (`base_layer.py`).
+- `Chunk.from_property` logs the episode metadata as recording properties (`base_layer.py`).
+- `rerun.urdf.UrdfTree` poses the arms by forward kinematics, as in the [`robot_data_preprocessing` example](https://github.com/rerun-io/rerun/tree/main/examples/python/robot_data_preprocessing) (`urdf_layer.py`).
+- `Pinhole` and `Transform3D` place the cameras in 3D (`camera_layer.py`).
+- [`CatalogClient`](https://rerun.io/docs/concepts/query-and-transform/catalog-object-model) registers the episodes, the arm assets, and the blueprint (`catalog.py`).
+- The [blueprint](https://rerun.io/docs/concepts/visualization/blueprints) API builds the default layout (`blueprint.py`).
