@@ -47,8 +47,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 URDF_DIR_IN_IMAGE = "/root/urdf"
 
 HOUR = 60 * 60
-# The largest file group is about 9.5 GB, and the longest episode (8,953 frames) is read into memory whole.
-MEMORY_REQUEST = 4096
+MEMORY_REQUEST = 2048
 CPU_REQUEST = 1.0
 
 # Caps the Hub download burst: each worker fetches `meta/` and a median of 12 data and video files.
