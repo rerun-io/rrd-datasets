@@ -25,6 +25,12 @@
       "skillPath": "skills/rerun-data-model/SKILL.md",
       "computedHash": "5057234e91b82af67569353520c76f176bb5f386a13907b01e3160e089a36528"
     },
+    "rerun-dataset-conversion": {
+      "source": "rerun-io/rerun",
+      "sourceType": "github",
+      "skillPath": "skills/rerun-dataset-conversion/SKILL.md",
+      "computedHash": "ca6318670c5fe7a4ea54076b6790d28efa6e63544d3072bde18b9d37c0da9c62"
+    },
     "rerun-lerobot": {
       "source": "rerun-io/rerun",
       "sourceType": "github",

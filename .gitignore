@@ -32,5 +32,8 @@ notes/
 CLAUDE.md
 
 # Agent skills restored from skills-lock.json (`npx skills experimental_install`):
-.agents/
 .claude/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/rrd-datasets-add-example/
