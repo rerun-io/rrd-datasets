@@ -1,4 +1,4 @@
-# MolmoAct2
+# MolmoAct2-BimanualYAM
 
 Below is the viewer showing a converted episode with the default blueprint.
 
