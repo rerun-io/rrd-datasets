@@ -133,6 +133,11 @@ def fetch_meta(files: set[str], local_dir: Path = LOCAL_DIR) -> None:
         )
 
 
+def meta_files() -> list[str]:
+    """The repo-relative `meta/` files of the pinned revision."""
+    return sorted(path for path in hf_file_index(HF_REPO_ID, CACHE_PATH, HF_REVISION) if path.startswith(_META_PREFIX))
+
+
 def discover_groups(task_filter: str = "", local_dir: Path = LOCAL_DIR) -> list[WorkItem]:
     """Every matching file group in the pinned repo, after fetching its `meta/` into `local_dir`."""
     files = hf_file_index(HF_REPO_ID, CACHE_PATH, HF_REVISION)

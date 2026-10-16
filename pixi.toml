@@ -453,6 +453,10 @@ molmoact2 = { path = "examples/molmoact2", editable = true, extras = ["cloud"] }
 
 [feature.molmoact2.activation.env]
 PACKAGE_DIR = "examples/molmoact2"
+# The dataset converts into a HuggingFace bucket named after it.
+# The `${VAR:-default}` form lets a caller's own setting win.
+STORAGE_BACKEND = "${STORAGE_BACKEND:-hf}"
+HF_BUCKET = "${HF_BUCKET:-molmoact2}"
 
 # Dataset tasks are in their own feature, which only the molmo environment includes.
 # Every dataset names its stages the same way (download, convert, register, …),
@@ -482,6 +486,26 @@ description = "Convert the dataset's camera layer"
 cmd = "python -m molmoact2.blueprint"
 cwd = "examples/molmoact2"
 description = "Generate the dataset's blueprint"
+
+[feature.molmoact2-tasks.tasks.register]
+cmd = "python -m molmoact2.catalog"
+cwd = "examples/molmoact2"
+description = "Register the dataset's recordings in a catalog"
+
+[feature.molmoact2-tasks.tasks.convert-on-modal]
+cmd = "modal run --detach -q -m molmoact2.modal_jobs.convert_groups"
+cwd = "examples/molmoact2"
+description = "Convert the dataset's file groups on Modal"
+
+[feature.molmoact2-tasks.tasks.upload-blueprint]
+cmd = "python -m molmoact2.upload_blueprint"
+cwd = "examples/molmoact2"
+description = "Upload the dataset's blueprint"
+
+[feature.molmoact2-tasks.tasks.upload-asset]
+cmd = "python -m molmoact2.upload_asset"
+cwd = "examples/molmoact2"
+description = "Upload the dataset's arm model assets"
 
 
 [environments]
