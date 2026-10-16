@@ -2,7 +2,8 @@
 Build the default Rerun blueprint for MolmoAct2 episodes and save it as an `.rbl`.
 
 Registered as the dataset's default, every episode opens with the same layout: the instruction
-and the three cameras on top, and one state plot and one action plot per arm below.
+on top, the posed arms next to the three cameras, and one state plot and one action plot per arm
+below, as two tabs.
 
 Run:  pixi run -e molmo blueprint   # regenerates blueprints/molmoact2/default.rbl
 """
@@ -12,6 +13,7 @@ from __future__ import annotations
 import rerun as rr
 import rerun.blueprint as rrb
 
+from molmoact2 import urdf_layer
 from molmoact2.base_layer import APPLICATION_ID, PROPERTY, TIMESTAMP_TIMELINE
 from rrd_datasets_common.paths import default_blueprint_path
 
@@ -35,6 +37,12 @@ JOINT_COLORS = [0x3987E5FF, 0xD95926FF, 0x199E70FF, 0xC98500FF, 0xD55181FF, 0x00
 # Without a fixed range, a plot shows only a window around the time cursor, which cuts off the
 # start of long episodes.
 WHOLE_EPISODE = rr.TimeRange(start=rr.TimeRangeBoundary.infinite(), end=rr.TimeRangeBoundary.infinite())
+
+# How far in front of each camera its video is drawn in the 3D view, in meters.
+IMAGE_PLANE_DISTANCE = {"top": 0.3, "left": 0.1, "right": 0.1}
+
+# How opaque the camera videos are in the 3D view, so the arms behind an image plane stay visible.
+VIDEO_OPACITY = 0.7
 
 
 def arm_lines(arm: str) -> rr.SeriesLines:
@@ -82,24 +90,57 @@ def instruction_view() -> rrb.TextDocumentView:
     )
 
 
+def arms_view() -> rrb.Spatial3DView:
+    """Both posed arms and the three cameras in the `world` frame, seen from behind and above the right arm."""
+    cameras = {camera: f"/observation.images.{camera}" for camera in CAMERAS}
+    return rrb.Spatial3DView(
+        origin="/",
+        contents=[
+            *(f"+ {urdf_layer.arm_entity(arm)}/**" for arm in ARMS),
+            *(f"+ {entity}" for entity in cameras.values()),
+        ],
+        name="Arms",
+        # A 3D view draws a `VideoStream` only when its visualizer is set: the visualizer prefers 2D views.
+        overrides={
+            entity: [
+                rr.Pinhole.from_fields(image_plane_distance=IMAGE_PLANE_DISTANCE[camera]),
+                rr.VideoStream.from_fields(opacity=VIDEO_OPACITY).visualizer(),
+            ]
+            for camera, entity in cameras.items()
+        },
+        spatial_information=rrb.SpatialInformation(target_frame=urdf_layer.WORLD_FRAME),
+        eye_controls=rrb.archetypes.EyeControls3D(
+            position=[-0.79, -0.37, 0.64], look_target=[0.18, 0.08, 0.05], eye_up=[0.0, 0.0, 1.0]
+        ),
+    )
+
+
+def camera_view(camera: str) -> rrb.Spatial2DView:
+    return rrb.Spatial2DView(origin=f"/observation.images.{camera}", name=CAMERAS[camera])
+
+
 def build_blueprint() -> rrb.Blueprint:
     return rrb.Blueprint(
         rrb.Vertical(
             instruction_view(),
             rrb.Horizontal(
-                *(
-                    rrb.Spatial2DView(origin=f"/observation.images.{camera}", name=title)
-                    for camera, title in CAMERAS.items()
-                ),
-                name="Cameras",
+                arms_view(),
+                rrb.Vertical(camera_view("top"), camera_view("left"), camera_view("right")),
+                column_shares=[2, 1],
+                name="Scene",
             ),
-            rrb.Grid(
-                *(arm_plot(STATE_ENTITY, arm, "state") for arm in ARMS),
-                *(arm_plot(ACTION_ENTITY, arm, "action") for arm in ARMS),
-                grid_columns=2,
+            rrb.Horizontal(
+                *(
+                    rrb.Tabs(
+                        arm_plot(STATE_ENTITY, arm, "state"),
+                        arm_plot(ACTION_ENTITY, arm, "action"),
+                        name=f"{arm.capitalize()} arm",
+                    )
+                    for arm in ARMS
+                ),
                 name="Signals",
             ),
-            row_shares=[4, 22, 34],
+            row_shares=[6, 52, 22],
         ),
         rrb.TimePanel(
             timeline=TIMESTAMP_TIMELINE,
