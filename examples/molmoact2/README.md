@@ -16,7 +16,8 @@ There are two ways to run it.
 The [local version](#local-runs) downloads three sample file groups, converts them, and registers them to a catalog you can query.
 The [Modal](https://modal.com/)-based [remote version](#remote-convert-example-on-modal) converts the whole dataset into a storage bucket.
 
-> **Note:** this example uses Pixi.
+> [!Note]
+> This example uses Pixi.
 > Get it [here](https://pixi.prefix.dev/latest/installation/).
 > Everything runs inside the pixi env: prefix task commands with `pixi run`, and direct tool commands (`hf`, `rerun`, `modal`) with `pixi run -e molmo`.
 > File paths in the commands below are relative to the repository root.
@@ -109,14 +110,17 @@ pixi run -e molmo rerun rrds/molmoact2/*/episode_00800.rrd blueprints/molmoact2/
 
 > Keep the `*` to load all layers.
 
-> **Note:** The viewer opens local files through its Viewer catalog by default, and it can then ignore the blueprint file.
+> [!Note]
+> The viewer opens local files through its Viewer catalog by default, and it can then ignore the blueprint file.
 > Turn off **Settings** → **Viewer catalog** → **Load files via Viewer catalog** before running the command above.
 
-> **Note:** Viewed from files alone, the **Arms** view shows the three cameras but not the arm meshes.
+> [!Note]
+> Viewed from files alone, the Arms view shows the three cameras but not the arm meshes.
 > The arm meshes are in the dataset's model assets, which have their own recording ids, so the viewer does not add them to the episode.
 > The [local catalog](#4-local-catalog) registers the assets and shows the posed arms, as in the screenshot above.
 
-> **Note:** Each arm's action plot is in the tab next to its state plot.
+> [!Note]
+> Each arm's action plot is in the tab next to its state plot.
 > Each plot shows the 7 values of one arm.
 > The other arm's values are hidden, and the legend lists them as a single `left arm` or `right arm` entry, which shows them when clicked.
 > A joint has the same color in every plot, so its state and action can be compared.
@@ -166,8 +170,8 @@ This example converts to a [Hugging Face Storage Bucket](https://huggingface.co/
 Access uses [HF S3 credentials](https://huggingface.co/docs/hub/storage-buckets-s3#generating-s3-credentials), generated from a fine-grained HF token scoped to the bucket.
 The launcher passes them to the workers as a per-run secret.
 
-> **Note:** to store in an AWS S3 bucket instead, `export STORAGE_BACKEND=s3` and follow the
-> [S3 prerequisite in the ABC-130k example](../abc-130k/README.md#1-prerequisite-s3-storage).
+> [!Note]
+> To store in an AWS S3 bucket instead, `export STORAGE_BACKEND=s3` and follow the [S3 prerequisite in the ABC-130k example](../abc-130k/README.md#1-prerequisite-s3-storage).
 
 ### 2. Prerequisite: Modal setup
 
@@ -201,7 +205,8 @@ The `convert-on-modal` task runs detached and returns immediately.
 Watch progress in the Modal dashboard.
 A full run writes about 2.4 TB to the bucket, about the size of the source.
 
-> **Note:** Without `--overwrite`, anything already in the bucket is skipped.
+> [!Note]
+> Without `--overwrite`, anything already in the bucket is skipped.
 
 #### Picking layers
 
@@ -298,7 +303,7 @@ The source dataset does not provide the arm placement. We use an estimate.
 
 ### Cameras layer
 
-`molmoact2/camera_layer.py` — The three cameras, placed in the scene so their videos show in the **Arms** view.
+`molmoact2/camera_layer.py` — The three cameras, placed in the scene so their videos show in the Arms view.
 The source dataset does not provide camera calibration.
 The wrist mounts come from i2rt's station model, and the top camera's pose and all intrinsics are estimates.
 
