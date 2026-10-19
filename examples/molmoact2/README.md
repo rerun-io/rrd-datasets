@@ -307,6 +307,11 @@ The source dataset does not provide the arm placement. We use an estimate.
 The source dataset does not provide camera calibration.
 The wrist mounts come from i2rt's station model, and the top camera's pose and all intrinsics are estimates.
 
+> [!Note]
+> The authors posted partial calibration in [allenai/molmoact2#2](https://github.com/allenai/molmoact2/issues/2): a nominal layout drawing and the top camera pose.
+> The sample intrinsics posted in the issue are for 640×480, so they do not apply to the 640×360 videos.
+> Our hand-fitted values match its arm spacing (0.50 m) and top camera tilt (72°).
+
 ## Rerun APIs demonstrated
 
 The conversion is built on the [chunk processing API](https://rerun.io/docs/concepts/logging-and-ingestion/chunk-processing-api) and [lenses](https://rerun.io/docs/concepts/query-and-transform/lenses).
