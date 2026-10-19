@@ -1,16 +1,33 @@
 # MolmoAct2-BimanualYAM
 
+[MolmoAct2-BimanualYAM](https://huggingface.co/datasets/allenai/MolmoAct2-BimanualYAM-Dataset) is a bimanual manipulation dataset recorded on two I2RT YAM arms: 32,246 teleoperated episodes (about 704 hours) with three cameras, in the LeRobot v3 format.
+This example converts each episode into three Rerun recordings (`.rrd`).
+One recording corresponds to one layer: the episode as recorded, the two posed arms, and the three cameras placed in the scene.
+
+**Status: incubating.** The conversion works end to end, but the converted dataset is not published yet.
+
 Below is the viewer showing a converted episode with the default blueprint.
 
 ![MolmoAct2 in the Rerun viewer](screenshot.png)
 
 The [default blueprint](#3-view) puts the episode's instruction at the top, the posed arms next to the top and wrist cameras below it, and each arm's state and action plots, as two tabs, along the bottom.
 
+There are two ways to run it.
+The [local version](#local-runs) downloads three sample file groups, converts them, and registers them to a catalog you can query.
+The [Modal](https://modal.com/)-based [remote version](#remote-convert-example-on-modal) converts the whole dataset into a storage bucket.
+
+> [!Note]
+> This example uses Pixi.
+> Get it [here](https://pixi.prefix.dev/latest/installation/).
+> Everything runs inside the pixi env: prefix task commands with `pixi run`, and direct tool commands (`hf`, `rerun`, `modal`) with `pixi run -e molmo`.
+> File paths in the commands below are relative to the repository root.
+
 ## Dataset
 
 - **Source**: [allenai/MolmoAct2-BimanualYAM-Dataset](https://huggingface.co/datasets/allenai/MolmoAct2-BimanualYAM-Dataset) on Hugging Face
 - **License**: Apache 2.0. Converted artifacts are derived from the dataset, so redistributing them is governed by the same terms.
 - **Subset used**: the local demo runs on three sample file groups (~1.1 GB, 19 episodes) spanning three tasks, all listed in [observations.md](observations.md#surveyed-file-groups).
+  The Modal job supports the full dataset conversion with options to filter or limit file groups.
 - **Access**: public, not gated.
 
 This example does not redistribute the dataset.
@@ -93,18 +110,135 @@ pixi run -e molmo rerun rrds/molmoact2/*/episode_00800.rrd blueprints/molmoact2/
 
 > Keep the `*` to load all layers.
 
-> **Note:** The viewer opens local files through its Viewer catalog by default, and it can then ignore the blueprint file.
+> [!Note]
+> The viewer opens local files through its Viewer catalog by default, and it can then ignore the blueprint file.
 > Turn off **Settings** → **Viewer catalog** → **Load files via Viewer catalog** before running the command above.
 
-> **Note:** Viewed from files alone, the **Arms** view shows the three cameras but not the arm meshes.
+> [!Note]
+> Viewed from files alone, the Arms view shows the three cameras but not the arm meshes.
 > The arm meshes are in the dataset's model assets, which have their own recording ids, so the viewer does not add them to the episode.
-> A catalog with the assets registered shows the posed arms, as in the screenshot above.
+> The [local catalog](#4-local-catalog) registers the assets and shows the posed arms, as in the screenshot above.
 
-> **Note:** Each arm's action plot is in the tab next to its state plot.
+> [!Note]
+> Each arm's action plot is in the tab next to its state plot.
 > Each plot shows the 7 values of one arm.
 > The other arm's values are hidden, and the legend lists them as a single `left arm` or `right arm` entry, which shows them when clicked.
 > A joint has the same color in every plot, so its state and action can be compared.
 > To modify the layout, edit `molmoact2/blueprint.py` and rerun the `blueprint` task.
+
+### 4. Local Catalog
+
+Register the converted episodes to a [catalog server](https://rerun.io/docs/concepts/how-does-rerun-work#catalog-server), then browse, sort, filter, and query them as one dataset.
+
+Start a local server:
+
+```bash
+pixi run serve              # start an in-memory catalog server (leave running)
+```
+
+In another shell, register the converted episodes:
+
+```bash
+pixi run -e molmo register   # register all episodes as the `molmoact2` dataset
+```
+
+Browse them in the Rerun Viewer:
+
+```bash
+pixi run -e molmo rerun rerun+http://127.0.0.1:51234
+```
+
+## Remote Convert Example on Modal
+
+The steps above run locally on the downloaded sample files.
+The following steps convert the full dataset on cloud workers.
+
+### 1. Prerequisite: storage backend
+
+Set the env vars for your storage backend in the shell, or edit the defaults in
+[`rrd_datasets_common/storage.py`](../../packages/rrd_datasets_common/rrd_datasets_common/storage.py).
+The dataset's own layout under the bucket lives in [`storage.py`](molmoact2/storage.py):
+
+| Env var                                           | Backend | What it is                                                              |
+| ------------------------------------------------- | ------- | ----------------------------------------------------------------------- |
+| `STORAGE_BACKEND`                                 | both    | Which bucket kind, `hf` or `s3`, `hf` in the `molmo` environments       |
+| `HF_NAMESPACE`                                    | hf      | The user or org that owns the bucket, set this one                      |
+| `HF_BUCKET`                                       | hf      | Bucket the RRDs are written to, `molmoact2` by default, create it first |
+| `HF_BUCKET_ACCESS_KEY_ID` / `…_SECRET_ACCESS_KEY` | hf      | The HF S3 credentials                                                   |
+
+This example converts to a [Hugging Face Storage Bucket](https://huggingface.co/docs/hub/main/en/storage-buckets-s3) behind its S3-compatible gateway.
+Access uses [HF S3 credentials](https://huggingface.co/docs/hub/storage-buckets-s3#generating-s3-credentials), generated from a fine-grained HF token scoped to the bucket.
+The launcher passes them to the workers as a per-run secret.
+
+> [!Note]
+> To store in an AWS S3 bucket instead, `export STORAGE_BACKEND=s3` and follow the [S3 prerequisite in the ABC-130k example](../abc-130k/README.md#1-prerequisite-s3-storage).
+
+### 2. Prerequisite: Modal setup
+
+The [Modal](https://modal.com/) job under `molmoact2/modal_jobs/` starts one worker per [file group](#a-note-on-episodes-and-files).
+Each worker downloads `meta/` and its group's files, converts every episode in it, and uploads the `.rrd` layers to the bucket.
+
+To set it up:
+
+- `pixi run -e molmo modal setup` — authenticate the Modal CLI (one-time).
+- `pixi run -e molmo hf auth login`, or set `$HF_TOKEN` — optional for this public dataset, but anonymous callers share a smaller per-IP download quota.
+
+### 3. Run Convert
+
+Run `pixi run -e molmo convert-on-modal --help` to see all options.
+
+```bash
+# One new file group, every layer (the default when no flags are given):
+pixi run -e molmo convert-on-modal
+
+# Every file group (--limit 0 removes the cap):
+pixi run -e molmo convert-on-modal --limit 0
+
+# The file groups of one task:
+pixi run -e molmo convert-on-modal --task-filter "Fold the cloth" --limit 0
+
+# See what would run, without starting any worker:
+pixi run -e molmo convert-on-modal --dry-run --limit 10
+```
+
+The `convert-on-modal` task runs detached and returns immediately.
+Watch progress in the Modal dashboard.
+A full run writes about 2.4 TB to the bucket, about the size of the source.
+
+> [!Note]
+> Without `--overwrite`, anything already in the bucket is skipped.
+
+#### Picking layers
+
+`--layers` lets you choose which layers to build:
+
+```bash
+# Only the base layer:
+pixi run -e molmo convert-on-modal --layers base --limit 0
+
+# Rebuild layers after changing them:
+pixi run -e molmo convert-on-modal --layers urdf,cameras --limit 0 --overwrite
+```
+
+Every layer derives from the base layer, so a worker downloads its whole file group whatever the selection.
+
+### 4. Upload the blueprint
+
+`pixi run -e molmo blueprint` writes `blueprints/molmoact2/default.rbl`.
+To upload it to your bucket (`s3://<bucket>/blueprints/`), run:
+
+```bash
+pixi run -e molmo upload-blueprint
+```
+
+### 5. Upload the arm model assets
+
+`pixi run -e molmo convert-urdf` writes the two arm models as `rrds/molmoact2/assets/urdf-model-{left,right}.rrd`.
+To upload them to your bucket (`s3://<bucket>/assets/`), run:
+
+```bash
+pixi run -e molmo upload-asset
+```
 
 ## Observations
 
@@ -169,16 +303,23 @@ The source dataset does not provide the arm placement. We use an estimate.
 
 ### Cameras layer
 
-`molmoact2/camera_layer.py` — The three cameras, placed in the scene so their videos show in the **Arms** view.
+`molmoact2/camera_layer.py` — The three cameras, placed in the scene so their videos show in the Arms view.
 The source dataset does not provide camera calibration.
 The wrist mounts come from i2rt's station model, and the top camera's pose and all intrinsics are estimates.
 
+> [!Note]
+> The authors posted partial calibration in [allenai/molmoact2#2](https://github.com/allenai/molmoact2/issues/2): a nominal layout drawing and the top camera pose.
+> The sample intrinsics posted in the issue are for 640×480, so they do not apply to the 640×360 videos.
+> Our hand-fitted values match its arm spacing (0.50 m) and top camera tilt (72°).
+
 ## Rerun APIs demonstrated
 
-- [`LeRobotReader`](https://ref.rerun.io/docs/python/stable/experimental/#rerun.experimental.LeRobotReader) reads one episode at a time into chunk streams, with each camera's video cut to the episode and copied without re-encoding (`base_layer.py`).
-- A `LazyChunkStream.map` step adds the `timestamp` timeline to every chunk as an extra index column (`base_layer.py`).
-- `Chunk.from_property` logs the episode's metadata as recording properties (`base_layer.py`).
-- `rerun.urdf.UrdfTree` streams the arm model and solves forward kinematics (`urdf_layer.py`).
-- `Pinhole`, `CoordinateFrame` and a static `Transform3D` place the camera videos in 3D (`camera_layer.py`).
-- The [blueprint](https://rerun.io/docs/concepts/visualization/blueprints) API composes the default layout.
-  A component mapping shows the `instruction` property as text, and `SeriesLines` overrides split the 14 state and action values by arm (`blueprint.py`).
+The conversion is built on the [chunk processing API](https://rerun.io/docs/concepts/logging-and-ingestion/chunk-processing-api) and [lenses](https://rerun.io/docs/concepts/query-and-transform/lenses).
+
+- [`LeRobotReader`](https://ref.rerun.io/docs/python/stable/experimental/#rerun.experimental.LeRobotReader) reads each episode of the [LeRobot v3](https://huggingface.co/docs/lerobot/en/lerobot-dataset-v3) source (`base_layer.py`).
+- `LazyChunkStream.map` adds the `timestamp` timeline (`base_layer.py`).
+- `Chunk.from_property` logs the episode metadata as recording properties (`base_layer.py`).
+- `rerun.urdf.UrdfTree` poses the arms by forward kinematics, as in the [`robot_data_preprocessing` example](https://github.com/rerun-io/rerun/tree/main/examples/python/robot_data_preprocessing) (`urdf_layer.py`).
+- `Pinhole` and `Transform3D` place the cameras in 3D (`camera_layer.py`).
+- [`CatalogClient`](https://rerun.io/docs/concepts/query-and-transform/catalog-object-model) registers the episodes, the arm assets, and the blueprint (`catalog.py`).
+- The [blueprint](https://rerun.io/docs/concepts/visualization/blueprints) API builds the default layout (`blueprint.py`).
