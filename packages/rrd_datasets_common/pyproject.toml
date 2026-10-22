@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# The modal_jobs modules (Modal/S3 flow) only.
+# The modal_jobs modules (Modal/S3 flow) and `upload` only.
 cloud = ["modal>=1,<2", "boto3>=1.34", "botocore>=1.34"]
 
 [project.urls]

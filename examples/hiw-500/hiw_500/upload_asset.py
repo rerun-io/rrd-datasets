@@ -21,26 +21,6 @@ MODEL_PATH = model_rrd_path(RRD_ROOT)
 MODEL_ASSET_URI = f"{ASSET_PREFIX}{MODEL_PATH.name}"
 
 
-def upload_asset(asset: Path, uri: str) -> None:
-    """Upload the local `.rrd` at `asset` to `uri` on the active storage backend."""
-    from rrd_datasets_common.modal_jobs.hf_bucket import missing_hf_s3_keys
-    from rrd_datasets_common.modal_jobs.store import check_bucket, launcher_client, upload_file
-    from rrd_datasets_common.storage import STORAGE_BACKEND
-
-    if asset.suffix != ".rrd":
-        raise ValueError(f"Expected an .rrd recording, got {asset}")
-    if not asset.exists():
-        raise FileNotFoundError(f"{asset} not found — run `pixi run -e hiw convert-urdf` first.")
-    if not uri.startswith("s3://"):
-        raise ValueError(f"Expected an s3:// URI, got {uri}")
-
-    if STORAGE_BACKEND == "hf" and (missing := missing_hf_s3_keys()):
-        raise SystemExit(f"Missing HF S3 credentials: {', '.join(missing)} — generate them from an HF access token.")
-    check_bucket()
-    upload_file(launcher_client(), str(asset), uri)
-    print(f"Uploaded asset: {uri}")
-
-
 def main() -> None:
     """Upload the shared model rrd (or a given `.rrd`) to the dataset's asset prefix."""
     parser = argparse.ArgumentParser(
@@ -51,7 +31,9 @@ def main() -> None:
     parser.add_argument("--uri", default=MODEL_ASSET_URI, help="Destination URI for the asset (s3:// shape).")
     args = parser.parse_args()
 
-    upload_asset(args.asset, args.uri)
+    from rrd_datasets_common.upload import upload_files
+
+    upload_files({args.asset: args.uri}, missing_hint="run `pixi run -e hiw convert-urdf` first")
 
 
 if __name__ == "__main__":
