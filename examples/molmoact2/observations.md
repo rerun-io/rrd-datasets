@@ -62,7 +62,7 @@ The `Tag` column provides a short name for referring to each episode in the sect
 | `untangle`   | `episode_31487` | both arms pulling cables apart, with the right gripper closing 17 times (`Untangle cables`) |
 | `dishwasher` | `episode_24832` | a five-step instruction: bowls and a plate into the rack, food waste into the bin           |
 | `no-motion`  | `episode_01832` | 82 frames in which no joint moves                                                           |
-| `two-demos`  | `episode_31749` | video that holds a second demonstration with no data rows                                   |
+| `two-demos`  | `episode_31749` | video that ends with part of a discarded take, with no data rows                            |
 | `mislabeled` | `episode_07294` | labeled `Pack container`, but shows clothes folded on the table                             |
 
 ## Video
@@ -113,12 +113,14 @@ Data bugs and inaccuracies are labels or statistics in the source that are wrong
 
 ### Edge cases
 
-#### Episode 31749's video holds a second demonstration
+#### Episode 31749's video ends with part of a discarded take
 
-The time windows of `two-demos` are longer than its 1,619 data rows: 2,832 frames on `top` and `left`, and 2,658 on `right`.
-The extra video shows a second, complete fold of the same cloth, which has no state, action, or task rows.
-The video runs 40 s past the data on `top` and `left`, and the `right` window ends 174 frames (5.8 s) earlier than the other two.
-It is the only episode whose windows disagree with its length.
+`two-demos` is the only episode whose video time windows disagree with its length.
+They hold 2,832 frames on `top` and `left` and 2,658 on `right`, but the episode has only 1,619 data rows.
+All three cameras cut abruptly at frame 1,619, where the data rows end.
+After the cut, the video shows the last 40 s of another take of the same fold.
+These frames have no state, action, or task rows.
+The likely cause is a LeRobot recording bug, fixed in v0.6.1, that kept a discarded take's frames on disk and encoded them after the re-recorded take ([huggingface/lerobot#3683](https://github.com/huggingface/lerobot/pull/3683)).
 
 #### Episode 7315's top video is one frame short
 
