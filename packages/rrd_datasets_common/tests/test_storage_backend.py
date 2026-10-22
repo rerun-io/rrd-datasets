@@ -1,4 +1,4 @@
-"""Tests for `STORAGE_BACKEND` selection: storage config, the bucket and worker selectors, and the gateway client. No network."""
+"""Tests for `STORAGE_BACKEND` selection: storage config, bucket and worker clients, and the gateway. No network."""
 
 from __future__ import annotations
 

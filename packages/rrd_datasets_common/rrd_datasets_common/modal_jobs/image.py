@@ -120,9 +120,7 @@ def hf_s3_secret() -> modal.Secret:
     if not modal.is_local():
         return modal.Secret.from_dict({})
 
-    from rrd_datasets_common.hf_bucket import HF_S3_KEYS, missing_hf_s3_keys
+    from rrd_datasets_common.hf_bucket import HF_S3_KEYS, require_hf_s3_keys
 
-    missing = missing_hf_s3_keys()
-    if missing:
-        raise SystemExit(f"Missing HF S3 credentials: {', '.join(missing)} — generate them from an HF access token.")
+    require_hf_s3_keys()
     return modal.Secret.from_dict({key: os.environ[key] for key in HF_S3_KEYS})

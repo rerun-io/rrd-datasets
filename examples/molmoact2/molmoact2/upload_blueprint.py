@@ -12,6 +12,7 @@ from pathlib import Path
 
 from molmoact2.blueprint import BLUEPRINT_PATH
 from molmoact2.storage import BLUEPRINT_URI
+from rrd_datasets_common.bucket import upload_files
 
 
 def main() -> None:
@@ -23,8 +24,6 @@ def main() -> None:
     parser.add_argument("blueprint", nargs="?", type=Path, default=BLUEPRINT_PATH, help="Path to the .rbl to upload.")
     parser.add_argument("--uri", default=BLUEPRINT_URI, help="Destination URI for the blueprint (s3:// shape).")
     args = parser.parse_args()
-
-    from rrd_datasets_common.bucket import upload_files
 
     upload_files({args.blueprint: args.uri}, missing_hint="run `pixi run -e molmo blueprint` first")
 

@@ -15,6 +15,7 @@ from pathlib import Path
 
 from abc_130k.blueprint import BLUEPRINT_PATH
 from abc_130k.storage import BLUEPRINT_PREFIX
+from rrd_datasets_common.bucket import upload_files
 
 DEFAULT_BLUEPRINT_URI = f"{BLUEPRINT_PREFIX}{BLUEPRINT_PATH.name}"
 
@@ -28,8 +29,6 @@ def main() -> None:
     parser.add_argument("blueprint", nargs="?", type=Path, default=BLUEPRINT_PATH, help="Path to the .rbl to upload.")
     parser.add_argument("--uri", default=DEFAULT_BLUEPRINT_URI, help="Destination URI for the blueprint (s3:// shape).")
     args = parser.parse_args()
-
-    from rrd_datasets_common.bucket import upload_files
 
     upload_files({args.blueprint: args.uri}, missing_hint="run `pixi run -e abc blueprint` first")
 

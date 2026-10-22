@@ -1,8 +1,10 @@
 """
 Bucket access on the active storage backend: the local client, object checks, and uploads.
 
-Callers do not check which backend is active. `s3` uses the caller's own AWS credentials, and `hf`
-goes through the HF Storage Bucket's S3-compatible gateway with a static key pair.
+Callers do not check which backend is active. The functions that take an `S3Client` accept any
+client: the local one from `launcher_client`, or a Modal worker's from `modal_jobs.store`.
+On `s3` the local client uses the caller's own AWS credentials. On `hf` it goes through the HF
+Storage Bucket's S3-compatible gateway with a static key pair.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from typing import TYPE_CHECKING
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 
-from rrd_datasets_common.hf_bucket import HF_TRANSFER_CONFIG, gateway_client, missing_hf_s3_keys
+from rrd_datasets_common.hf_bucket import HF_TRANSFER_CONFIG, gateway_client, require_hf_s3_keys
 from rrd_datasets_common.hf_bucket import check_bucket as check_hf_bucket
 from rrd_datasets_common.storage import HF_BUCKET, HF_NAMESPACE, S3_REGION, STORAGE_BACKEND
 
@@ -54,10 +56,8 @@ def upload_files(uploads: Mapping[Path, str], missing_hint: str = "") -> None:
     if bad_uris := [uri for uri in uploads.values() if not uri.startswith("s3://")]:
         raise ValueError(f"Expected s3:// URIs, got {', '.join(bad_uris)}")
 
-    if STORAGE_BACKEND == "hf" and (missing_keys := missing_hf_s3_keys()):
-        raise SystemExit(
-            f"Missing HF S3 credentials: {', '.join(missing_keys)} — generate them from an HF access token."
-        )
+    if STORAGE_BACKEND == "hf":
+        require_hf_s3_keys()
     check_bucket()
 
     client = launcher_client()

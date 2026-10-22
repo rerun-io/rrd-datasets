@@ -36,9 +36,10 @@ HF_TRANSFER_CONFIG = TransferConfig(
 )
 
 
-def missing_hf_s3_keys() -> list[str]:
-    """The HF S3 credential variables not set in the caller's environment."""
-    return [key for key in HF_S3_KEYS if not os.environ.get(key)]
+def require_hf_s3_keys() -> None:
+    """Stop unless the caller's environment sets every HF S3 credential variable."""
+    if missing := [key for key in HF_S3_KEYS if not os.environ.get(key)]:
+        raise SystemExit(f"Missing HF S3 credentials: {', '.join(missing)} — generate them from an HF access token.")
 
 
 def gateway_client(namespace: str) -> S3Client:

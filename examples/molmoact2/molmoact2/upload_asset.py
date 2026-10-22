@@ -14,6 +14,7 @@ import argparse
 from molmoact2.base_layer import RRD_ROOT
 from molmoact2.storage import ASSET_PREFIX
 from molmoact2.urdf_layer import ARMS, model_rrd_path
+from rrd_datasets_common.bucket import upload_files
 
 
 def asset_uri(arm: str) -> str:
@@ -29,8 +30,6 @@ def main() -> None:
     )
     parser.add_argument("arms", nargs="*", choices=ARMS, help="The arms to upload (default: both).")
     args = parser.parse_args()
-
-    from rrd_datasets_common.bucket import upload_files
 
     uploads = {model_rrd_path(RRD_ROOT, arm): asset_uri(arm) for arm in args.arms or ARMS}
     upload_files(uploads, missing_hint="run `pixi run -e molmo convert-urdf` first")
