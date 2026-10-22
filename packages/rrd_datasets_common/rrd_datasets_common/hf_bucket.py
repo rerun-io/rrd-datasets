@@ -1,5 +1,5 @@
 """
-HF Storage Bucket access for Modal jobs: a boto3 client on the S3-compatible gateway.
+HF Storage Bucket access: a boto3 client on the S3-compatible gateway.
 
 Namespaces are arguments rather than constants, so this file carries nothing private or specific
 to one dataset. The HF S3 credentials ride in `HF_BUCKET_*` variables.
@@ -65,7 +65,7 @@ def gateway_client(namespace: str) -> S3Client:
 
 def check_bucket(namespace: str, bucket: str) -> None:
     """
-    Stop the launch unless `bucket` exists in `namespace`.
+    Stop unless `bucket` exists in `namespace`.
 
     A worker uploads only after building its layers, so a missing bucket would burn a container's
     build time per episode before failing. One listing on the launcher catches it first.

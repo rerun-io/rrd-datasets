@@ -30,7 +30,7 @@ def main() -> None:
     parser.add_argument("arms", nargs="*", choices=ARMS, help="The arms to upload (default: both).")
     args = parser.parse_args()
 
-    from rrd_datasets_common.upload import upload_files
+    from rrd_datasets_common.bucket import upload_files
 
     uploads = {model_rrd_path(RRD_ROOT, arm): asset_uri(arm) for arm in args.arms or ARMS}
     upload_files(uploads, missing_hint="run `pixi run -e molmo convert-urdf` first")

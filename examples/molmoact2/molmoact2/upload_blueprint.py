@@ -24,7 +24,7 @@ def main() -> None:
     parser.add_argument("--uri", default=BLUEPRINT_URI, help="Destination URI for the blueprint (s3:// shape).")
     args = parser.parse_args()
 
-    from rrd_datasets_common.upload import upload_files
+    from rrd_datasets_common.bucket import upload_files
 
     upload_files({args.blueprint: args.uri}, missing_hint="run `pixi run -e molmo blueprint` first")
 
