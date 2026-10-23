@@ -56,6 +56,7 @@ MAX_CONTAINERS = 30
 image = image_from_pyproject(
     REPO_ROOT / "pyproject.toml",
     extras=["cloud"],
+    apt=["ffmpeg"],  # `LeRobotReader` re-encodes the start of a video window that begins on a delta frame
     env={**HF_HUB_ENV, **worker_env()},
     files={"urdf": URDF_DIR_IN_IMAGE},
     python_sources=("molmoact2", "rrd_datasets_common"),
