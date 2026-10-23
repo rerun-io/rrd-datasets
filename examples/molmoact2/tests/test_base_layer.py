@@ -62,7 +62,7 @@ def test_round_trip_rebuilds_data_and_properties(dataset_root: Path, tmp_path: P
         assert props["task"] == [[TASKS[EPISODE_TASKS[episode]]]]
         assert props["instruction"] == [[INSTRUCTIONS[episode]]]
         assert props["robot_type"] == [["bi_yam_follower"]]
-        assert props["has_frame_mismatch"] == [[False]]
+        assert props["num_frames_mismatched"] == [[False]]
 
         for name in ("action", "observation.state"):
             frames, nanos, values = temporal_rows(store, f"/{name}", "Scalars:scalars")
@@ -89,7 +89,7 @@ def test_downloaded_episode_has_one_video_sample_per_frame(tmp_path: Path) -> No
     (path,) = convert_group(group, LeRobotReader(LOCAL_DIR), meta, tmp_path)
     store = RrdReader(str(path)).store()
     props = properties(store).to_pydict()
-    assert props["has_frame_mismatch"] == [[False]]
+    assert props["num_frames_mismatched"] == [[False]]
 
     for camera in CAMERAS:
         frames, nanos, _ = temporal_rows(store, f"/observation.images.{camera}", "VideoStream:sample")

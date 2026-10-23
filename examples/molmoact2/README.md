@@ -286,15 +286,15 @@ It computes each value as `float32(frame_index / 30)`, which also gives a time t
 The source `timestamp` column holds the same values: its per-episode statistics in `meta/episodes` (count, min, max, mean) match `frame_index / 30` in all 32,246 episodes of the pinned revision.
 The episode's metadata is logged as recording properties, which the catalog shows as columns to filter, sort, and search on:
 
-| Property             | Type   | Source                                                                                                                                                      |
-| -------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `episode_index`      | int64  | `meta/episodes`                                                                                                                                             |
-| `task`               | string | `meta/episodes`, where the source stores a one-element list                                                                                                 |
-| `instruction`        | string | `meta/tasks_annotated.parquet`                                                                                                                              |
-| `length`             | int64  | `meta/episodes`, in frames                                                                                                                                  |
-| `robot_type`         | string | `meta/info.json`                                                                                                                                            |
-| `source_revision`    | string | the pinned dataset revision                                                                                                                                 |
-| `has_frame_mismatch` | bool   | true when the state, the action, or a camera holds a number of frames other than `length` (see [observations.md](observations.md#edge-cases-and-data-bugs)) |
+| Property                | Type   | Source                                                                                                                                                      |
+| ----------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `episode_index`         | int64  | `meta/episodes`                                                                                                                                             |
+| `task`                  | string | `meta/episodes`, where the source stores a one-element list                                                                                                 |
+| `instruction`           | string | `meta/tasks_annotated.parquet`                                                                                                                              |
+| `length`                | int64  | `meta/episodes`, in frames                                                                                                                                  |
+| `robot_type`            | string | `meta/info.json`                                                                                                                                            |
+| `source_revision`       | string | the pinned dataset revision                                                                                                                                 |
+| `num_frames_mismatched` | bool   | true when the state, the action, or a camera holds a number of frames other than `length` (see [observations.md](observations.md#edge-cases-and-data-bugs)) |
 
 ### URDF layer
 

@@ -82,7 +82,7 @@ def read_source_meta(dataset_root: Path) -> SourceMeta:
     return SourceMeta(str(info["robot_type"]), int(info["fps"]), episodes)
 
 
-def has_frame_mismatch(store: ChunkStore, length: int) -> bool:
+def num_frames_mismatched(store: ChunkStore, length: int) -> bool:
     """Whether the state, the action, or any camera holds a number of frames other than `length`."""
     rows: dict[str, int] = {}
     for chunk in store.stream().filter(components=FRAME_COMPONENTS, is_static=False):
@@ -90,7 +90,7 @@ def has_frame_mismatch(store: ChunkStore, length: int) -> bool:
     return any(count != length for count in rows.values())
 
 
-def properties_chunk(meta: SourceMeta, episode: int, frame_mismatch: bool) -> Chunk:
+def properties_chunk(meta: SourceMeta, episode: int, frames_mismatched: bool) -> Chunk:
     """The episode's recording properties, typed the same in every episode."""
     row = meta.episodes.slice(episode, 1)
     return Chunk.from_property(
@@ -102,7 +102,7 @@ def properties_chunk(meta: SourceMeta, episode: int, frame_mismatch: bool) -> Ch
             length=row["length"].to_numpy(),
             robot_type=[meta.robot_type],
             source_revision=[HF_REVISION],
-            has_frame_mismatch=np.array([frame_mismatch], dtype=np.bool_),
+            num_frames_mismatched=np.array([frames_mismatched], dtype=np.bool_),
         ),
     )
 
@@ -145,7 +145,7 @@ def convert_episode(episode: int, reader: LeRobotReader, meta: SourceMeta, rrd_r
     # The object-store profile compacts the reader's small chunks into the sizes catalog reads expect.
     store = episode_stream(reader, meta, episode).collect(optimize=OptimizationProfile.OBJECT_STORE)
     length = int(meta.episodes["length"][episode].as_py())
-    properties = properties_chunk(meta, episode, has_frame_mismatch(store, length))
+    properties = properties_chunk(meta, episode, num_frames_mismatched(store, length))
     LazyChunkStream.merge(store.stream(), LazyChunkStream.from_iter([properties])).write_rrd(
         str(out_path), application_id=APPLICATION_ID, recording_id=recording
     )
