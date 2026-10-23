@@ -13,11 +13,23 @@ from conftest import EPISODE_TASKS, INSTRUCTIONS, JOINT_NAMES, LENGTHS, TASKS, f
 from rerun.chunk import ChunkStore, LazyStore, RrdReader
 from rerun.experimental import LeRobotReader
 
-from molmoact2.base_layer import PROPERTY, convert_group, read_source_meta, timestamp_nanos
+from molmoact2.base_layer import (
+    PROPERTY,
+    convert_group,
+    episode_file,
+    keyframe_misaligned_cameras,
+    read_source_meta,
+    timestamp_nanos,
+    window_misaligned,
+)
 from molmoact2.episode_index import LOCAL_DIR, discover_local_groups, groups_from_meta
 
 SAMPLE_GROUP = 31673  # a single-episode file group from `SAMPLES`
 CAMERAS = ("top", "left", "right")
+
+# In top `file-823`, the windows of 12054–12061 start on a delta frame. In left `file-588`, 12051's
+# window starts on a video segment one frame long, so its first two frames are keyframes.
+MISALIGNED_CAMERAS = {12051: ["left"], 12052: [], 12053: [], **{episode: ["top"] for episode in range(12054, 12062)}}
 
 
 def temporal_rows(
@@ -55,7 +67,8 @@ def test_round_trip_rebuilds_data_and_properties(dataset_root: Path, tmp_path: P
     rebuilt: dict[str, list[np.ndarray]] = {name: [] for name in frame_columns()}
     first_index = 0
     for episode, store in enumerate(stores):
-        props = properties(store).to_pydict()
+        batch = properties(store)
+        props = batch.to_pydict()
         assert props["episode_index"] == [[episode]]
         assert props["length"] == [[LENGTHS[episode]]]
         # The fixture's tasks are out of order, so a lookup by the wrong row shows up here.
@@ -64,6 +77,8 @@ def test_round_trip_rebuilds_data_and_properties(dataset_root: Path, tmp_path: P
         assert props["robot_type"] == [["bi_yam_follower"]]
         assert props["source_files"] == [[["data/chunk-000/file-000.parquet"]]]
         assert props["num_frames_mismatched"] == [[False]]
+        # Every fixture episode has an empty camera list, which must still be typed like a filled list.
+        assert batch.schema.field("keyframe_misaligned_cameras").type == batch.schema.field("source_files").type
 
         for name in ("action", "observation.state"):
             frames, nanos, values = temporal_rows(store, f"/{name}", "Scalars:scalars")
@@ -104,3 +119,30 @@ def test_downloaded_episode_has_one_video_sample_per_frame(tmp_path: Path) -> No
         # `is_keyframe` is only written on keyframe rows.
         keyframes, _, _ = temporal_rows(store, f"/observation.images.{camera}", "VideoStream:is_keyframe")
         assert keyframes[0] == 0, f"{camera} does not start on a keyframe"
+
+
+@pytest.mark.parametrize(
+    ("keyframes", "start", "misaligned"),
+    [
+        ([0, 2, 4, 5, 7], 5, False),  # starts right after an odd-length episode's last keyframe
+        ([0, 2, 4, 6], 3, True),  # starts on a delta frame
+        ([0, 2, 3, 4, 6], 3, True),  # starts on a segment one frame long
+    ],
+)
+def test_window_misaligned(keyframes: list[int], start: int, misaligned: bool) -> None:
+    assert window_misaligned(np.array(keyframes), start) == misaligned
+
+
+@pytest.mark.skipif(not (LOCAL_DIR / "meta" / "info.json").exists(), reason="needs `pixi run -e molmo download`")
+def test_downloaded_videos_flag_keyframe_misaligned_cameras() -> None:
+    meta = read_source_meta(LOCAL_DIR)
+    videos = {
+        LOCAL_DIR / episode_file(meta, file_set, episode)
+        for episode in MISALIGNED_CAMERAS
+        for file_set in meta.file_sets
+        if file_set.video_key
+    }
+    if not all(video.is_file() for video in videos):
+        pytest.skip("the video files of episodes 12051–12061 are not downloaded")
+    found = {episode: keyframe_misaligned_cameras(meta, episode) for episode in MISALIGNED_CAMERAS}
+    assert found == MISALIGNED_CAMERAS
