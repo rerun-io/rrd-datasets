@@ -76,12 +76,18 @@ def recording_id(episode_index: int) -> str:
     return f"episode_{episode_index:05d}"
 
 
-def groups_from_meta(dataset_root: Path, task_filter: str = "") -> list[WorkItem]:
-    """Every file group under `dataset_root` with a task containing `task_filter`."""
+def episode_file_sets(dataset_root: Path) -> list[EpisodeFileSet]:
+    """The data parquets, then one file set per camera in name order, as `info.json` describes them."""
     info = json.loads((dataset_root / "meta" / "info.json").read_text())
     video_keys = sorted(name for name, feature in info["features"].items() if feature["dtype"] == "video")
     file_sets = [EpisodeFileSet("data", info["data_path"], "")]
     file_sets += [EpisodeFileSet(f"videos/{key}", info["video_path"], key) for key in video_keys]
+    return file_sets
+
+
+def groups_from_meta(dataset_root: Path, task_filter: str = "") -> list[WorkItem]:
+    """Every file group under `dataset_root` with a task containing `task_filter`."""
+    file_sets = episode_file_sets(dataset_root)
     columns = ["episode_index", "tasks"]
     columns += [f"{file_set.prefix}/{part}" for file_set in file_sets for part in ("chunk_index", "file_index")]
     episodes = pa.concat_tables(

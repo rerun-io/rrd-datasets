@@ -62,6 +62,7 @@ def test_round_trip_rebuilds_data_and_properties(dataset_root: Path, tmp_path: P
         assert props["task"] == [[TASKS[EPISODE_TASKS[episode]]]]
         assert props["instruction"] == [[INSTRUCTIONS[episode]]]
         assert props["robot_type"] == [["bi_yam_follower"]]
+        assert props["source_files"] == [[["data/chunk-000/file-000.parquet"]]]
         assert props["num_frames_mismatched"] == [[False]]
 
         for name in ("action", "observation.state"):
@@ -90,6 +91,11 @@ def test_downloaded_episode_has_one_video_sample_per_frame(tmp_path: Path) -> No
     store = RrdReader(str(path)).store()
     props = properties(store).to_pydict()
     assert props["num_frames_mismatched"] == [[False]]
+    # The data parquet, then one video file per camera; the conversion just read all of them.
+    ((files,),) = props["source_files"]
+    assert files[0].startswith("data/")
+    assert len(files) == 1 + len(CAMERAS)
+    assert all((LOCAL_DIR / file).is_file() for file in files), files
 
     for camera in CAMERAS:
         frames, nanos, _ = temporal_rows(store, f"/observation.images.{camera}", "VideoStream:sample")

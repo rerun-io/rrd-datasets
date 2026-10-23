@@ -26,7 +26,15 @@ import rerun as rr
 from rerun.chunk import Chunk, ChunkStore, LazyChunkStream, OptimizationProfile
 from rerun.experimental import LeRobotReader
 
-from molmoact2.episode_index import HF_REVISION, LOCAL_DIR, WorkItem, discover_local_groups, recording_id
+from molmoact2.episode_index import (
+    HF_REVISION,
+    LOCAL_DIR,
+    EpisodeFileSet,
+    WorkItem,
+    discover_local_groups,
+    episode_file_sets,
+    recording_id,
+)
 from rrd_datasets_common.paths import dataset_rrd_dir, layer_relpath
 
 LAYER = "base"
@@ -55,13 +63,18 @@ class SourceMeta:
 
     robot_type: str
     fps: int
-    episodes: pa.Table  # one row per episode, in episode order: episode_index, length, task, instruction
+    file_sets: list[EpisodeFileSet]  # the data parquets, then one per camera
+    # One row per episode, in episode order: episode_index, length, task, instruction, and each
+    # file set's chunk_index and file_index.
+    episodes: pa.Table
 
 
 def read_source_meta(dataset_root: Path) -> SourceMeta:
     """Read the dataset-wide and per-episode metadata under `dataset_root/meta`."""
     info = json.loads((dataset_root / "meta" / "info.json").read_text())
+    file_sets = episode_file_sets(dataset_root)
     columns = ["episode_index", "length", "tasks"]
+    columns += [f"{file_set.prefix}/{part}" for file_set in file_sets for part in ("chunk_index", "file_index")]
     episodes = pa.concat_tables(
         pq.read_table(path, columns=columns) for path in sorted(dataset_root.glob("meta/episodes/*/*.parquet"))
     ).sort_by("episode_index")
@@ -79,7 +92,18 @@ def read_source_meta(dataset_root: Path) -> SourceMeta:
     if not np.array_equal(annotated["episode_index"].to_numpy(), episodes["episode_index"].to_numpy()):
         raise ValueError(f"tasks_annotated.parquet in {dataset_root} does not list every episode once")
     episodes = episodes.append_column("instruction", annotated["task"])
-    return SourceMeta(str(info["robot_type"]), int(info["fps"]), episodes)
+    return SourceMeta(str(info["robot_type"]), int(info["fps"]), file_sets, episodes)
+
+
+def source_files(meta: SourceMeta, episode: int) -> list[str]:
+    """The repo paths of the episode's data parquet and of each camera's video file."""
+    return [
+        file_set.path(
+            int(meta.episodes[f"{file_set.prefix}/chunk_index"][episode].as_py()),
+            int(meta.episodes[f"{file_set.prefix}/file_index"][episode].as_py()),
+        )
+        for file_set in meta.file_sets
+    ]
 
 
 def num_frames_mismatched(store: ChunkStore, length: int) -> bool:
@@ -102,6 +126,7 @@ def properties_chunk(meta: SourceMeta, episode: int, frames_mismatched: bool) ->
             length=row["length"].to_numpy(),
             robot_type=[meta.robot_type],
             source_revision=[HF_REVISION],
+            source_files=pa.array([source_files(meta, episode)], type=pa.list_(pa.string())),
             num_frames_mismatched=np.array([frames_mismatched], dtype=np.bool_),
         ),
     )
