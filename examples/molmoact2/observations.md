@@ -119,7 +119,7 @@ Data bugs and inaccuracies are labels or statistics in the source that are wrong
 
 #### Episode 31749's video ends with part of a discarded take
 
-`two-demos` is the only episode whose video time windows disagree with its length.
+`two-demos` is an episode whose video time windows disagree with its length.
 They hold 2,832 frames on `top` and `left` and 2,658 on `right`, but the episode has only 1,619 data rows.
 All three cameras cut abruptly at frame 1,619, where the data rows end.
 After the cut, the video shows the last 40 s of another take of the same fold.
@@ -188,6 +188,9 @@ Across the dataset, 52 `Pack container` episodes share their exact instruction w
 The per-episode image `std` is 0 for every camera in all 32,246 episodes.
 The dataset-wide image `std` in `stats.json` (0.017 to 0.037) therefore only measures how much the episode means vary.
 The real pixel spread is far wider: the dataset-wide `q01` and `q99` are about 0.01–0.05 and 0.98–1.0.
+
+The likely cause is a LeRobot statistics bug, reported in [huggingface/lerobot#3682](https://github.com/huggingface/lerobot/issues/3682).
+It was fixed in v0.6.0 ([huggingface/lerobot#3697](https://github.com/huggingface/lerobot/pull/3697)), but the dataset was compiled before the fix.
 
 #### Statistics left over from the merge
 
