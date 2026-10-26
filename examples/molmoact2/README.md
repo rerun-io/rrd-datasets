@@ -150,6 +150,9 @@ Browse them in the Rerun Viewer:
 pixi run -e molmo rerun rerun+http://127.0.0.1:51234
 ```
 
+See [`notebook/filter_episodes.ipynb`](notebook/filter_episodes.ipynb) for a query that leaves out the short episodes and the episodes in which neither arm moves.
+Pick `.pixi/envs/molmo/bin/python` as its kernel, which includes the notebook viewer (`rerun-notebook`).
+
 ## Remote Convert Example on Modal
 
 The steps above run locally on the downloaded sample files.
@@ -356,4 +359,5 @@ The conversion is built on the [chunk processing API](https://rerun.io/docs/conc
 - `Pinhole` and `Transform3D` place the cameras in 3D (`camera_layer.py`).
 - `DynamicArchetype` logs the source's statistics under custom component names (`stats_layer.py`).
 - [`CatalogClient`](https://rerun.io/docs/concepts/query-and-transform/catalog-object-model) registers the episodes, the arm assets, and the blueprint (`catalog.py`).
+- The segment table and `filter_segments` select episodes by their recording properties (`notebook/filter_episodes.ipynb`).
 - The [blueprint](https://rerun.io/docs/concepts/visualization/blueprints) API builds the default layout (`blueprint.py`).
