@@ -76,6 +76,11 @@ def recording_id(episode_index: int) -> str:
     return f"episode_{episode_index:05d}"
 
 
+def episode_of(recording: str) -> int:
+    """The episode index in an `episode_NNNNN` recording id."""
+    return int(recording.removeprefix("episode_"))
+
+
 def episode_file_sets(dataset_root: Path) -> list[EpisodeFileSet]:
     """The data parquets, then one file set per camera in name order, as `info.json` describes them."""
     info = json.loads((dataset_root / "meta" / "info.json").read_text())
