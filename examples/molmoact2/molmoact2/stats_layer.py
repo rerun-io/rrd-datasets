@@ -110,16 +110,10 @@ def feature_chunk(stats: EpisodeStats, feature: str, episode: int) -> Chunk:
 
 def properties_chunk(stats: EpisodeStats, episode: int) -> Chunk:
     """The episode's arm spreads, as recording properties."""
-    row = slice(episode, episode + 1)
-    return Chunk.from_property(
-        PROPERTY,
-        rr.AnyValues(
-            left_joint_spread=stats.spreads["left_joint_spread"][row],
-            right_joint_spread=stats.spreads["right_joint_spread"][row],
-            left_gripper_spread=stats.spreads["left_gripper_spread"][row],
-            right_gripper_spread=stats.spreads["right_gripper_spread"][row],
-        ),
-    )
+    values = rr.AnyValues()
+    for name, spreads in stats.spreads.items():
+        values = values.with_component_from_data(name, spreads[episode : episode + 1])
+    return Chunk.from_property(PROPERTY, values)
 
 
 def write_layer(recording_id: str, stats: EpisodeStats, out_dir: Path) -> Path:

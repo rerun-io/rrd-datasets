@@ -346,18 +346,18 @@ The catalog shows them as `property:stats:<name>`.
 | `left_joint_spread`, `right_joint_spread`     | float64 | the largest spread of the arm's six joints, in radians |
 | `left_gripper_spread`, `right_gripper_spread` | float64 | the gripper's spread, from 0 (closed) to 1 (open)      |
 
-In all but 25 of the dataset's 64,492 arms, the joint spread is below 0.01 rad or above 1 rad, so any threshold in between gives nearly the same split.
+Across the 32,246 episodes, all but 25 of the 64,492 joint spreads (one per arm) are below 0.01 rad or above 1 rad, so any threshold in between gives nearly the same split.
 
 ## Rerun APIs demonstrated
 
 The conversion is built on the [chunk processing API](https://rerun.io/docs/concepts/logging-and-ingestion/chunk-processing-api) and [lenses](https://rerun.io/docs/concepts/query-and-transform/lenses).
 
 - [`LeRobotReader`](https://ref.rerun.io/docs/python/stable/experimental/#rerun.experimental.LeRobotReader) reads each episode of the [LeRobot v3](https://huggingface.co/docs/lerobot/en/lerobot-dataset-v3) source (`base_layer.py`).
-- `LazyChunkStream.map` adds the `timestamp` timeline (`base_layer.py`).
-- `Chunk.from_property` logs the episode metadata as recording properties (`base_layer.py`).
-- `rerun.urdf.UrdfTree` poses the arms by forward kinematics, as in the [`robot_data_preprocessing` example](https://github.com/rerun-io/rerun/tree/main/examples/python/robot_data_preprocessing) (`urdf_layer.py`).
-- `Pinhole` and `Transform3D` place the cameras in 3D (`camera_layer.py`).
-- `DynamicArchetype` logs the source's statistics under custom component names (`stats_layer.py`).
+- [`LazyChunkStream.map`](https://ref.rerun.io/docs/python/stable/chunk/#rerun.chunk.LazyChunkStream.map) adds the `timestamp` timeline (`base_layer.py`).
+- [`Chunk.from_property`](https://ref.rerun.io/docs/python/stable/chunk/#rerun.chunk.Chunk.from_property) logs the episode metadata as recording properties (`base_layer.py`).
+- [`rerun.urdf.UrdfTree`](https://ref.rerun.io/docs/python/stable/urdf/#rerun.urdf.UrdfTree) poses the arms by forward kinematics, as in the [`robot_data_preprocessing` example](https://github.com/rerun-io/rerun/tree/main/examples/python/robot_data_preprocessing) (`urdf_layer.py`).
+- [`Pinhole`](https://rerun.io/docs/reference/types/archetypes/pinhole) and [`Transform3D`](https://rerun.io/docs/reference/types/archetypes/transform3d) place the cameras in 3D (`camera_layer.py`).
+- [`DynamicArchetype`](https://ref.rerun.io/docs/python/stable/rerun/#rerun.DynamicArchetype) logs the source's statistics under [custom component names](https://rerun.io/docs/howto/logging-and-ingestion/custom-data) (`stats_layer.py`).
 - [`CatalogClient`](https://rerun.io/docs/concepts/query-and-transform/catalog-object-model) registers the episodes, the arm assets, and the blueprint (`catalog.py`).
-- The segment table and `filter_segments` select episodes by their recording properties (`notebook/filter_episodes.ipynb`).
+- The [segment table](https://ref.rerun.io/docs/python/stable/catalog/#rerun.catalog.DatasetEntry.segment_table) and [`filter_segments`](https://ref.rerun.io/docs/python/stable/catalog/#rerun.catalog.DatasetEntry.filter_segments) select episodes by their recording properties (`notebook/filter_episodes.ipynb`).
 - The [blueprint](https://rerun.io/docs/concepts/visualization/blueprints) API builds the default layout (`blueprint.py`).

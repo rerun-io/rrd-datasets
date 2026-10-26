@@ -135,13 +135,14 @@ def convert_group_remote(item: WorkItem, layers: list[str], overwrite: bool, met
     if not any(todo.values()):
         print(f"done: {item.group_id} (every selected layer is in the bucket)")
         return
-    skipped = sum(not layers for layers in todo.values())
+    skipped = sum(not missing for missing in todo.values())
 
     # The stats layer reads `meta/` alone. Every other layer derives from the episode's base layer,
     # which needs the group's data and video files.
-    stats_todo = [recording_id for recording_id, layers in todo.items() if stats_layer.LAYER in layers]
+    stats_todo = [recording_id for recording_id, missing in todo.items() if stats_layer.LAYER in missing]
     base_todo = {
-        recording_id: [layer for layer in layers if layer != stats_layer.LAYER] for recording_id, layers in todo.items()
+        recording_id: [layer for layer in missing if layer != stats_layer.LAYER]
+        for recording_id, missing in todo.items()
     }
     files = item.files if any(base_todo.values()) else ()
 
