@@ -83,11 +83,14 @@ The measured joints go past the limits of i2rt's YAM URDF by up to 0.05 rad, and
 
 ## Episode length and motion
 
-8 episodes are shorter than 1 s, and 20 are shorter than 3 s.
+Across the whole dataset, 8 episodes are shorter than 1 s, and 20 are shorter than 3 s.
 
-Judging by the per-episode joint ranges, some episodes have little motion.
-In 84 episodes only the right arm moves more than 0.1 rad, in 30 only the left arm, and in 43 neither arm.
-`no-motion` is one of the 43.
+The per-episode statistics in `meta/episodes/chunk-000/file-000.parquet` show that some episodes have little motion.
+Out of all 32,246 episodes, only the right arm moves more than 0.1 rad in 84 episodes, and only the left arm in 30 episodes.
+Neither arm moves in 43 episodes.
+An arm counts as moving when one of its six joints has a range of `observation.state` from `q01` to `q99` over 0.1 rad.
+This cutoff is somewhat arbitrary.
+The `no-motion` episode is one of the 43.
 
 ## Tasks and instructions
 
