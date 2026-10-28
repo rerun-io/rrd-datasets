@@ -11,7 +11,7 @@ from botocore.exceptions import NoCredentialsError
 
 from molmoact2.episode_index import WorkItem, recording_id
 from molmoact2.layers import LAYERS
-from rrd_datasets_common.modal_jobs.hf_bucket import HF_S3_KEYS
+from rrd_datasets_common.hf_bucket import HF_S3_KEYS
 from rrd_datasets_common.paths import layer_relpath
 
 # Importing the launcher builds Modal objects, which read the HF token and the HF S3 credentials.

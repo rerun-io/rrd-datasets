@@ -14,8 +14,8 @@ from botocore.exceptions import ClientError, NoCredentialsError
 
 from hiw_500.episode_index import WorkItem
 from hiw_500.layers import LAYERS
-from rrd_datasets_common.modal_jobs.hf_bucket import HF_S3_KEYS
-from rrd_datasets_common.modal_jobs.store import s3_existing_keys
+from rrd_datasets_common.bucket import s3_existing_keys
+from rrd_datasets_common.hf_bucket import HF_S3_KEYS
 from rrd_datasets_common.paths import layer_relpath
 
 if TYPE_CHECKING:

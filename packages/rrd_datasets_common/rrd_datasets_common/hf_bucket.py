@@ -1,5 +1,5 @@
 """
-HF Storage Bucket access for Modal jobs: a boto3 client on the S3-compatible gateway.
+HF Storage Bucket access: a boto3 client on the S3-compatible gateway.
 
 Namespaces are arguments rather than constants, so this file carries nothing private or specific
 to one dataset. The HF S3 credentials ride in `HF_BUCKET_*` variables.
@@ -36,9 +36,10 @@ HF_TRANSFER_CONFIG = TransferConfig(
 )
 
 
-def missing_hf_s3_keys() -> list[str]:
-    """The HF S3 credential variables not set in the caller's environment."""
-    return [key for key in HF_S3_KEYS if not os.environ.get(key)]
+def require_hf_s3_keys() -> None:
+    """Stop unless the caller's environment sets every HF S3 credential variable."""
+    if missing := [key for key in HF_S3_KEYS if not os.environ.get(key)]:
+        raise SystemExit(f"Missing HF S3 credentials: {', '.join(missing)} — generate them from an HF access token.")
 
 
 def gateway_client(namespace: str) -> S3Client:
@@ -65,7 +66,7 @@ def gateway_client(namespace: str) -> S3Client:
 
 def check_bucket(namespace: str, bucket: str) -> None:
     """
-    Stop the launch unless `bucket` exists in `namespace`.
+    Stop unless `bucket` exists in `namespace`.
 
     A worker uploads only after building its layers, so a missing bucket would burn a container's
     build time per episode before failing. One listing on the launcher catches it first.

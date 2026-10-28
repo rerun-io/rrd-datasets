@@ -10,7 +10,7 @@ import pytest
 from botocore.exceptions import ClientError, NoCredentialsError
 
 from abc_130k.episode_index import WorkItem
-from rrd_datasets_common.modal_jobs.store import s3_existing_keys
+from rrd_datasets_common.bucket import s3_existing_keys
 
 if TYPE_CHECKING:
     from mypy_boto3_s3.client import S3Client

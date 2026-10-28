@@ -18,7 +18,8 @@ There are two kinds of job:
 | Pending when | a selected layer is missing from the bucket                   | the input layer is registered and the derived layer is not |
 
 `references/project-layout.md` defines a [unit] under "Terms", and its "Storage" section says where the output goes.
-Reuse the shared code in `rrd_datasets_common/modal_jobs/`, which builds the worker image and handles both storage backends.
+Reuse the shared code in `rrd_datasets_common/modal_jobs/`, which builds the worker image and sets up each storage backend on the workers.
+The bucket access the launcher needs (`check_bucket`, `launcher_client`, `s3_existing_keys`, …) is in `rrd_datasets_common/bucket.py`.
 
 Each kind of job below ends with a skeleton that leaves out the imports and constants.
 Adapt it to the dataset instead of copying it whole.
