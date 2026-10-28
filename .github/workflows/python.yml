@@ -24,4 +24,8 @@ jobs:
 
       - run: pixi run py-lint-all
 
+      - run: pixi run nb-strip-check
+
+      - run: git lfs fsck --pointers
+
       - run: pixi run tests-all
