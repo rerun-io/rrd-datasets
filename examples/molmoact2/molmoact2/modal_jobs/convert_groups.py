@@ -2,9 +2,10 @@
 Convert MolmoAct2 file groups to RRDs on Modal, one worker per file group.
 
 The launcher builds the file groups from the episode index, drops the ones already in the bucket,
-and starts a worker for each of the rest. A worker downloads `meta/` and its group's files once,
-builds the selected layers of every episode, and uploads each rrd under its local relative path,
-so a bucket synced into `rrds/molmoact2/` registers without renaming.
+and starts a worker for each of the rest. A worker downloads `meta/` and its group's files once
+(only `meta/` when it builds just the stats layer), builds the selected layers of every episode, and
+uploads each rrd under its local relative path, so a bucket synced into `rrds/molmoact2/` registers
+without renaming.
 
 Run:  pixi run -e molmo convert-on-modal --help
 """
@@ -46,6 +47,7 @@ MAX_CONTAINERS = 30
 image = image_from_pyproject(
     REPO_ROOT / "pyproject.toml",
     extras=["cloud"],
+    apt=["ffmpeg"],  # `LeRobotReader` re-encodes the start of a video window that begins on a delta frame
     env={**HF_HUB_ENV, **worker_env()},
     files={"urdf": URDF_DIR_IN_IMAGE},
     python_sources=("molmoact2", "rrd_datasets_common"),
@@ -112,7 +114,7 @@ def convert_group_remote(item: WorkItem, layers: list[str], overwrite: bool, met
     from huggingface_hub import hf_hub_download
     from rerun.experimental import LeRobotReader
 
-    from molmoact2 import base_layer, urdf_layer
+    from molmoact2 import base_layer, stats_layer, urdf_layer
 
     print("creating storage client…")
     s3 = worker_client()
@@ -123,13 +125,22 @@ def convert_group_remote(item: WorkItem, layers: list[str], overwrite: bool, met
     if not any(todo.values()):
         print(f"done: {item.group_id} (every selected layer is in the bucket)")
         return
+    skipped = sum(not missing for missing in todo.values())
+
+    # The stats layer reads `meta/` alone. Every other layer derives from the episode's base layer,
+    # which needs the group's data and video files.
+    stats_todo = [recording_id for recording_id, missing in todo.items() if stats_layer.LAYER in missing]
+    base_todo = {
+        recording_id: [layer for layer in missing if layer != stats_layer.LAYER]
+        for recording_id, missing in todo.items()
+    }
+    files = item.files if any(base_todo.values()) else ()
 
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         source = root / "source"
-        # Every layer derives from the base layer, so the worker reads the source whatever the selection.
-        print(f"downloading {len(meta)} meta and {len(item.files)} data and video files of {item.group_id}…")
-        for filename in [*meta, *item.files]:
+        print(f"downloading {len(meta)} meta and {len(files)} data and video files of {item.group_id}…")
+        for filename in [*meta, *files]:
             hf_hub_download(
                 repo_id=HF_REPO_ID,
                 repo_type="dataset",
@@ -138,24 +149,33 @@ def convert_group_remote(item: WorkItem, layers: list[str], overwrite: bool, met
                 local_dir=str(source),
             )
 
-        reader = LeRobotReader(source)
-        source_meta = base_layer.read_source_meta(source)
-        urdfs = urdf_layer.load_urdfs()
         out_dir = root / "rrds"
-        uploaded = skipped = 0
-        for episode, recording_id in zip(item.episodes, item.recording_ids, strict=True):
-            if not todo[recording_id]:
-                skipped += 1
-                continue
-            print(f"building {', '.join(todo[recording_id])}: {recording_id}…")
-            base_rrd = base_layer.convert_episode(episode, reader, source_meta, out_dir)
-            for layer in todo[recording_id]:
-                rrd = base_rrd if layer == "base" else _build_derived_layer(layer, base_rrd, urdfs, out_dir)
-                upload_file(s3, str(rrd), layer_dest(layer, recording_id))
-                if rrd != base_rrd:
-                    rrd.unlink()
+        uploaded = 0
+        if stats_todo:
+            print(f"building {stats_layer.LAYER}: {len(stats_todo)} episode(s)…")
+            stats = stats_layer.read_episode_stats(source)
+            for recording_id in stats_todo:
+                rrd = stats_layer.write_layer(recording_id, stats, out_dir)
+                upload_file(s3, str(rrd), layer_dest(stats_layer.LAYER, recording_id))
+                rrd.unlink()
                 uploaded += 1
-            base_rrd.unlink()
+
+        if files:
+            reader = LeRobotReader(source)
+            source_meta = base_layer.read_source_meta(source)
+            urdfs = urdf_layer.load_urdfs()
+            for episode, recording_id in zip(item.episodes, item.recording_ids, strict=True):
+                if not base_todo[recording_id]:
+                    continue
+                print(f"building {', '.join(base_todo[recording_id])}: {recording_id}…")
+                base_rrd = base_layer.convert_episode(episode, reader, source_meta, out_dir)
+                for layer in base_todo[recording_id]:
+                    rrd = base_rrd if layer == "base" else _build_derived_layer(layer, base_rrd, urdfs, out_dir)
+                    upload_file(s3, str(rrd), layer_dest(layer, recording_id))
+                    if rrd != base_rrd:
+                        rrd.unlink()
+                    uploaded += 1
+                base_rrd.unlink()
         print(f"done: {item.group_id} ({uploaded} rrd(s) uploaded, {skipped} episode(s) already complete)")
 
 
@@ -246,7 +266,8 @@ def main(*arglist: str) -> None:
         print(f"Nothing to do -> {DATASET_PREFIX}")
         return
 
-    print(f"Layers: {', '.join(layers)}. Each worker downloads its whole file group.")
+    download = "only meta/" if layers == ["stats"] else "its whole file group"
+    print(f"Layers: {', '.join(layers)}. Each worker downloads {download}.")
     print(f"Modal worker request: cpu={CPU_REQUEST}, memory={MEMORY_REQUEST} MiB")
     if not get_token():
         print("note: no HuggingFace token, so the workers download anonymously")
