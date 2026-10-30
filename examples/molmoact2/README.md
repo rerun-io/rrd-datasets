@@ -151,7 +151,8 @@ pixi run -e molmo rerun rerun+http://127.0.0.1:51234
 ```
 
 See [`notebook/filter_episodes.ipynb`](notebook/filter_episodes.ipynb) for a query that leaves out the short episodes and the episodes in which neither arm moves.
-Pick `.pixi/envs/molmo/bin/python` as its kernel, which includes the notebook viewer (`rerun-notebook`).
+See [`notebook/compare_arm_speed.ipynb`](notebook/compare_arm_speed.ipynb) for queries that compare how fast the arms move in each episode and each data file.
+Pick `.pixi/envs/molmo/bin/python` as their kernel, which includes the notebook viewer (`rerun-notebook`).
 
 ## Remote Convert Example on Modal
 
