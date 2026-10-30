@@ -33,6 +33,11 @@ The [Modal](https://modal.com/)-based [remote version](#remote-convert-example-o
 This example does not redistribute the dataset.
 Data is downloaded at runtime from the original Hugging Face repo.
 
+### Converted `.rrd` Dataset
+
+Converted recordings are published at [`rerun/molmoact2`](https://huggingface.co/buckets/rerun/molmoact2) — download them directly if you only want the `.rrd` data.
+They are built from source revision [`e9f21ae1`](https://huggingface.co/datasets/allenai/MolmoAct2-BimanualYAM-Dataset/tree/e9f21ae15074330839f2ac25ed4b49d76dfa1f9c), dated 2026-06-11, with rerun-sdk 0.38.1.
+
 ## Local Runs
 
 The source data revision is pinned in this example.
