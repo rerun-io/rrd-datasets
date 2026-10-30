@@ -179,6 +179,13 @@ The metadata window is one frame off and starts episode 12051 at 45594, so it al
 
 ![Frames 45592 to 45596 of the left camera: a stray frame at 45594 between 12050 and 12051](images/window-12050-12051-left.png)
 
+#### The arms move faster in some episodes
+
+In episodes 24051–24090, such as 24071, the arms seem to move faster than in the episodes before them.
+Per frame, the arm joints move about twice as far as in episodes 23782–24050.
+The timestamps cannot show whether these episodes were recorded at a different rate, because they appear to be computed from the frame index and the dataset-wide 30 fps.
+We found no proof in the data but still report this as a potential issue: some of these episodes might have been recorded at a lower rate than 30 fps.
+
 #### Some `Pack container` episodes show clothes folding
 
 The episodes 7294–7317 are labeled `Pack container`.
