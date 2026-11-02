@@ -1,8 +1,8 @@
 # MolmoAct2-BimanualYAM
 
 [MolmoAct2-BimanualYAM](https://huggingface.co/datasets/allenai/MolmoAct2-BimanualYAM-Dataset) is a bimanual manipulation dataset recorded on two I2RT YAM arms: 32,246 teleoperated episodes (about 704 hours) with three cameras, in the LeRobot v3 format.
-This example converts each episode into three Rerun recordings (`.rrd`).
-One recording corresponds to one layer: the episode as recorded, the two posed arms, and the three cameras placed in the scene.
+This example converts each episode into four Rerun recordings (`.rrd`).
+One recording corresponds to one layer: the episode as recorded, the two posed arms, the three cameras placed in the scene, and the source's statistics of the episode.
 
 **Status: incubating.** The conversion works end to end, but the converted dataset is not published yet.
 
@@ -32,6 +32,11 @@ The [Modal](https://modal.com/)-based [remote version](#remote-convert-example-o
 
 This example does not redistribute the dataset.
 Data is downloaded at runtime from the original Hugging Face repo.
+
+### Converted `.rrd` Dataset
+
+Converted recordings are published at [`rerun/molmoact2`](https://huggingface.co/buckets/rerun/molmoact2) — download them directly if you only want the `.rrd` data.
+They are built from source revision [`e9f21ae1`](https://huggingface.co/datasets/allenai/MolmoAct2-BimanualYAM-Dataset/tree/e9f21ae15074330839f2ac25ed4b49d76dfa1f9c), dated 2026-06-11, with rerun-sdk 0.38.1.
 
 ## Local Runs
 
@@ -78,18 +83,20 @@ pixi run -e molmo convert-base --from 800 --to 809   # downloaded episodes 800 t
 
 The recordings are written to `rrds/molmoact2/base/`.
 
-Then build the urdf and cameras layers from the base recordings.
-The urdf layer poses the two arms, and the cameras layer places the three cameras in the scene.
-Both keep each episode's recording id:
+Then build the urdf, cameras, and stats layers for the converted episodes.
+The urdf layer poses the two arms, the cameras layer places the three cameras in the scene, and the stats layer holds the source's statistics of the episode.
+All three keep each episode's recording id:
 
 ```bash
 pixi run -e molmo convert-urdf                                             # every recording under rrds/molmoact2/base/
 pixi run -e molmo convert-urdf rrds/molmoact2/base/episode_00800.rrd       # one recording
 pixi run -e molmo convert-cameras                                          # every recording under rrds/molmoact2/base/
 pixi run -e molmo convert-cameras rrds/molmoact2/base/episode_00800.rrd    # one recording
+pixi run -e molmo convert-stats                                            # every recording under rrds/molmoact2/base/
+pixi run -e molmo convert-stats rrds/molmoact2/base/episode_00800.rrd      # one recording
 ```
 
-The layers are written to `rrds/molmoact2/urdf/` and `rrds/molmoact2/cameras/`, and the arm model is written once for the whole dataset, as one asset per arm: `rrds/molmoact2/assets/urdf-model-{left,right}.rrd`.
+The layers are written to `rrds/molmoact2/urdf/`, `rrds/molmoact2/cameras/`, and `rrds/molmoact2/stats/`, and the arm model is written once for the whole dataset, as one asset per arm: `rrds/molmoact2/assets/urdf-model-{left,right}.rrd`.
 See [More about Layers](#more-about-layers) for what each layer contains.
 
 ### 3. View
@@ -147,6 +154,10 @@ Browse them in the Rerun Viewer:
 ```bash
 pixi run -e molmo rerun rerun+http://127.0.0.1:51234
 ```
+
+See [`notebook/filter_episodes.ipynb`](notebook/filter_episodes.ipynb) for a query that leaves out the short episodes and the episodes in which neither arm moves.
+See [`notebook/compare_arm_speed.ipynb`](notebook/compare_arm_speed.ipynb) for queries that compare how fast the arms move in each episode and each data file.
+Pick `.pixi/envs/molmo/bin/python` as their kernel, which includes the notebook viewer (`rerun-notebook`).
 
 ## Remote Convert Example on Modal
 
@@ -218,9 +229,13 @@ pixi run -e molmo convert-on-modal --layers base --limit 0
 
 # Rebuild layers after changing them:
 pixi run -e molmo convert-on-modal --layers urdf,cameras --limit 0 --overwrite
+
+# Add the stats layer to a converted bucket:
+pixi run -e molmo convert-on-modal --layers stats --limit 0
 ```
 
-Every layer derives from the base layer, so a worker downloads its whole file group whatever the selection.
+The stats layer reads only `meta/`, so `--layers stats` downloads no data or video file.
+Every other layer derives from the base layer, so selecting any of them makes a worker download its whole file group.
 
 ### 4. Upload the blueprint
 
@@ -250,21 +265,25 @@ See [observations.md](observations.md) for the full survey.
 The base layer keeps each episode as `LeRobotReader` emits it: one entity per feature, named after the feature, with the values and the video samples unchanged.
 It adds two things: a `timestamp` timeline for the source column the reader drops, and the episode's recording properties.
 The urdf layer and the model assets add the two posed arms, computed from `/observation.state`.
+The stats layer adds the source's statistics of each episode, and how far each arm moves.
 
-| Source                                                       | Entity path                                                 | Component / archetype                       | Layer   | Notes                                                                                      |
-| ------------------------------------------------------------ | ----------------------------------------------------------- | ------------------------------------------- | ------- | ------------------------------------------------------------------------------------------ |
-| `action` [14]                                                | `/action`                                                   | `Scalars`, static `SeriesLines:names`       | base    | commanded joints in radians, grippers from 0 (closed) to 1 (open), named as in `info.json` |
-| `observation.state` [14]                                     | `/observation.state`                                        | `Scalars`, static `SeriesLines:names`       | base    | measured joints, in the same units                                                         |
-| `task_index`                                                 | `/task`                                                     | `TextDocument`                              | base    | the task text, repeated on every frame                                                     |
-| `observation.images.{top,left,right}`                        | `/observation.images.{top,left,right}`                      | `VideoStream`                               | base    | the AV1 samples of the episode, copied without re-encoding                                 |
-| `frame_index`                                                | `frame_index` timeline                                      | —                                           | base    | the frame number within the episode                                                        |
-| `timestamp`                                                  | `timestamp` timeline                                        | —                                           | base    | `float32(frame_index / 30)` seconds, as whole nanoseconds                                  |
-| `meta/episodes`, `meta/tasks_annotated.parquet`, `info.json` | segment properties                                          | —                                           | base    | see [Base layer](#base-layer)                                                              |
-| `yam.urdf` meshes and joints                                 | `/urdf_{left,right}/yam/**`, `/urdf_{left,right}/tf_static` | `Asset3D`, `Transform3D`                    | asset   | static; one model rrd per arm, 3.3 MB each, once per dataset                               |
-| `observation.state` [14] → forward kinematics                | `/urdf_{left,right}/transforms`                             | `Transform3D`                               | urdf    | 8 joints per arm per frame, between named frames                                           |
-| estimated arm placement                                      | `/urdf_{left,right}/world_from_base`                        | `Transform3D`                               | urdf    | static; see [URDF layer](#urdf-layer)                                                      |
-| i2rt's wrist camera mount                                    | `/observation.images.{left,right}`                          | `Transform3D`, `Pinhole`, `CoordinateFrame` | cameras | static; on the gripper flange, so the video moves with the arm                             |
-| estimated top camera pose                                    | `/observation.images.top`                                   | `Transform3D`, `Pinhole`, `CoordinateFrame` | cameras | static; see [Cameras layer](#cameras-layer)                                                |
+| Source                                                              | Entity path                                                 | Component / archetype                       | Layer   | Notes                                                                                                                                                                                            |
+| ------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `action` [14]                                                       | `/action`                                                   | `Scalars`, static `SeriesLines:names`       | base    | commanded joints in radians, grippers from 0 (closed) to 1 (open), named as in `info.json`                                                                                                       |
+| `observation.state` [14]                                            | `/observation.state`                                        | `Scalars`, static `SeriesLines:names`       | base    | measured joints, in the same units                                                                                                                                                               |
+| `task_index`                                                        | `/task`                                                     | `TextDocument`                              | base    | the task text, repeated on every frame                                                                                                                                                           |
+| `observation.images.{top,left,right}`                               | `/observation.images.{top,left,right}`                      | `VideoStream`                               | base    | the AV1 samples of the episode, copied without re-encoding, except that a window starting on a delta frame has its frames up to the next keyframe re-encoded (see `keyframe_misaligned_cameras`) |
+| `frame_index`                                                       | `frame_index` timeline                                      | —                                           | base    | the frame number within the episode                                                                                                                                                              |
+| `timestamp`                                                         | `timestamp` timeline                                        | —                                           | base    | `float32(frame_index / 30)` seconds, as whole nanoseconds                                                                                                                                        |
+| `meta/episodes`, `meta/tasks_annotated.parquet`, `info.json`        | segment properties                                          | —                                           | base    | see [Base layer](#base-layer)                                                                                                                                                                    |
+| `yam.urdf` meshes and joints                                        | `/urdf_{left,right}/yam/**`, `/urdf_{left,right}/tf_static` | `Asset3D`, `Transform3D`                    | asset   | static; one model rrd per arm, 3.3 MB each, once per dataset                                                                                                                                     |
+| `observation.state` [14] → forward kinematics                       | `/urdf_{left,right}/transforms`                             | `Transform3D`                               | urdf    | 8 joints per arm per frame, between named frames                                                                                                                                                 |
+| estimated arm placement                                             | `/urdf_{left,right}/world_from_base`                        | `Transform3D`                               | urdf    | static; see [URDF layer](#urdf-layer)                                                                                                                                                            |
+| i2rt's wrist camera mount                                           | `/observation.images.{left,right}`                          | `Transform3D`, `Pinhole`, `CoordinateFrame` | cameras | static; on the gripper flange, so the video moves with the arm                                                                                                                                   |
+| estimated top camera pose                                           | `/observation.images.top`                                   | `Transform3D`, `Pinhole`, `CoordinateFrame` | cameras | static; see [Cameras layer](#cameras-layer)                                                                                                                                                      |
+| `meta/episodes` statistics of `observation.state`, `action`         | `/stats/observation.state`, `/stats/action`                 | `FeatureStats`                              | stats   | static; one value (`count`) is the number of frames, every other statistic has 14 values, and the 14 element names come from `info.json`                                                         |
+| `meta/episodes` statistics of `observation.images.{top,left,right}` | `/stats/observation.images.{top,left,right}`                | `FeatureStats`                              | stats   | static; one value (`count`) is the number of frames the source sampled, and every other statistic has one value per RGB channel                                                                  |
+| `meta/episodes` `q01` and `q99` of `action`                         | segment properties                                          | —                                           | stats   | see [Stats layer](#stats-layer)                                                                                                                                                                  |
 
 ### Round trip test (LeRobot → RRD → LeRobot)
 
@@ -286,15 +305,20 @@ It computes each value as `float32(frame_index / 30)`, which also gives a time t
 The source `timestamp` column holds the same values: its per-episode statistics in `meta/episodes` (count, min, max, mean) match `frame_index / 30` in all 32,246 episodes of the pinned revision.
 The episode's metadata is logged as recording properties, which the catalog shows as columns to filter, sort, and search on:
 
-| Property             | Type   | Source                                                                                                                                                      |
-| -------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `episode_index`      | int64  | `meta/episodes`                                                                                                                                             |
-| `task`               | string | `meta/episodes`, where the source stores a one-element list                                                                                                 |
-| `instruction`        | string | `meta/tasks_annotated.parquet`                                                                                                                              |
-| `length`             | int64  | `meta/episodes`, in frames                                                                                                                                  |
-| `robot_type`         | string | `meta/info.json`                                                                                                                                            |
-| `source_revision`    | string | the pinned dataset revision                                                                                                                                 |
-| `has_frame_mismatch` | bool   | true when the state, the action, or a camera holds a number of frames other than `length` (see [observations.md](observations.md#edge-cases-and-data-bugs)) |
+| Property                      | Type            | Source                                                                                                                                                                      |
+| ----------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `episode_index`               | int64           | `meta/episodes`                                                                                                                                                             |
+| `task`                        | string          | `meta/episodes`, where the source stores a one-element list                                                                                                                 |
+| `instruction`                 | string          | `meta/tasks_annotated.parquet`                                                                                                                                              |
+| `length`                      | int64           | `meta/episodes`, in frames                                                                                                                                                  |
+| `robot_type`                  | string          | `meta/info.json`                                                                                                                                                            |
+| `source_revision`             | string          | the pinned dataset revision                                                                                                                                                 |
+| `source_files`                | list of strings | the episode's data parquet, then the video file of each camera (left, right, top), as paths in the source repo, e.g. `videos/observation.images.top/chunk-000/file-823.mp4` |
+| `num_frames_mismatched`       | bool            | true when the state, the action, or a camera holds a number of frames other than `length` (see [observations.md](observations.md#edge-cases-and-data-bugs))                 |
+| `keyframe_misaligned_cameras` | list of strings | the cameras (left, right, top) whose video window disagrees with the keyframes of its file: the window starts on a delta frame, or its first two frames are keyframes       |
+
+`keyframe_misaligned_cameras` comes from the keyframes alone.
+A window can be shifted in a way the keyframes do not show, and a flagged window's picture can still look aligned.
 
 ### URDF layer
 
@@ -312,14 +336,34 @@ The wrist mounts come from i2rt's station model, and the top camera's pose and a
 > The sample intrinsics posted in the issue are for 640×480, so they do not apply to the 640×360 videos.
 > Our hand-fitted values match its arm spacing (0.50 m) and top camera tilt (72°).
 
+### Stats layer
+
+`molmoact2/stats_layer.py` — The source's statistics of the episode, from `meta/episodes`, and how far each arm moves.
+
+The state, the action, and each camera get a static `FeatureStats` entity under `/stats/`, with one component per statistic: `min`, `max`, `mean`, `std`, `q01`, `q10`, `q50`, `q90`, `q99`, and `count`.
+The values are copied as the source stores them, errors included (see [observations.md](observations.md#statistics)).
+The statistics of `timestamp`, `frame_index`, `episode_index`, `index`, and `task_index` are left out.
+
+Four recording properties hold each arm's spread: `q99 − q01` of its commanded `action` over the episode.
+The catalog shows them as `property:stats:<name>`.
+
+| Property                                      | Type    | Value                                                  |
+| --------------------------------------------- | ------- | ------------------------------------------------------ |
+| `left_joint_spread`, `right_joint_spread`     | float64 | the largest spread of the arm's six joints, in radians |
+| `left_gripper_spread`, `right_gripper_spread` | float64 | the gripper's spread, from 0 (closed) to 1 (open)      |
+
+Across the 32,246 episodes, all but 25 of the 64,492 joint spreads (one per arm) are below 0.01 rad or above 1 rad, so any threshold in between gives nearly the same split.
+
 ## Rerun APIs demonstrated
 
 The conversion is built on the [chunk processing API](https://rerun.io/docs/concepts/logging-and-ingestion/chunk-processing-api) and [lenses](https://rerun.io/docs/concepts/query-and-transform/lenses).
 
 - [`LeRobotReader`](https://ref.rerun.io/docs/python/stable/experimental/#rerun.experimental.LeRobotReader) reads each episode of the [LeRobot v3](https://huggingface.co/docs/lerobot/en/lerobot-dataset-v3) source (`base_layer.py`).
-- `LazyChunkStream.map` adds the `timestamp` timeline (`base_layer.py`).
-- `Chunk.from_property` logs the episode metadata as recording properties (`base_layer.py`).
-- `rerun.urdf.UrdfTree` poses the arms by forward kinematics, as in the [`robot_data_preprocessing` example](https://github.com/rerun-io/rerun/tree/main/examples/python/robot_data_preprocessing) (`urdf_layer.py`).
-- `Pinhole` and `Transform3D` place the cameras in 3D (`camera_layer.py`).
+- [`LazyChunkStream.map`](https://ref.rerun.io/docs/python/stable/chunk/#rerun.chunk.LazyChunkStream.map) adds the `timestamp` timeline (`base_layer.py`).
+- [`Chunk.from_property`](https://ref.rerun.io/docs/python/stable/chunk/#rerun.chunk.Chunk.from_property) logs the episode metadata as recording properties (`base_layer.py`).
+- [`rerun.urdf.UrdfTree`](https://ref.rerun.io/docs/python/stable/urdf/#rerun.urdf.UrdfTree) poses the arms by forward kinematics, as in the [`robot_data_preprocessing` example](https://github.com/rerun-io/rerun/tree/main/examples/python/robot_data_preprocessing) (`urdf_layer.py`).
+- [`Pinhole`](https://rerun.io/docs/reference/types/archetypes/pinhole) and [`Transform3D`](https://rerun.io/docs/reference/types/archetypes/transform3d) place the cameras in 3D (`camera_layer.py`).
+- [`DynamicArchetype`](https://ref.rerun.io/docs/python/stable/rerun/#rerun.DynamicArchetype) logs the source's statistics under [custom component names](https://rerun.io/docs/howto/logging-and-ingestion/custom-data) (`stats_layer.py`).
 - [`CatalogClient`](https://rerun.io/docs/concepts/query-and-transform/catalog-object-model) registers the episodes, the arm assets, and the blueprint (`catalog.py`).
+- The [segment table](https://ref.rerun.io/docs/python/stable/catalog/#rerun.catalog.DatasetEntry.segment_table) and [`filter_segments`](https://ref.rerun.io/docs/python/stable/catalog/#rerun.catalog.DatasetEntry.filter_segments) select episodes by their recording properties (`notebook/filter_episodes.ipynb`).
 - The [blueprint](https://rerun.io/docs/concepts/visualization/blueprints) API builds the default layout (`blueprint.py`).

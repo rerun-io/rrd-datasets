@@ -1,19 +1,20 @@
 # MolmoAct2 Observations
 
-These findings come from surveying a subset of the source episodes, with a focus on details that aren't covered in the [dataset card](https://huggingface.co/datasets/allenai/MolmoAct2-BimanualYAM-Dataset).
+These findings come from surveying the source dataset, with a focus on details that aren't covered in the [dataset card](https://huggingface.co/datasets/allenai/MolmoAct2-BimanualYAM-Dataset).
 We're sharing them because they may be useful to others working with the dataset, especially when validating assumptions or building data pipelines around it.
 
 The source revision is [`e9f21ae1`](https://huggingface.co/datasets/allenai/MolmoAct2-BimanualYAM-Dataset/tree/e9f21ae15074330839f2ac25ed4b49d76dfa1f9c).
 The survey downloaded 15 file groups, runs of consecutive episodes whose files hold no other episode (see [A note on episodes and files](README.md#a-note-on-episodes-and-files)).
 The checks on `meta/` cover every episode.
+We also checked the index of all 5,860 video files.
 
-|             | Surveyed  | Full dataset |
-| ----------- | --------- | ------------ |
-| File groups | 15        | 786          |
-| Episodes    | 283       | 32,246       |
-| Tasks       | 11        | 34           |
-| Size        | 14.8 GB   | 2.35 TB      |
-| Robot time  | 4.8 hours | 704 hours    |
+|             | Downloaded | Full dataset |
+| ----------- | ---------- | ------------ |
+| File groups | 15         | 786          |
+| Episodes    | 283        | 32,246       |
+| Tasks       | 11         | 34           |
+| Size        | 14.8 GB    | 2.35 TB      |
+| Robot time  | 4.8 hours  | 704 hours    |
 
 ## Summary
 
@@ -62,28 +63,34 @@ The `Tag` column provides a short name for referring to each episode in the sect
 | `untangle`   | `episode_31487` | both arms pulling cables apart, with the right gripper closing 17 times (`Untangle cables`) |
 | `dishwasher` | `episode_24832` | a five-step instruction: bowls and a plate into the rack, food waste into the bin           |
 | `no-motion`  | `episode_01832` | 82 frames in which no joint moves                                                           |
-| `two-demos`  | `episode_31749` | video that holds a second demonstration with no data rows                                   |
+| `two-demos`  | `episode_31749` | video that ends with part of a discarded take, with no data rows                            |
 | `mislabeled` | `episode_07294` | labeled `Pack container`, but shows clothes folded on the table                             |
 
 ## Video
 
-In every surveyed video, every second frame is a keyframe.
-This matches the [default settings](https://github.com/huggingface/lerobot/blob/a3a8653a5b569e8e70cd6fe4b0973c4b2b983120/src/lerobot/configs/video.py#L86-L92) of LeRobot's video encoder: a keyframe every 2 frames.
+An mp4 file in the LeRobot v3 format holds several consecutive episodes.
+LeRobot's video encoder writes a keyframe every 2 frames by its [default settings](https://github.com/huggingface/lerobot/blob/a3a8653a5b569e8e70cd6fe4b0973c4b2b983120/src/lerobot/configs/video.py#L86-L92), and this dataset follows them.
+
+In this survey, we looked closely at the episode boundaries, where things can easily go wrong in this format.
+See [Some video windows are misaligned](#some-video-windows-are-misaligned).
 
 ## Joint values
 
 The joints of `observation.state` (measured) and `action` (commanded) are in radians, and each gripper runs from 0 (closed) to 1 (open).
 
-The measured state follows the command by 3 frames (100 ms) in most surveyed episodes (175 of 279), and by 4 or 5 frames in the rest.
+The measured state follows the command signal by 3 frames (100 ms) in most downloaded episodes (175 of 279), and by 4 or 5 frames in the rest.
 The measured joints go past the limits of i2rt's YAM URDF by up to 0.05 rad, and the commanded joints by up to 0.11 rad.
 
 ## Episode length and motion
 
-8 episodes are shorter than 1 s, and 20 are shorter than 3 s.
+Across the whole dataset, 8 episodes are shorter than 1 s, and 20 are shorter than 3 s.
 
-Judging by the per-episode joint ranges, some episodes have little motion.
-In 84 episodes only the right arm moves more than 0.1 rad, in 30 only the left arm, and in 43 neither arm.
-`no-motion` is one of the 43.
+The per-episode statistics in `meta/episodes/chunk-000/file-000.parquet` show that some episodes have little motion.
+Out of all 32,246 episodes, only the right arm moves more than 0.1 rad in 84 episodes, and only the left arm in 30 episodes.
+Neither arm moves in 43 episodes.
+An arm counts as moving when one of its six joints has a range of `observation.state` from `q01` to `q99` over 0.1 rad.
+This cutoff is somewhat arbitrary.
+The `no-motion` episode is one of the 43.
 
 ## Tasks and instructions
 
@@ -113,19 +120,71 @@ Data bugs and inaccuracies are labels or statistics in the source that are wrong
 
 ### Edge cases
 
-#### Episode 31749's video holds a second demonstration
+#### Episode 31749's video ends with part of a discarded take
 
-The time windows of `two-demos` are longer than its 1,619 data rows: 2,832 frames on `top` and `left`, and 2,658 on `right`.
-The extra video shows a second, complete fold of the same cloth, which has no state, action, or task rows.
-The video runs 40 s past the data on `top` and `left`, and the `right` window ends 174 frames (5.8 s) earlier than the other two.
-It is the only episode whose windows disagree with its length.
+`two-demos` is an episode whose video time windows disagree with its length.
+They hold 2,832 frames on `top` and `left` and 2,658 on `right`, but the episode has only 1,619 data rows.
+All three cameras cut abruptly at frame 1,619, where the data rows end.
+After the cut, the video shows the last 40 s of another take of the same fold.
+These frames have no state, action, or task rows.
+The likely cause is a LeRobot recording bug, fixed in v0.6.1, that kept a discarded take's frames on disk and encoded them after the re-recorded take ([huggingface/lerobot#3683](https://github.com/huggingface/lerobot/pull/3683)).
 
 #### Episode 7315's top video is one frame short
 
 `videos/observation.images.top/chunk-000/file-490.mp4` holds 32,576 frames, one fewer than the metadata says.
 Episode 7315 is the last episode in that file, so it has 4,109 `top` frames for 4,110 data rows.
+Its `top` window is also one of the misaligned windows described under [Some video windows are misaligned](#some-video-windows-are-misaligned): it starts one frame late and runs one frame past the end of the file.
 
 ### Data bugs and inaccuracies
+
+#### Some video windows are misaligned
+
+`meta/episodes` places each episode in its camera's video file with a time window, from `from_timestamp` to `to_timestamp`.
+LeRobot encodes each episode as a separate video segment that starts with a keyframe, and every second frame is a keyframe (see [Video](#video)).
+A window that matches its segment therefore starts on a keyframe followed by a delta frame.
+
+We read the index of **all** 5,860 video files, which lists every frame and marks the keyframes.
+We then checked every window against those keyframes.
+In total, 27 files include 89 misaligned episodes.
+
+| Kind  | Where the window starts                    | Episodes |
+| ----- | ------------------------------------------ | -------- |
+| late  | on a delta frame                           | 73       |
+| early | on a keyframe followed by another keyframe | 18       |
+| total |                                            | 89       |
+
+In all 27 affected files, the first misaligned window comes right after a gap in the numbering left over from the merge (see [Statistics left over from the merge](#statistics-left-over-from-the-merge)).
+We did not confirm every case, but later episodes in the same file can be misaligned as well.
+When a file's last window is misaligned, it can run one frame past the end of the file, as for [episode 7315 above](#episode-7315s-top-video-is-one-frame-short).
+
+Three misalignment examples are illustrated in the diagrams below.
+"metadata window" is taken from `meta/episodes`, and "episode's video" is where its own video segment is.
+
+**Episodes 12054 and 12055, top camera (kind: late).**
+Visually, episode 12054 ends at 9816, and episode 12055 starts at 9817.
+But the metadata window is one frame off and starts episode 12055 at 9818, a delta frame.
+
+![Frames 9815 to 9819 of the top camera: 12055's video starts at 9817, its window at 9818](images/window-12054-12055-top.png)
+
+**Episodes 12053 and 12054, top camera (kind: late).**
+Visually, episode 12053 ends at 7342, and episode 12054 starts at 7343, where its metadata window also starts.
+But 7343 is a delta frame that can only be decoded from keyframe 7342, so by the keyframes, episode 12054 starts at 7342.
+
+![Frames 7340 to 7344 of the top camera: 12054 starts at 7342 by keyframes and at 7343 by picture](images/window-12053-12054-top.png)
+
+**Episodes 12050 and 12051, left camera (kind: early).**
+Visually, episode 12050 ends at 45593, and episode 12051 starts at 45595.
+The frame in between, 45594, matches neither of the two adjacent frames.
+The metadata window is one frame off and starts episode 12051 at 45594, so it also leaves out episode 12051's last frame.
+
+![Frames 45592 to 45596 of the left camera: a stray frame at 45594 between 12050 and 12051](images/window-12050-12051-left.png)
+
+#### The arms move faster in some episodes
+
+In episodes 24051–24090, such as 24071, the arms seem to move faster than in the episodes before them.
+Per frame, the arm joints move about twice as far as in episodes 23782–24050.
+The timestamps cannot show whether these episodes were recorded at a different rate, because they appear to be computed from the frame index and the dataset-wide 30 fps.
+We found no proof in the data but still report this as a potential issue: some of these episodes might have been recorded at a lower rate than 30 fps.
 
 #### Some `Pack container` episodes show clothes folding
 
@@ -139,6 +198,9 @@ Across the dataset, 52 `Pack container` episodes share their exact instruction w
 The per-episode image `std` is 0 for every camera in all 32,246 episodes.
 The dataset-wide image `std` in `stats.json` (0.017 to 0.037) therefore only measures how much the episode means vary.
 The real pixel spread is far wider: the dataset-wide `q01` and `q99` are about 0.01–0.05 and 0.98–1.0.
+
+The likely cause is a LeRobot statistics bug, reported in [huggingface/lerobot#3682](https://github.com/huggingface/lerobot/issues/3682).
+It was fixed in v0.6.0 ([huggingface/lerobot#3697](https://github.com/huggingface/lerobot/pull/3697)), but the dataset was compiled before the fix.
 
 #### Statistics left over from the merge
 

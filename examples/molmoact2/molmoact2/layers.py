@@ -7,4 +7,4 @@ of an episode by its recording id.
 
 from __future__ import annotations
 
-LAYERS = ("base", "urdf", "cameras")
+LAYERS = ("base", "urdf", "cameras", "stats")
