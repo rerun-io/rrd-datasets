@@ -4,8 +4,6 @@
 This example converts each episode into four Rerun recordings (`.rrd`).
 One recording corresponds to one layer: the episode as recorded, the two posed arms, the three cameras placed in the scene, and the source's statistics of the episode.
 
-**Status: incubating.** The conversion works end to end, but the converted dataset is not published yet.
-
 Below is the viewer showing a converted episode with the default blueprint.
 
 ![MolmoAct2 in the Rerun viewer](screenshot.png)
