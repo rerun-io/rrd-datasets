@@ -4,8 +4,6 @@
 This example converts each demo into four Rerun recordings (`.rrd`).
 One recording corresponds to one layer: the demo itself, its metadata properties, the posed robot model, and the two cameras placed in the scene.
 
-**Status: incubating.** Download, conversion, the urdf and cameras layers, the default blueprint, catalog registration, and the remote Modal conversion work; publishing the converted bucket is still to come.
-
 Below is the viewer showing a converted demo with the default blueprint.
 
 ![LIBERO in the Rerun viewer](init_blueprint.png)
@@ -28,7 +26,7 @@ Data is downloaded at runtime from the original Hugging Face repo.
 
 ### Converted `.rrd` Dataset
 
-Converted recordings will be published to a Hugging Face bucket when ready.
+Converted recordings are published at [`rerun/libero`](https://huggingface.co/buckets/rerun/libero) — download them directly if you only want the `.rrd` data.
 They are built from source revision [`f13aa24a`](https://huggingface.co/datasets/yifengzhu-hf/LIBERO-datasets/tree/f13aa24a3da8c43c7225569f28c562979fa0e35a), dated 2025-05-18, with rerun-sdk 0.37.0.
 
 ## Local Runs
